@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 
@@ -104,9 +104,9 @@ class EvidencePack:
     collected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     revision: str = ""
     workspace_fingerprint: str = ""
-    fitness: dict = field(default_factory=dict)
-    review_trigger: dict = field(default_factory=dict)
-    collection_errors: list = field(default_factory=list)
+    fitness: dict[str, Any] = field(default_factory=dict)
+    review_trigger: dict[str, Any] = field(default_factory=dict)
+    collection_errors: list[dict[str, Any]] = field(default_factory=list)
     collection_duration_seconds: float = 0.0
 
 
