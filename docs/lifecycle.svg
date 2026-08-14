@@ -1,0 +1,186 @@
+<svg width="1600" height="940" viewBox="0 0 1600 940" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <polygon points="2,2 8,5 2,8" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1600" height="940" fill="#f8fafc"/>
+
+  <!-- Title -->
+  <text x="40" y="58" font-family="sans-serif" font-size="44" font-weight="700" fill="#1e293b">Entrix Lifecycle</text>
+  <text x="40" y="85" font-family="sans-serif" font-size="17" font-weight="500" fill="#64748b">Executable guardrails shift quality earlier</text>
+
+  <!-- Cost Bar -->
+  <rect x="40" y="110" width="1520" height="8" rx="4" fill="#e2e8f0"/>
+  <rect x="40" y="110" width="380" height="8" rx="4" fill="#10b981"/>
+  <rect x="420" y="110" width="380" height="8" rx="4" fill="#f59e0b"/>
+  <rect x="800" y="110" width="380" height="8" rx="4" fill="#f97316"/>
+  <rect x="1180" y="110" width="380" height="8" rx="4" fill="#dc2626"/>
+
+  <text x="40" y="140" font-family="sans-serif" font-size="12" font-weight="600" fill="#047857">LOW COST</text>
+  <text x="1560" y="140" font-family="sans-serif" font-size="12" font-weight="600" fill="#b91c1c" text-anchor="end">HIGH COST</text>
+
+  <!-- Stage 1 -->
+  <rect x="40" y="170" width="280" height="90" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+  <circle cx="68" cy="198" r="11" fill="#3b82f6"/>
+  <text x="64" y="204" font-family="sans-serif" font-size="14" font-weight="700" fill="#fff">1</text>
+  <text x="90" y="204" font-family="sans-serif" font-size="16" font-weight="700" fill="#1e293b">Policy Setup</text>
+  <text x="58" y="226" font-family="sans-serif" font-size="13" fill="#475569">Define what must be proven</text>
+  <text x="58" y="245" font-family="sans-serif" font-size="13" fill="#475569">safe before merge.</text>
+
+  <!-- Arrow -->
+  <path d="M320 215 H358" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+
+  <!-- Stage 2 -->
+  <rect x="368" y="170" width="280" height="90" rx="10" fill="#d1fae5" stroke="#10b981" stroke-width="2"/>
+  <circle cx="396" cy="198" r="11" fill="#10b981"/>
+  <text x="392" y="204" font-family="sans-serif" font-size="14" font-weight="700" fill="#fff">2</text>
+  <text x="418" y="204" font-family="sans-serif" font-size="16" font-weight="700" fill="#1e293b">Quality Gates</text>
+  <text x="386" y="226" font-family="sans-serif" font-size="13" fill="#475569">Fast checks: compile, lint,</text>
+  <text x="386" y="245" font-family="sans-serif" font-size="13" fill="#475569">tests, coverage.</text>
+
+  <path d="M648 215 H686" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+
+  <!-- Stage 3 -->
+  <rect x="696" y="170" width="280" height="90" rx="10" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+  <circle cx="724" cy="198" r="11" fill="#f59e0b"/>
+  <text x="720" y="204" font-family="sans-serif" font-size="14" font-weight="700" fill="#fff">3</text>
+  <text x="746" y="204" font-family="sans-serif" font-size="16" font-weight="700" fill="#1e293b">Risk Routing</text>
+  <text x="714" y="226" font-family="sans-serif" font-size="13" fill="#475569">Measure risk via diff,</text>
+  <text x="714" y="245" font-family="sans-serif" font-size="13" fill="#475569">graph, triggers.</text>
+
+  <path d="M976 215 H1014" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+
+  <!-- Stage 4 -->
+  <rect x="1024" y="170" width="280" height="90" rx="10" fill="#fee2e2" stroke="#ef4444" stroke-width="2"/>
+  <circle cx="1052" cy="198" r="11" fill="#ef4444"/>
+  <text x="1047" y="204" font-family="sans-serif" font-size="14" font-weight="700" fill="#fff">4</text>
+  <text x="1074" y="204" font-family="sans-serif" font-size="16" font-weight="700" fill="#1e293b">Deep Validation</text>
+  <text x="1042" y="226" font-family="sans-serif" font-size="13" fill="#475569">Expensive evidence:</text>
+  <text x="1042" y="245" font-family="sans-serif" font-size="13" fill="#475569">E2E, security, perf.</text>
+
+  <path d="M1304 215 H1342" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+
+  <!-- Stage 5 -->
+  <rect x="1352" y="170" width="208" height="90" rx="10" fill="#f3e8ff" stroke="#a855f7" stroke-width="2"/>
+  <circle cx="1380" cy="198" r="11" fill="#a855f7"/>
+  <text x="1375" y="204" font-family="sans-serif" font-size="14" font-weight="700" fill="#fff">5</text>
+  <text x="1402" y="204" font-family="sans-serif" font-size="16" font-weight="700" fill="#1e293b">Decision</text>
+  <text x="1370" y="226" font-family="sans-serif" font-size="13" fill="#475569">Merge → new</text>
+  <text x="1370" y="245" font-family="sans-serif" font-size="13" fill="#475569">rules, tuning.</text>
+
+  <!-- Details -->
+  <rect x="40" y="280" width="280" height="100" rx="8" fill="#fff" stroke="#cbd5e1"/>
+  <text x="52" y="302" font-family="sans-serif" font-size="12" fill="#475569">• metrics, thresholds</text>
+  <text x="52" y="320" font-family="sans-serif" font-size="12" fill="#475569">• hard/advisory gates</text>
+  <text x="52" y="338" font-family="sans-serif" font-size="12" fill="#475569">• evidence type</text>
+  <text x="52" y="356" font-family="sans-serif" font-size="12" fill="#475569">• run_when_changed</text>
+
+  <rect x="368" y="280" width="280" height="100" rx="8" fill="#fff" stroke="#cbd5e1"/>
+  <text x="380" y="302" font-family="sans-serif" font-size="12" fill="#475569">• compile, type check</text>
+  <text x="380" y="320" font-family="sans-serif" font-size="12" fill="#475569">• lint, policy</text>
+  <text x="380" y="338" font-family="sans-serif" font-size="12" fill="#475569">• unit tests</text>
+  <text x="380" y="356" font-family="sans-serif" font-size="12" fill="#475569">• file budget</text>
+
+  <rect x="696" y="280" width="280" height="100" rx="8" fill="#fff" stroke="#cbd5e1"/>
+  <text x="708" y="302" font-family="sans-serif" font-size="12" fill="#475569">• API/schema drift</text>
+  <text x="708" y="320" font-family="sans-serif" font-size="12" fill="#475569">• blast radius</text>
+  <text x="708" y="338" font-family="sans-serif" font-size="12" fill="#475569">• missing evidence</text>
+  <text x="708" y="356" font-family="sans-serif" font-size="12" fill="#475569">• review triggers</text>
+
+  <rect x="1024" y="280" width="280" height="100" rx="8" fill="#fff" stroke="#cbd5e1"/>
+  <text x="1036" y="302" font-family="sans-serif" font-size="12" fill="#475569">• API contract</text>
+  <text x="1036" y="320" font-family="sans-serif" font-size="12" fill="#475569">• E2E tests</text>
+  <text x="1036" y="338" font-family="sans-serif" font-size="12" fill="#475569">• security scan</text>
+  <text x="1036" y="356" font-family="sans-serif" font-size="12" fill="#475569">• performance</text>
+
+  <rect x="1352" y="280" width="208" height="100" rx="8" fill="#fff" stroke="#cbd5e1"/>
+  <text x="1364" y="302" font-family="sans-serif" font-size="12" fill="#475569">• PASS/WARN/BLOCK</text>
+  <text x="1364" y="320" font-family="sans-serif" font-size="12" fill="#475569">• weighted score</text>
+  <text x="1364" y="338" font-family="sans-serif" font-size="12" fill="#475569">• tune thresholds</text>
+  <text x="1364" y="356" font-family="sans-serif" font-size="12" fill="#475569">• stronger checks</text>
+
+  <!-- Judgment Structure -->
+  <rect x="40" y="410" width="1520" height="180" rx="10" fill="#f1f5f9" stroke="#94a3b8"/>
+  <text x="60" y="440" font-family="sans-serif" font-size="18" font-weight="700" fill="#1e293b">Judgment Structure</text>
+
+  <rect x="60" y="455" width="440" height="48" rx="8" fill="#d1fae5" stroke="#10b981"/>
+  <rect x="72" y="465" width="12" height="12" rx="2" fill="#10b981"/>
+  <text x="92" y="475" font-family="sans-serif" font-size="13" font-weight="600" fill="#047857">Machine auto-blocks</text>
+  <text x="72" y="493" font-family="sans-serif" font-size="12" fill="#475569">compile, lint, type checks</text>
+
+  <rect x="530" y="455" width="440" height="48" rx="8" fill="#fef3c7" stroke="#f59e0b"/>
+  <rect x="542" y="465" width="12" height="12" rx="2" fill="#f59e0b"/>
+  <text x="562" y="475" font-family="sans-serif" font-size="13" font-weight="600" fill="#b45309">Machine assists</text>
+  <text x="542" y="493" font-family="sans-serif" font-size="12" fill="#475569">risk routing, review triggers</text>
+
+  <rect x="1000" y="455" width="520" height="48" rx="8" fill="#fee2e2" stroke="#ef4444"/>
+  <rect x="1012" y="465" width="12" height="12" rx="2" fill="#ef4444"/>
+  <text x="1032" y="475" font-family="sans-serif" font-size="13" font-weight="600" fill="#b91c1c">Human intervenes</text>
+  <text x="1012" y="493" font-family="sans-serif" font-size="12" fill="#475569">semantic ambiguity, validation</text>
+
+  <!-- Review Trigger detail row -->
+  <text x="60" y="526" font-family="sans-serif" font-size="13" font-weight="600" fill="#64748b">Review Trigger Flow</text>
+
+  <rect x="60" y="536" width="200" height="36" rx="6" fill="#fff" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="160" y="559" font-family="sans-serif" font-size="12" font-weight="600" fill="#b45309" text-anchor="middle">changed_paths</text>
+
+  <rect x="280" y="536" width="200" height="36" rx="6" fill="#fff" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="380" y="559" font-family="sans-serif" font-size="12" font-weight="600" fill="#b45309" text-anchor="middle">diff_size</text>
+
+  <path d="M480 554 H530" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+
+  <rect x="540" y="536" width="240" height="36" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="660" y="559" font-family="sans-serif" font-size="12" font-weight="600" fill="#b45309" text-anchor="middle">severity: high / medium</text>
+
+  <path d="M780 554 H830" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+
+  <rect x="840" y="536" width="280" height="36" rx="6" fill="#fee2e2" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="980" y="559" font-family="sans-serif" font-size="12" font-weight="600" fill="#b91c1c" text-anchor="middle">require_human_review</text>
+
+  <!-- Bottom Row: 3 columns side by side -->
+
+  <!-- Column 1: System Foundation -->
+  <rect x="40" y="620" width="490" height="300" rx="12" fill="#fefce8" stroke="#f59e0b" stroke-width="2"/>
+  <text x="60" y="650" font-family="sans-serif" font-size="18" font-weight="700" fill="#1e293b">System Foundation</text>
+  <text x="60" y="672" font-family="sans-serif" font-size="13" fill="#64748b">Repository-native rules → executable decisions</text>
+
+  <rect x="70" y="690" width="430" height="40" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="200" y="716" font-family="sans-serif" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">docs/fitness/*.md</text>
+  <path d="M285 730 V755" stroke="#64748b" stroke-width="2.5" marker-end="url(#arrow)" fill="none"/>
+  <rect x="70" y="760" width="430" height="40" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="200" y="786" font-family="sans-serif" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">entrix orchestration</text>
+  <path d="M285 800 V825" stroke="#64748b" stroke-width="2.5" marker-end="url(#arrow)" fill="none"/>
+  <rect x="70" y="830" width="430" height="40" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="200" y="856" font-family="sans-serif" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">gates + score + triggers + evidence</text>
+
+  <!-- Column 2: Codified in Repo -->
+  <rect x="555" y="620" width="490" height="300" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+  <text x="575" y="650" font-family="sans-serif" font-size="18" font-weight="700" fill="#1e293b">Codified in Repo</text>
+  <text x="575" y="672" font-family="sans-serif" font-size="13" fill="#64748b">Rules, evidence, execution in version control</text>
+
+  <rect x="585" y="690" width="430" height="40" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="715" y="716" font-family="sans-serif" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">rules: docs/fitness</text>
+  <path d="M800 730 V755" stroke="#64748b" stroke-width="2.5" marker-end="url(#arrow)" fill="none"/>
+  <rect x="585" y="760" width="430" height="40" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="715" y="786" font-family="sans-serif" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">evidence: VERIFIED / TODO / BLOCKED</text>
+  <path d="M800 800 V825" stroke="#64748b" stroke-width="2.5" marker-end="url(#arrow)" fill="none"/>
+  <rect x="585" y="830" width="430" height="40" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="715" y="856" font-family="sans-serif" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">execution: tier, scope, triggers</text>
+
+  <!-- Column 3: Feedback Loop -->
+  <rect x="1070" y="620" width="490" height="300" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+  <text x="1090" y="650" font-family="sans-serif" font-size="18" font-weight="700" fill="#1e293b">Feedback Loop</text>
+  <text x="1090" y="672" font-family="sans-serif" font-size="13" fill="#64748b">Continuous improvement from production insights</text>
+
+  <rect x="1100" y="690" width="430" height="40" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="1230" y="716" font-family="sans-serif" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">incident detected</text>
+  <path d="M1315 730 V755" stroke="#64748b" stroke-width="2.5" marker-end="url(#arrow)" fill="none"/>
+  <rect x="1100" y="760" width="430" height="40" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="1230" y="786" font-family="sans-serif" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">update rules + tune thresholds</text>
+  <path d="M1315 800 V825" stroke="#64748b" stroke-width="2.5" marker-end="url(#arrow)" fill="none"/>
+  <rect x="1100" y="830" width="430" height="40" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="1230" y="856" font-family="sans-serif" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">add stronger checks</text>
+</svg>

@@ -1,0 +1,1534 @@
+"""CLI entry point — wires all modules together, feature parity with fitness.py."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from threading import RLock
+
+from entrix.analysis.long_file import analyze_long_files
+from entrix.engine import collect_changed_files, run_fitness_report
+from entrix.file_budgets import evaluate_paths, is_tracked_source_file, load_config
+from entrix.governance import GovernancePolicy, StreamOutputMode, enforce
+from entrix.loaders import load_dimensions, validate_weights
+from entrix.model import ExecutionScope, FitnessReport, Gate, Metric, MetricResult, ResultState, Tier
+from entrix.presets import get_project_preset
+from entrix.reporting import report_to_dict, write_report_output
+from entrix.review_trigger import (
+    collect_changed_files as collect_review_changed_files,
+    collect_diff_stats,
+    evaluate_review_triggers,
+    load_review_triggers,
+)
+from entrix.release_trigger import (
+    evaluate_release_triggers,
+    load_release_manifest,
+    load_release_triggers,
+)
+from entrix.reporters.terminal import TerminalReporter
+from entrix.reporters.visual import AsciiReporter, RichLiveProgressReporter, RichReporter
+from entrix.runners.graph import GraphRunner
+from entrix.test_mapping import analyze_test_mappings
+
+
+class _ShellOutputController:
+    """Coordinates progress output with optional shell log streaming modes."""
+
+    def __init__(self, reporter: TerminalReporter, *, mode: StreamOutputMode = "off"):
+        self.reporter = reporter
+        self.mode = mode
+        self._buffered_lines: dict[int, list[tuple[str, str]]] = {}
+        self._lock = RLock()
+
+    @property
+    def should_capture_output(self) -> bool:
+        return self.mode != "off"
+
+    def handle_output(self, metric: Metric, source: str, line: str) -> None:
+        if self.mode == "off":
+            return
+        if self.mode == "all":
+            with self._lock:
+                self.reporter.print_metric_output(metric_name=metric.name, source=source, line=line)
+            return
+        with self._lock:
+            self._buffered_lines.setdefault(id(metric), []).append((source, line))
+
+    def handle_progress(self, event: str, metric: Metric, result: MetricResult | None) -> None:
+        with self._lock:
+            self.reporter.print_metric_progress(
+                event,
+                metric_name=metric.name,
+                tier=metric.tier.value,
+                hard_gate=metric.gate == Gate.HARD,
+                result=result,
+            )
+        if event != "end" or self.mode != "failures":
+            return
+        buffered = self._pop_buffer(metric)
+        if result is None or result.state != ResultState.FAIL:
+            return
+        for source, line in buffered:
+            with self._lock:
+                self.reporter.print_metric_output(metric_name=metric.name, source=source, line=line)
+
+    def _pop_buffer(self, metric: Metric) -> list[tuple[str, str]]:
+        with self._lock:
+            return self._buffered_lines.pop(id(metric), [])
+
+
+def _find_project_root() -> Path:
+    """Walk up from CWD to find the project root (contains package.json or Cargo.toml)."""
+    cwd = Path.cwd().resolve()
+    for parent in [cwd, *cwd.parents]:
+        if (parent / "package.json").exists() or (parent / "Cargo.toml").exists():
+            return parent
+    return cwd
+
+
+def _runtime_marker(project_root: Path) -> str:
+    return hashlib.sha256(str(project_root).encode("utf-8")).hexdigest()
+
+
+def _runtime_root(project_root: Path) -> Path:
+    return Path("/tmp") / "harness-monitor" / "runtime" / _runtime_marker(project_root)
+
+
+def _runtime_event_path(project_root: Path) -> Path:
+    return _runtime_root(project_root) / "events.jsonl"
+
+
+def _runtime_fitness_artifact_dir(project_root: Path) -> Path:
+    return _runtime_root(project_root) / "artifacts" / "fitness"
+
+
+def _runtime_fitness_mailbox_dir(project_root: Path) -> Path:
+    return _runtime_root(project_root) / "mailbox" / "fitness" / "new"
+
+
+def _runtime_mode(tier: str | None) -> str:
+    return "full" if tier in (None, "", "normal") else tier
+
+
+def _load_runtime_coverage_summary(project_root: Path) -> dict:
+    summary_path = project_root / "target" / "coverage" / "fitness-summary.json"
+    if not summary_path.is_file():
+        return {"generated_at_ms": None, "typescript": {}, "rust": {}}
+    try:
+        payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"generated_at_ms": None, "typescript": {}, "rust": {}}
+    sources = payload.get("sources", {})
+    return {
+        "generated_at_ms": payload.get("generated_at_ms"),
+        "typescript": sources.get("typescript", {}) or {},
+        "rust": sources.get("rust", {}) or {},
+    }
+
+
+def _summarize_metric_output(output: str) -> str | None:
+    lines = [line.strip() for line in output.splitlines() if line.strip()][:3]
+    if not lines:
+        return None
+    excerpt = " | ".join(lines)
+    if len(excerpt) > 180:
+        excerpt = excerpt[:177] + "..."
+    return excerpt
+
+
+def _build_runtime_fitness_snapshot(
+    project_root: Path,
+    *,
+    tier: str | None,
+    report: FitnessReport,
+    duration_ms: float,
+    artifact_path: str,
+    observed_at_ms: int,
+    producer: str,
+    base_ref: str | None,
+    changed_files: list[str],
+) -> dict:
+    dimensions = []
+    slowest_metrics = []
+    failing_metrics = []
+    coverage_metric_available = False
+
+    for dimension_score in report.dimensions:
+        metrics = []
+        for result in dimension_score.results:
+            metric_summary = {
+                "name": result.metric_name,
+                "passed": result.passed,
+                "state": result.state.value if result.state is not None else "unknown",
+                "hard_gate": result.hard_gate,
+                "duration_ms": result.duration_ms,
+                "output_excerpt": _summarize_metric_output(result.output),
+            }
+            metrics.append(metric_summary)
+            slowest_metrics.append(metric_summary)
+            if metric_summary["state"] not in ("pass", "waived"):
+                failing_metrics.append(metric_summary)
+            coverage_metric_available = coverage_metric_available or (
+                "coverage" in result.metric_name.lower() or "cover" in result.metric_name.lower()
+            )
+        dimensions.append(
+            {
+                "name": dimension_score.dimension,
+                "weight": dimension_score.weight,
+                "score": dimension_score.score,
+                "passed": dimension_score.passed,
+                "total": dimension_score.total,
+                "hard_gate_failures": dimension_score.hard_gate_failures,
+                "metrics": metrics,
+            }
+        )
+
+    slowest_metrics.sort(key=lambda metric: metric["duration_ms"], reverse=True)
+    failing_metrics.sort(
+        key=lambda metric: (
+            not metric["hard_gate"],
+            -metric["duration_ms"],
+            metric["name"],
+        )
+    )
+    return {
+        "mode": _runtime_mode(tier),
+        "final_score": report.final_score,
+        "hard_gate_blocked": report.hard_gate_blocked,
+        "score_blocked": report.score_blocked,
+        "duration_ms": duration_ms,
+        "metric_count": sum(len(ds.results) for ds in report.dimensions),
+        "coverage_metric_available": coverage_metric_available,
+        "coverage_summary": _load_runtime_coverage_summary(project_root),
+        "dimensions": dimensions,
+        "slowest_metrics": slowest_metrics[:5],
+        "artifact_path": artifact_path,
+        "producer": producer,
+        "generated_at_ms": observed_at_ms,
+        "base_ref": base_ref,
+        "changed_file_count": len(changed_files),
+        "changed_files_preview": changed_files[:8],
+        "failing_metrics": failing_metrics[:5],
+    }
+
+
+def _write_runtime_fitness_artifacts(
+    project_root: Path,
+    *,
+    tier: str | None,
+    snapshot: dict,
+    observed_at_ms: int,
+) -> str:
+    mode = _runtime_mode(tier)
+    artifact_dir = _runtime_fitness_artifact_dir(project_root)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = artifact_dir / f"{observed_at_ms}-{mode}.json"
+    latest_path = artifact_dir / f"latest-{mode}.json"
+    serialized = json.dumps(snapshot, indent=2, ensure_ascii=False) + "\n"
+    artifact_path.write_text(serialized, encoding="utf-8")
+    latest_path.write_text(serialized, encoding="utf-8")
+    return str(artifact_path)
+
+
+def _write_runtime_fitness_mailbox_message(project_root: Path, *, payload: dict) -> None:
+    mailbox_dir = _runtime_fitness_mailbox_dir(project_root)
+    mailbox_dir.mkdir(parents=True, exist_ok=True)
+    mailbox_path = mailbox_dir / f"{payload['observed_at_ms']}-{payload['mode']}.json"
+    mailbox_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _emit_runtime_fitness_event(
+    project_root: Path,
+    *,
+    status: str,
+    tier: str | None,
+    report: FitnessReport | None,
+    metric_count: int | None,
+    duration_ms: float | None,
+    artifact_path: str | None,
+) -> None:
+    mode = _runtime_mode(tier)
+    event_path = _runtime_event_path(project_root)
+    event_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "type": "fitness",
+        "repo_root": str(project_root),
+        "observed_at_ms": int(datetime.now(timezone.utc).timestamp() * 1000),
+        "mode": mode,
+        "status": status,
+        "final_score": None if report is None else report.final_score,
+        "hard_gate_blocked": None if report is None else report.hard_gate_blocked,
+        "score_blocked": None if report is None else report.score_blocked,
+        "duration_ms": duration_ms,
+        "dimension_count": None if report is None else len(report.dimensions),
+        "metric_count": metric_count,
+        "artifact_path": artifact_path,
+    }
+    with event_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=True))
+        handle.write("\n")
+    _write_runtime_fitness_mailbox_message(project_root, payload=payload)
+
+
+def _default_mcp_config() -> dict:
+    return {
+        "mcpServers": {
+            "entrix": {
+                "command": "uvx",
+                "args": ["entrix", "serve"],
+            }
+        }
+    }
+
+
+def cmd_install(args: argparse.Namespace) -> int:
+    """Write `.mcp.json` for Claude Code MCP integration."""
+    target = Path(args.repo).resolve() if args.repo else Path.cwd().resolve()
+    mcp_path = target / ".mcp.json"
+    config_text = json.dumps(_default_mcp_config(), indent=2) + "\n"
+
+    if args.dry_run:
+        print(config_text)
+        return 0
+
+    mcp_path.write_text(config_text, encoding="utf-8")
+    print(f"Wrote Claude MCP config to {mcp_path}")
+    print("Run `entrix --help` to verify the command is available.")
+    print("Restart Claude Code after changing MCP settings.")
+    return 0
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    """Run Entrix MCP server."""
+    from entrix.server import create_server
+
+    create_server().run(transport="stdio")
+    return 0
+
+
+def _find_fitness_dir(project_root: Path) -> Path:
+    """Locate the docs/fitness/ directory relative to project root."""
+    fitness_dir = get_project_preset().fitness_dir(project_root)
+    if not fitness_dir.is_dir():
+        print(f"Error: fitness directory not found at {fitness_dir}")
+        sys.exit(1)
+    return fitness_dir
+
+
+def _find_review_trigger_config(project_root: Path) -> Path:
+    """Locate the default review-trigger config."""
+    config_path = get_project_preset().review_trigger_config(project_root)
+    if not config_path.is_file():
+        print(f"Error: review-trigger config not found at {config_path}")
+        sys.exit(1)
+    return config_path
+
+
+def _find_release_trigger_config(project_root: Path) -> Path:
+    """Locate the default release-trigger config."""
+    config_path = get_project_preset().release_trigger_config(project_root)
+    if not config_path.is_file():
+        print(f"Error: release-trigger config not found at {config_path}")
+        sys.exit(1)
+    return config_path
+
+
+def _print_json(data: dict) -> None:
+    print(json.dumps(data, indent=2, ensure_ascii=False))
+
+
+def _print_graph_impact(result: dict) -> None:
+    print(result.get("summary", "No summary available."))
+    print(f"Changed files: {len(result.get('changed_files', []))}")
+    print(f"Impacted files: {len(result.get('impacted_files', []))}")
+    print(f"Impacted test files: {len(result.get('impacted_test_files', []))}")
+    print(f"Wide blast radius: {'yes' if result.get('wide_blast_radius') else 'no'}")
+    if result.get("skipped_files"):
+        print(f"Skipped files: {', '.join(result['skipped_files'][:10])}")
+
+
+def _print_graph_test_radius(result: dict) -> None:
+    print(result.get("summary", "No summary available."))
+    print(f"Changed files: {len(result.get('changed_files', []))}")
+    print(f"Queryable targets: {len(result.get('target_nodes', []))}")
+    print(f"Unique test files: {len(result.get('test_files', []))}")
+    print(f"Untested targets: {len(result.get('untested_targets', []))}")
+    if result.get("test_files"):
+        print("Test files:")
+        for file_path in result["test_files"][:20]:
+            print(f"  - {file_path}")
+    if result.get("untested_targets"):
+        print("Untested targets:")
+        for target in result["untested_targets"][:20]:
+            print(f"  - {target['qualified_name']}")
+
+
+def _print_graph_test_mapping(result: dict) -> None:
+    print(result.get("summary", "No summary available."))
+    print(f"Changed files: {len(result.get('changed_files', []))}")
+    print(f"Skipped changed test files: {len(result.get('skipped_test_files', []))}")
+    counts = result.get("status_counts", {})
+    if counts:
+        ordered = ", ".join(f"{key}={counts[key]}" for key in sorted(counts))
+        print(f"Statuses: {ordered}")
+    resolver_counts = result.get("resolver_counts", {})
+    if resolver_counts:
+        ordered = ", ".join(f"{key}={resolver_counts[key]}" for key in sorted(resolver_counts))
+        print(f"Resolvers: {ordered}")
+    graph = result.get("graph", {})
+    print(
+        "Graph enrichment: "
+        f"{'on' if graph.get('available') else 'off'} "
+        f"({graph.get('status', 'unknown')})"
+    )
+    for item in result.get("mappings", [])[:20]:
+        related = item.get("related_test_files", [])
+        related_preview = ", ".join(related[:3]) if related else "-"
+        print(
+            f"- {item['source_file']} [{item['language']}] "
+            f"status={item['status']} resolver={item['resolver_kind']} "
+            f"tests={related_preview}"
+        )
+
+
+def _print_graph_query(result: dict) -> None:
+    print(result.get("summary", "No summary available."))
+    for item in result.get("results", [])[:20]:
+        label = item.get("qualified_name") or item.get("name") or item.get("file_path") or str(item)
+        print(f"  - {label}")
+
+
+def _print_graph_history(result: dict) -> None:
+    print(result.get("summary", "No summary available."))
+    for commit in result.get("commits", []):
+        print(
+            f"{commit['short_commit']} {commit['subject']} | "
+            f"files={commit['changed_file_count']} "
+            f"targets={commit['target_count']} "
+            f"tests={commit['test_file_count']} "
+            f"untested={commit['untested_target_count']}"
+        )
+
+
+def _print_graph_review_context(result: dict) -> None:
+    print(result.get("summary", "No summary available."))
+    context = result.get("context", {})
+    tests = context.get("tests", {})
+    print(f"Changed files: {len(context.get('changed_files', []))}")
+    print(f"Impacted files: {len(context.get('impacted_files', []))}")
+    print(f"Queryable targets: {len(context.get('targets', []))}")
+    print(f"Test files: {len(tests.get('test_files', []))}")
+    print("Review guidance:")
+    for line in str(context.get("review_guidance", "")).splitlines():
+        print(f"  {line}")
+    snippets = context.get("source_snippets", [])
+    if snippets:
+        print("Source snippets:")
+        for snippet in snippets[:10]:
+            suffix = " (truncated)" if snippet.get("truncated") else ""
+            print(f"  - {snippet['file_path']}{suffix}")
+
+
+def _format_line_span(item: dict) -> str:
+    return f"L{item['startLine']}-{item['endLine']}, {item['lineCount']}"
+
+
+def _format_compact_items(items: list[dict]) -> str:
+    return ", ".join(f"{item['name']} ({_format_line_span(item)})" for item in items)
+
+
+def _sort_structure_items(items: list[dict]) -> list[dict]:
+    return sorted(items, key=lambda item: (-item["lineCount"], item["startLine"], item["name"]))
+
+
+def _print_hook_long_file_summary(
+    result: dict,
+    *,
+    max_classes: int = 3,
+    max_methods_per_class: int = 4,
+    max_functions: int = 5,
+) -> None:
+    files = result.get("files", [])
+    if not files:
+        print("Structure summary unavailable: no supported files for structural analysis.")
+        return
+
+    print("Structure summary (tree-sitter symbols):")
+    for item in files:
+        file_path = item.get("filePath", "<unknown>")
+        if item.get("status") not in {None, "ok"}:
+            print(f"- {file_path}: {item.get('summary', 'analysis failed')}")
+            continue
+
+        print(f"- {file_path}")
+        classes = _sort_structure_items(item.get("classes", []))
+        functions = _sort_structure_items(item.get("functions", []))
+
+        if not classes and not functions:
+            print("  no class/function symbols found")
+            continue
+
+        for cls in classes[:max_classes]:
+            print(
+                f"  class {cls['name']} "
+                f"({_format_line_span(cls)}, methods={cls.get('methodCount', 0)})"
+            )
+            methods = _sort_structure_items(cls.get("methods", []))
+            for method in methods[:max_methods_per_class]:
+                print(f"    method {method['name']} ({_format_line_span(method)})")
+            remaining_methods = len(methods) - max_methods_per_class
+            if remaining_methods > 0:
+                print(f"    ... {remaining_methods} more method(s)")
+
+        remaining_classes = len(classes) - max_classes
+        if remaining_classes > 0:
+            print(f"  ... {remaining_classes} more class(es)")
+
+        if functions:
+            print(f"  functions: {_format_compact_items(functions[:max_functions])}")
+            remaining_functions = len(functions) - max_functions
+            if remaining_functions > 0:
+                print(f"  ... {remaining_functions} more function(s)")
+
+        warnings = item.get("warnings", [])
+        if warnings:
+            print(f"  review-warnings: {len(warnings)}")
+
+
+def _print_long_file_analysis(result: dict, *, min_lines: int = 60) -> None:
+    files = result.get("files", [])
+    if not files:
+        print("No oversized files detected.")
+        return
+    for item in files:
+        if item.get("status") not in {None, "ok"}:
+            print(f"{item['filePath']}: {item.get('summary', 'analysis failed')}")
+            continue
+        status_line = (
+            f"{item['filePath']} exceeds budget {item['budgetLimit']} with {item['lineCount']} lines"
+            if item.get("overBudget")
+            else f"{item['filePath']} has {item['lineCount']} lines (budget {item['budgetLimit']})"
+        )
+        print(status_line)
+        print(f"History: commits={item.get('commitCount', 0)}")
+        warnings = item.get("warnings", [])
+        if warnings:
+            print(f"Warnings: {len(warnings)}")
+            for warning in warnings:
+                print(
+                    "- review comments in "
+                    f"{warning['symbolKind']} {warning['name']} "
+                    f"({_format_line_span(warning)}) commits={warning['commitCount']} "
+                    f"comments={warning['commentCount']}"
+                )
+
+        classes = sorted(
+            item.get("classes", []),
+            key=lambda cls: (cls["startLine"], cls["name"]),
+        )
+        functions = sorted(
+            item.get("functions", []),
+            key=lambda fn: (fn["startLine"], fn["name"]),
+        )
+        print(f"Classes: {len(classes)}")
+        if classes:
+            for cls in classes:
+                print(f"- {cls['name']} ({_format_line_span(cls)})")
+        else:
+            print("- none")
+
+        print("")
+        print(f"Functions: {len(functions)}")
+        if not functions:
+            print("- none")
+            continue
+
+        large = [fn for fn in functions if fn["lineCount"] >= min_lines]
+        small = [fn for fn in functions if fn["lineCount"] <= 10]
+        medium = [fn for fn in functions if 10 < fn["lineCount"] < min_lines]
+
+        if small:
+            print(f"- Small helpers: {_format_compact_items(small)}")
+        if medium:
+            print(f"- Medium: {_format_compact_items(medium)}")
+        if large:
+            print(f"- Large: {_format_compact_items(large)}")
+
+
+def _print_review_trigger_report(report: dict) -> None:
+    print("REVIEW TRIGGER REPORT")
+    print(f"Base: {report['base']}")
+    stats = report.get("diff_stats", {})
+    print(
+        "Diff stats: "
+        f"files={stats.get('file_count', 0)} "
+        f"added={stats.get('added_lines', 0)} "
+        f"deleted={stats.get('deleted_lines', 0)}"
+    )
+    if report.get("human_review_required"):
+        print("Human review required: yes")
+        for trigger in report.get("triggers", []):
+            print(f"- {trigger['name']} [{trigger['severity']}]")
+            for reason in trigger.get("reasons", []):
+                print(f"  reason: {reason}")
+    else:
+        print("Human review required: no")
+
+
+def _domains_from_files(files: list[str]) -> set[str]:
+    return get_project_preset().domains_from_files(files)
+
+
+def _metric_domains(metric: Metric) -> set[str]:
+    return get_project_preset().metric_domains(metric)
+
+
+def _collect_run_files(args: argparse.Namespace, project_root: Path) -> list[str]:
+    explicit_files = args.files or []
+    if explicit_files:
+        return explicit_files
+    if args.changed_only:
+        return collect_changed_files(project_root, args.base)
+    return []
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    """Run architecture fitness functions as executable guardrail checks."""
+    project_root = _find_project_root()
+    _find_fitness_dir(project_root)
+    preset = get_project_preset()
+    run_started_at = time.perf_counter()
+
+    tier_filter = Tier(args.tier) if args.tier else None
+    execution_scope = ExecutionScope(args.scope) if args.scope else ExecutionScope.LOCAL
+    policy = GovernancePolicy(
+        tier_filter=tier_filter,
+        parallel=args.parallel,
+        dry_run=args.dry_run,
+        verbose=args.verbose,
+        stream_output=args.stream,
+        min_score=args.min_score,
+        execution_scope=execution_scope,
+        dimension_filters=tuple(args.dimension or ()),
+        metric_filters=tuple(args.metric or ()),
+    )
+
+    output_format = getattr(args, "format", "text")
+    reporter = TerminalReporter(verbose=policy.verbose)
+    shell_output = _ShellOutputController(reporter, mode=policy.stream_output)
+    live_reporter = (
+        RichLiveProgressReporter(
+            stream=sys.stdout,
+            refresh_per_second=max(1, int(args.progress_refresh)),
+        )
+        if output_format == "rich" and sys.stdout.isatty() and not policy.dry_run
+        else None
+    )
+    reporter.print_header(
+        dry_run=policy.dry_run,
+        tier=args.tier,
+        parallel=policy.parallel,
+    )
+
+    changed_files = _collect_run_files(args, project_root)
+    if args.changed_only or changed_files:
+        if args.changed_only and not changed_files:
+            print("No changed files detected; skipping fitness run.")
+            write_report_output(
+                args.output,
+                {
+                    "final_score": 0.0,
+                    "hard_gate_blocked": False,
+                    "score_blocked": False,
+                    "dimensions": [],
+                },
+            )
+            _emit_runtime_fitness_event(
+                project_root,
+                status="skipped",
+                tier=args.tier,
+                report=None,
+                metric_count=0,
+                duration_ms=0.0,
+                artifact_path=None,
+            )
+            return 0
+
+        changed_domains = preset.domains_from_files(changed_files)
+        print(
+            f"\nIncremental mode: base={args.base}, changed_files={len(changed_files)}, domains={','.join(sorted(changed_domains)) or 'none'}"
+        )
+    report, dimensions = run_fitness_report(
+        project_root,
+        policy,
+        preset,
+        changed_files=changed_files or None,
+        base=args.base,
+        progress_setup_callback=(None if live_reporter is None else live_reporter.setup),
+        progress_callback=(
+            None
+            if policy.dry_run
+            else (
+                live_reporter.handle_progress
+                if live_reporter is not None
+                else shell_output.handle_progress
+            )
+        ),
+        shell_output_callback=(
+            None
+            if policy.dry_run or live_reporter is not None or output_format != "text" or not shell_output.should_capture_output
+            else shell_output.handle_output
+        ),
+    )
+    if live_reporter is not None:
+        live_reporter.close()
+
+    if not dimensions:
+        print("No metrics matched the current run filters; skipping fitness run.")
+        write_report_output(
+            args.output,
+            {
+                "final_score": 0.0,
+                "hard_gate_blocked": False,
+                "score_blocked": False,
+                "dimensions": [],
+            },
+        )
+        _emit_runtime_fitness_event(
+            project_root,
+            status="skipped",
+            tier=args.tier,
+            report=None,
+            metric_count=0,
+            duration_ms=0.0,
+            artifact_path=None,
+        )
+        return 0
+
+    if output_format == "text":
+        for dim, ds in zip(dimensions, report.dimensions):
+            print(f"\n## {dim.name.upper()} (weight: {dim.weight}%)")
+            print(f"   Source: {dim.source_file}")
+
+            for result in ds.results:
+                state_labels = {
+                    ResultState.PASS: "\u2705 PASS",
+                    ResultState.FAIL: "\u274c FAIL",
+                    ResultState.UNKNOWN: "\u2753 UNKNOWN",
+                    ResultState.SKIPPED: "\u23ed\ufe0f SKIPPED",
+                    ResultState.WAIVED: "\u26a0\ufe0f WAIVED",
+                }
+                status = state_labels.get(result.state, "\u2753 UNKNOWN")
+                hard = " [HARD GATE]" if result.hard_gate else ""
+                tier_label = f" [{result.tier.value}]" if tier_filter else ""
+                print(f"   - {result.metric_name}: {status}{hard}{tier_label}")
+
+                if result.state == ResultState.FAIL and (policy.verbose or result.hard_gate):
+                    if result.output:
+                        lines = result.output.strip().split("\n")
+                        for line in lines[:10]:
+                            print(f"     > {line}")
+                        if len(lines) > 10:
+                            print(f"     > ... ({len(lines) - 10} more lines)")
+
+            if ds.total > 0:
+                print(f"   Score: {ds.score:.0f}%")
+
+        reporter.print_footer(report)
+    elif output_format == "ascii":
+        AsciiReporter().report(report)
+    else:
+        RichReporter().report(report)
+
+    write_report_output(args.output, report_to_dict(report))
+    exit_code = enforce(report, policy)
+    duration_ms = (time.perf_counter() - run_started_at) * 1000.0
+    observed_at_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    artifact_path = _write_runtime_fitness_artifacts(
+        project_root,
+        tier=args.tier,
+        snapshot={
+            "mode": _runtime_mode(args.tier),
+            "final_score": report.final_score,
+            "hard_gate_blocked": report.hard_gate_blocked,
+            "score_blocked": report.score_blocked,
+            "duration_ms": duration_ms,
+            "metric_count": sum(len(ds.results) for ds in report.dimensions),
+            "coverage_metric_available": False,
+            "coverage_summary": {"generated_at_ms": None, "typescript": {}, "rust": {}},
+            "dimensions": [],
+            "slowest_metrics": [],
+            "artifact_path": None,
+            "producer": "entrix",
+            "generated_at_ms": observed_at_ms,
+            "base_ref": args.base if changed_files else None,
+            "changed_file_count": len(changed_files),
+            "changed_files_preview": changed_files[:8],
+            "failing_metrics": [],
+        },
+        observed_at_ms=observed_at_ms,
+    )
+    snapshot = _build_runtime_fitness_snapshot(
+        project_root,
+        tier=args.tier,
+        report=report,
+        duration_ms=duration_ms,
+        artifact_path=artifact_path,
+        observed_at_ms=observed_at_ms,
+        producer="entrix",
+        base_ref=(args.base if changed_files else None),
+        changed_files=changed_files,
+    )
+    artifact_path = _write_runtime_fitness_artifacts(
+        project_root,
+        tier=args.tier,
+        snapshot=snapshot,
+        observed_at_ms=observed_at_ms,
+    )
+    _emit_runtime_fitness_event(
+        project_root,
+        status="passed" if exit_code == 0 else "failed",
+        tier=args.tier,
+        report=report,
+        metric_count=sum(len(ds.results) for ds in report.dimensions),
+        duration_ms=duration_ms,
+        artifact_path=artifact_path,
+    )
+    return exit_code
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    """Validate that dimension weights sum to 100%."""
+    project_root = _find_project_root()
+    fitness_dir = _find_fitness_dir(project_root)
+
+    dimensions = load_dimensions(fitness_dir)
+    valid, total = validate_weights(dimensions)
+
+    for dim in dimensions:
+        print(f"  {dim.name}: {dim.weight}%  ({dim.source_file})")
+
+    print(f"\nTotal: {total}%")
+    if valid:
+        print("\u2705 Weights sum to 100%")
+        return 0
+
+    print(f"\u274c Weights sum to {total}%, expected 100%")
+    return 1
+
+
+def cmd_review_trigger(args: argparse.Namespace) -> int:
+    """Evaluate review-trigger rules for the current diff."""
+    project_root = _find_project_root()
+    config_path = Path(args.config).resolve() if args.config else _find_review_trigger_config(project_root)
+
+    rules = load_review_triggers(config_path)
+    changed_files = args.files or collect_review_changed_files(project_root, args.base)
+    diff_stats = collect_diff_stats(project_root, args.base)
+    report = evaluate_review_triggers(
+        rules,
+        changed_files,
+        diff_stats,
+        base=args.base,
+        repo_root=project_root,
+    )
+
+    if args.json:
+        _print_json(report.to_dict())
+    else:
+        _print_review_trigger_report(report.to_dict())
+
+    if report.human_review_required and args.fail_on_trigger:
+        return 3
+    return 0
+
+
+def _print_release_trigger_report(report: dict) -> None:
+    print("Release trigger report")
+    print(f"- blocked: {'yes' if report.get('blocked') else 'no'}")
+    print(
+        "- human review required: "
+        f"{'yes' if report.get('human_review_required') else 'no'}"
+    )
+    print(f"- manifest: {report.get('manifest_path')}")
+    if report.get("baseline_manifest_path"):
+        print(f"- baseline manifest: {report['baseline_manifest_path']}")
+    print(f"- artifacts: {len(report.get('artifacts', []))}")
+    print(f"- changed files: {len(report.get('changed_files', []))}")
+    triggers = report.get("triggers", [])
+    if not triggers:
+        print("- triggers: none")
+        return
+    print("- triggers:")
+    for trigger in triggers:
+        print(
+            f"  - {trigger['name']} [{trigger['severity']}] "
+            f"-> {trigger['action']}"
+        )
+        for reason in trigger.get("reasons", []):
+            print(f"    - {reason}")
+
+
+def cmd_release_trigger(args: argparse.Namespace) -> int:
+    """Evaluate release-trigger rules for a release manifest."""
+    project_root = _find_project_root()
+    config_path = Path(args.config).resolve() if args.config else _find_release_trigger_config(project_root)
+
+    rules = load_release_triggers(config_path)
+    manifest_path = Path(args.manifest).resolve()
+    manifest_label, artifacts = load_release_manifest(manifest_path)
+    baseline_artifacts = ()
+    baseline_manifest_label: str | None = None
+    if args.baseline_manifest:
+        baseline_manifest_path = Path(args.baseline_manifest).resolve()
+        baseline_manifest_label, baseline_artifacts = load_release_manifest(baseline_manifest_path)
+    changed_files = args.files or collect_review_changed_files(project_root, args.base)
+    report = evaluate_release_triggers(
+        rules,
+        artifacts,
+        manifest_path=manifest_label,
+        changed_files=changed_files,
+        baseline_artifacts=baseline_artifacts,
+        baseline_manifest_path=baseline_manifest_label,
+    )
+
+    if args.json:
+        _print_json(report.to_dict())
+    else:
+        _print_release_trigger_report(report.to_dict())
+
+    if args.fail_on_trigger:
+        if report.blocked:
+            return 4
+        if report.human_review_required:
+            return 3
+    return 0
+
+
+def cmd_graph_build(args: argparse.Namespace) -> int:
+    """Build or update the backing code graph."""
+    runner = GraphRunner(_find_project_root())
+    result = runner.build_graph(base=args.base, build_mode=args.build_mode)
+    if args.json:
+        _print_json(result)
+    else:
+        print(result.get("summary", result.get("reason", "No summary available.")))
+    return 0 if result.get("status") not in {"unavailable"} else 1
+
+
+def cmd_graph_stats(args: argparse.Namespace) -> int:
+    """Show graph statistics."""
+    runner = GraphRunner(_find_project_root())
+    result = runner.stats()
+    if args.json:
+        _print_json(result)
+    else:
+        if result.get("status") == "unavailable":
+            print(result.get("reason", "Graph unavailable"))
+            return 1
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0 if result.get("status") != "unavailable" else 1
+
+
+def cmd_graph_impact(args: argparse.Namespace) -> int:
+    """Show blast radius for changed files or an explicit file list."""
+    runner = GraphRunner(_find_project_root())
+    result = runner.analyze_impact(
+        args.files or None,
+        base=args.base,
+        max_depth=args.depth,
+        build_mode=args.build_mode,
+    )
+    if args.json:
+        _print_json(result)
+    else:
+        if result.get("status") == "unavailable":
+            print(result.get("reason", "Graph unavailable"))
+            return 1
+        _print_graph_impact(result)
+    return 0 if result.get("status") != "unavailable" else 1
+
+
+def cmd_graph_test_radius(args: argparse.Namespace) -> int:
+    """Show tests in the radius of the current diff or explicit files."""
+    runner = GraphRunner(_find_project_root())
+    result = runner.analyze_test_radius(
+        args.files or None,
+        base=args.base,
+        max_depth=args.depth,
+        build_mode=args.build_mode,
+        max_targets=args.max_targets,
+    )
+    if args.json:
+        _print_json(result)
+    else:
+        if result.get("status") == "unavailable":
+            print(result.get("reason", "Graph unavailable"))
+            return 1
+        _print_graph_test_radius(result)
+    return 0 if result.get("status") != "unavailable" else 1
+
+
+def cmd_graph_test_mapping(args: argparse.Namespace) -> int:
+    """Show cross-language source-to-test mappings for changed files."""
+    result = analyze_test_mappings(
+        _find_project_root(),
+        args.files or None,
+        base=args.base,
+        use_graph=not args.no_graph,
+        build_mode=args.build_mode,
+    )
+    if args.json:
+        _print_json(result)
+    else:
+        _print_graph_test_mapping(result)
+    missing_mappings = int((result.get("status_counts") or {}).get("missing", 0))
+    if args.fail_on_missing and missing_mappings > 0:
+        return 2
+    return 0
+
+
+def cmd_graph_query(args: argparse.Namespace) -> int:
+    """Run a graph query such as callers_of or tests_for."""
+    runner = GraphRunner(_find_project_root())
+    result = runner.query(
+        args.pattern,
+        args.target,
+        base=args.base,
+        build_mode=args.build_mode,
+    )
+    if args.json:
+        _print_json(result)
+    else:
+        if result.get("status") == "unavailable":
+            print(result.get("reason", "Graph unavailable"))
+            return 1
+        _print_graph_query(result)
+    return 0 if result.get("status") != "unavailable" else 1
+
+
+def cmd_graph_history(args: argparse.Namespace) -> int:
+    """Estimate test radius for recent commits using the current graph."""
+    runner = GraphRunner(_find_project_root())
+    result = runner.analyze_history(
+        count=args.count,
+        ref=args.ref,
+        max_depth=args.depth,
+        build_mode=args.build_mode,
+        max_targets=args.max_targets,
+    )
+    if args.json:
+        _print_json(result)
+    else:
+        if result.get("status") == "unavailable":
+            print(result.get("reason", "Graph unavailable"))
+            return 1
+        _print_graph_history(result)
+    return 0 if result.get("status") != "unavailable" else 1
+
+
+def cmd_graph_review_context(args: argparse.Namespace) -> int:
+    """Build an AI-friendly review context for the current diff or files."""
+    runner = GraphRunner(_find_project_root())
+    file_args = (args.files_positional or []) + (args.files or [])
+    result = runner.review_context(
+        file_args or None,
+        base=args.base,
+        max_depth=args.depth,
+        build_mode=args.build_mode,
+        max_targets=args.max_targets,
+        include_source=not args.no_source,
+        max_files=args.max_files,
+        max_lines_per_file=args.max_lines_per_file,
+    )
+    if args.json:
+        if args.output and args.output != "-":
+            Path(args.output).write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        else:
+            _print_json(result)
+    else:
+        if result.get("status") == "unavailable":
+            print(result.get("reason", "Graph unavailable"))
+            return 1
+        _print_graph_review_context(result)
+    return 0 if result.get("status") != "unavailable" else 1
+
+
+def cmd_hook_file_length(args: argparse.Namespace) -> int:
+    """Run a reusable file-length guard suitable for pre-commit hooks."""
+    project_root = _find_project_root()
+    config_path = Path(args.config).resolve()
+    config = load_config(config_path)
+    relative_paths = args.files or []
+    if not relative_paths:
+        file_budget_args = argparse.Namespace(
+            changed_only=False,
+            staged_only=args.staged_only,
+            base=args.base,
+            overrides_only=False,
+            paths=[],
+        )
+        from entrix.file_budgets import _resolve_paths
+
+        relative_paths = _resolve_paths(file_budget_args, project_root, config)
+
+    violations = evaluate_paths(
+        project_root,
+        relative_paths,
+        config,
+        use_head_ratchet=not args.strict_limit,
+    )
+
+    checked_count = sum(
+        1 for path in set(relative_paths) if is_tracked_source_file(path, config)
+    )
+    print(f"file_budget_checked: {checked_count}")
+    print(f"file_budget_violations: {len(violations)}")
+    for violation in violations:
+        reason = f" | {violation.reason}" if violation.reason else ""
+        print(
+            f"current file length {violation.line_count} exceeds limit "
+            f"{violation.max_lines}: {violation.path}{reason}"
+        )
+    if violations:
+        print("Refactor the oversized file before commit.")
+        structure_result = analyze_long_files(
+            project_root,
+            files=list(dict.fromkeys(violation.path for violation in violations)),
+            config_path=config_path,
+            base=args.base,
+            use_head_ratchet=not args.strict_limit,
+        )
+        if structure_result.get("status") == "unavailable":
+            print(
+                "Structure summary unavailable: "
+                f"{structure_result.get('summary', 'long-file analysis unavailable')}"
+            )
+        else:
+            _print_hook_long_file_summary(structure_result)
+        return 1
+    return 0
+
+
+def cmd_analyze_long_file(args: argparse.Namespace) -> int:
+    """Analyze oversized or explicit files into ClassMap/FunctionMap payloads."""
+    project_root = _find_project_root()
+    explicit_files = list(dict.fromkeys((args.files or []) + (args.paths or [])))
+    result = analyze_long_files(
+        project_root,
+        files=explicit_files or None,
+        config_path=Path(args.config).resolve() if args.config else None,
+        base=args.base,
+        use_head_ratchet=not args.strict_limit,
+        comment_review_commit_threshold=args.comment_review_commit_threshold,
+    )
+    if result.get("status") == "unavailable":
+        print(result.get("summary", "Long-file analysis unavailable"))
+        return 1
+    if args.json:
+        _print_json(result)
+    else:
+        _print_long_file_analysis(result, min_lines=args.min_lines)
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="entrix",
+        description=(
+            "Executable quality guardrails powered by evolutionary architecture "
+            "fitness functions"
+        ),
+    )
+    subparsers = parser.add_subparsers(dest="command")
+
+    run_parser = subparsers.add_parser("run", help="Run guardrail checks")
+    run_parser.add_argument(
+        "--tier", choices=["fast", "normal", "deep"], help="Run only metrics up to this tier"
+    )
+    run_parser.add_argument("--parallel", action="store_true", help="Run metrics in parallel")
+    run_parser.add_argument("--dry-run", action="store_true", help="Show what would run")
+    run_parser.add_argument("--verbose", action="store_true", help="Show output on failure")
+    run_parser.add_argument(
+        "--stream",
+        nargs="?",
+        choices=["off", "failures", "all"],
+        const="all",
+        default="failures",
+        help="Stream shell metric stdout/stderr. Default: 'failures' (replay on fail). Use 'all' for live output, 'off' to suppress.",
+    )
+    run_parser.add_argument(
+        "--format",
+        choices=["text", "ascii", "rich"],
+        default="text",
+        help="Render final report as plain text, ASCII scorecard, or rich scorecard",
+    )
+    run_parser.add_argument(
+        "--progress-refresh",
+        type=int,
+        default=4,
+        help="Refresh rate for rich live progress updates",
+    )
+    run_parser.add_argument(
+        "--min-score",
+        type=float,
+        default=80.0,
+        help="Minimum weighted score before the run exits non-zero",
+    )
+    run_parser.add_argument(
+        "--scope",
+        choices=["local", "ci", "staging", "prod_observation"],
+        help="Run only metrics for the given execution scope",
+    )
+    run_parser.add_argument(
+        "--output",
+        help="Write JSON report to a file path, or '-' for stdout",
+    )
+    run_parser.add_argument(
+        "--changed-only",
+        action="store_true",
+        help="Run only metrics relevant to changed files",
+    )
+    run_parser.add_argument(
+        "--files",
+        nargs="*",
+        default=[],
+        help="Explicit changed files used for incremental metric selection",
+    )
+    run_parser.add_argument(
+        "--base",
+        default="HEAD",
+        help="Git base reference used by --changed-only",
+    )
+    run_parser.add_argument(
+        "--dimension",
+        action="append",
+        default=[],
+        help="Restrict execution to a dimension name; repeat to include multiple dimensions",
+    )
+    run_parser.add_argument(
+        "--metric",
+        action="append",
+        default=[],
+        help="Restrict execution to a metric name; repeat to include multiple metrics",
+    )
+    run_parser.set_defaults(func=cmd_run)
+
+    install_parser = subparsers.add_parser(
+        "install",
+        help="Generate `.mcp.json` for Claude Code MCP integration",
+    )
+    install_parser.add_argument(
+        "--repo",
+        default=None,
+        help="Optional repo root (defaults to current working directory).",
+    )
+    install_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print `.mcp.json` content without writing it.",
+    )
+    install_parser.set_defaults(func=cmd_install)
+
+    init_parser = subparsers.add_parser("init", help="Alias for `install`.")
+    init_parser.add_argument(
+        "--repo",
+        default=None,
+        help="Optional repo root (defaults to current working directory).",
+    )
+    init_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print `.mcp.json` content without writing it.",
+    )
+    init_parser.set_defaults(func=cmd_install)
+
+    serve_parser = subparsers.add_parser(
+        "serve",
+        help="Run Entrix MCP server over stdio.",
+    )
+    serve_parser.set_defaults(func=cmd_serve)
+
+    validate_parser = subparsers.add_parser("validate", help="Check dimension weights sum to 100%%")
+    validate_parser.set_defaults(func=cmd_validate)
+
+    review_trigger_parser = subparsers.add_parser(
+        "review-trigger",
+        help="Detect risky changes that should trigger human review",
+    )
+    review_trigger_parser.add_argument("files", nargs="*", help="Optional explicit changed files")
+    review_trigger_parser.add_argument("--base", default="HEAD~1", help="Git diff base")
+    review_trigger_parser.add_argument("--config", help="Optional review-trigger YAML config path")
+    review_trigger_parser.add_argument(
+        "--fail-on-trigger",
+        action="store_true",
+        help="Return non-zero when human review is required",
+    )
+    review_trigger_parser.add_argument("--json", action="store_true", help="Emit JSON output")
+    review_trigger_parser.set_defaults(func=cmd_review_trigger)
+
+    release_trigger_parser = subparsers.add_parser(
+        "release-trigger",
+        help="Detect risky release-surface drift before publish",
+    )
+    release_trigger_parser.add_argument("files", nargs="*", help="Optional explicit changed files")
+    release_trigger_parser.add_argument("--manifest", required=True, help="Release manifest JSON path")
+    release_trigger_parser.add_argument("--baseline-manifest", help="Optional baseline manifest JSON path")
+    release_trigger_parser.add_argument("--base", default="HEAD~1", help="Git diff base")
+    release_trigger_parser.add_argument("--config", help="Optional release-trigger YAML config path")
+    release_trigger_parser.add_argument(
+        "--fail-on-trigger",
+        action="store_true",
+        help="Return non-zero when release review or block is required",
+    )
+    release_trigger_parser.add_argument("--json", action="store_true", help="Emit JSON output")
+    release_trigger_parser.set_defaults(func=cmd_release_trigger)
+
+    hook_parser = subparsers.add_parser("hook", help="Reusable local hook helpers")
+    hook_subparsers = hook_parser.add_subparsers(dest="hook_command")
+
+    hook_file_length = hook_subparsers.add_parser(
+        "file-length",
+        help="Fail when staged or explicit source files exceed the configured line budget",
+    )
+    hook_file_length.add_argument(
+        "--config",
+        required=True,
+        help="Path to a JSON file with file size budget configuration.",
+    )
+    hook_file_length.add_argument(
+        "--staged-only",
+        action="store_true",
+        help="Evaluate only staged files from the git index.",
+    )
+    hook_file_length.add_argument(
+        "--strict-limit",
+        action="store_true",
+        help="Ignore HEAD ratcheting and enforce configured limits directly.",
+    )
+    hook_file_length.add_argument(
+        "--base",
+        default="HEAD",
+        help="Compatibility flag for changed-only style integrations.",
+    )
+    hook_file_length.add_argument("files", nargs="*", help="Optional explicit relative paths to evaluate")
+    hook_file_length.set_defaults(func=cmd_hook_file_length)
+
+    analyze_parser = subparsers.add_parser("analyze", help="Structured source analysis helpers")
+    analyze_subparsers = analyze_parser.add_subparsers(dest="analyze_command")
+
+    analyze_long_file = analyze_subparsers.add_parser(
+        "long-file",
+        help="Return ClassMap/FunctionMap payloads for oversized or explicit files",
+    )
+    analyze_long_file.add_argument(
+        "paths",
+        nargs="*",
+        help="Explicit files to analyze",
+    )
+    analyze_long_file.add_argument("--files", nargs="*", default=[], help="Explicit files to analyze")
+    analyze_long_file.add_argument("--base", default="HEAD", help="Git base reference for implicit oversized-file discovery")
+    analyze_long_file.add_argument(
+        "--config",
+        help="Path to a JSON file with file size budget configuration.",
+    )
+    analyze_long_file.add_argument(
+        "--strict-limit",
+        action="store_true",
+        help="Ignore HEAD ratcheting and enforce configured limits directly.",
+    )
+    analyze_long_file.add_argument(
+        "--min-lines",
+        type=int,
+        default=60,
+        help="Hide text-report items smaller than this many lines (JSON output is unaffected).",
+    )
+    analyze_long_file.add_argument(
+        "--comment-review-commit-threshold",
+        type=int,
+        default=5,
+        help="Warn when a class/function has comments and changed in at least this many commits.",
+    )
+    analyze_long_file.add_argument("--json", action="store_true", help="Emit JSON output")
+    analyze_long_file.set_defaults(func=cmd_analyze_long_file)
+
+    graph_parser = subparsers.add_parser("graph", help="Graph-backed impact and test-radius analysis")
+    graph_subparsers = graph_parser.add_subparsers(dest="graph_command")
+
+    graph_build = graph_subparsers.add_parser("build", help="Build or update the code graph")
+    graph_build.add_argument("--base", default="HEAD", help="Git diff base for incremental update")
+    graph_build.add_argument(
+        "--build-mode",
+        choices=["auto", "full", "skip"],
+        default="auto",
+        help="Graph build mode",
+    )
+    graph_build.add_argument("--json", action="store_true", help="Emit JSON output")
+    graph_build.set_defaults(func=cmd_graph_build)
+
+    graph_stats = graph_subparsers.add_parser("stats", help="Show graph statistics")
+    graph_stats.add_argument("--json", action="store_true", help="Emit JSON output")
+    graph_stats.set_defaults(func=cmd_graph_stats)
+
+    graph_impact = graph_subparsers.add_parser("impact", help="Analyze blast radius")
+    graph_impact.add_argument("files", nargs="*", help="Optional explicit changed files")
+    graph_impact.add_argument("--base", default="HEAD", help="Git diff base")
+    graph_impact.add_argument("--depth", type=int, default=2, help="Traversal depth")
+    graph_impact.add_argument(
+        "--build-mode",
+        choices=["auto", "full", "skip"],
+        default="auto",
+        help="Graph build mode",
+    )
+    graph_impact.add_argument("--json", action="store_true", help="Emit JSON output")
+    graph_impact.set_defaults(func=cmd_graph_impact)
+
+    graph_test_radius = graph_subparsers.add_parser(
+        "test-radius",
+        help="Estimate tests affected by changed files or commits",
+    )
+    graph_test_radius.add_argument("files", nargs="*", help="Optional explicit changed files")
+    graph_test_radius.add_argument("--base", default="HEAD", help="Git diff base")
+    graph_test_radius.add_argument("--depth", type=int, default=2, help="Traversal depth")
+    graph_test_radius.add_argument("--max-targets", type=int, default=25, help="Max nodes to query")
+    graph_test_radius.add_argument(
+        "--build-mode",
+        choices=["auto", "full", "skip"],
+        default="auto",
+        help="Graph build mode",
+    )
+    graph_test_radius.add_argument("--json", action="store_true", help="Emit JSON output")
+    graph_test_radius.set_defaults(func=cmd_graph_test_radius)
+
+    graph_test_mapping = graph_subparsers.add_parser(
+        "test-mapping",
+        help="Map changed source files to related tests with heuristic and graph evidence",
+    )
+    graph_test_mapping.add_argument("files", nargs="*", help="Optional explicit changed files")
+    graph_test_mapping.add_argument("--base", default="HEAD", help="Git diff base")
+    graph_test_mapping.add_argument(
+        "--build-mode",
+        choices=["auto", "full", "skip"],
+        default="auto",
+        help="Graph build mode for optional semantic enrichment",
+    )
+    graph_test_mapping.add_argument(
+        "--no-graph",
+        action="store_true",
+        help="Disable graph enrichment and use heuristic mapping only",
+    )
+    graph_test_mapping.add_argument(
+        "--fail-on-missing",
+        action="store_true",
+        help="Return non-zero when at least one source file has no asserted test mapping",
+    )
+    graph_test_mapping.add_argument("--json", action="store_true", help="Emit JSON output")
+    graph_test_mapping.set_defaults(func=cmd_graph_test_mapping)
+
+    graph_query = graph_subparsers.add_parser("query", help="Run a graph query")
+    graph_query.add_argument(
+        "pattern",
+        choices=[
+            "callers_of",
+            "callees_of",
+            "imports_of",
+            "importers_of",
+            "children_of",
+            "tests_for",
+            "inheritors_of",
+            "file_summary",
+        ],
+        help="Query pattern",
+    )
+    graph_query.add_argument("target", help="Qualified name or file path")
+    graph_query.add_argument("--base", default="HEAD", help="Git diff base")
+    graph_query.add_argument(
+        "--build-mode",
+        choices=["auto", "full", "skip"],
+        default="auto",
+        help="Graph build mode",
+    )
+    graph_query.add_argument("--json", action="store_true", help="Emit JSON output")
+    graph_query.set_defaults(func=cmd_graph_query)
+
+    graph_history = graph_subparsers.add_parser(
+        "history",
+        help="Estimate test radius for recent commits using the current graph",
+    )
+    graph_history.add_argument("--count", type=int, default=10, help="Number of commits to inspect")
+    graph_history.add_argument("--ref", default="HEAD", help="Revision to walk from")
+    graph_history.add_argument("--depth", type=int, default=2, help="Traversal depth")
+    graph_history.add_argument("--max-targets", type=int, default=25, help="Max nodes to query")
+    graph_history.add_argument(
+        "--build-mode",
+        choices=["auto", "full", "skip"],
+        default="auto",
+        help="Graph build mode",
+    )
+    graph_history.add_argument("--json", action="store_true", help="Emit JSON output")
+    graph_history.set_defaults(func=cmd_graph_history)
+
+    graph_review_context = graph_subparsers.add_parser(
+        "review-context",
+        help="Build an AI-friendly review context from the current graph",
+    )
+    graph_review_context.add_argument("files_positional", nargs="*", help="Optional explicit changed files")
+    graph_review_context.add_argument("--files", nargs="*", default=[], help="Explicit changed files")
+    graph_review_context.add_argument("--base", default="HEAD", help="Git diff base")
+    graph_review_context.add_argument("--head", default="HEAD", help="Compatibility flag; currently unused")
+    graph_review_context.add_argument("--depth", type=int, default=2, help="Traversal depth")
+    graph_review_context.add_argument("--max-targets", type=int, default=25, help="Max nodes to query")
+    graph_review_context.add_argument("--max-files", type=int, default=12, help="Max source files to include")
+    graph_review_context.add_argument(
+        "--max-lines-per-file",
+        type=int,
+        default=120,
+        help="Max source lines to include per file",
+    )
+    graph_review_context.add_argument(
+        "--no-source",
+        action="store_true",
+        help="Do not include source snippets in the output",
+    )
+    graph_review_context.add_argument(
+        "--build-mode",
+        choices=["auto", "full", "skip"],
+        default="auto",
+        help="Graph build mode",
+    )
+    graph_review_context.add_argument("--json", action="store_true", help="Emit JSON output")
+    graph_review_context.add_argument("--output", help="Write JSON output to a file path or '-' for stdout")
+    graph_review_context.set_defaults(func=cmd_graph_review_context)
+
+    return parser
+
+
+def main() -> None:
+    parser = build_parser()
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        sys.exit(0)
+
+    if args.command == "graph" and not getattr(args, "graph_command", None):
+        parser.parse_args(["graph", "--help"])
+        return
+    if args.command == "hook" and not getattr(args, "hook_command", None):
+        parser.parse_args(["hook", "--help"])
+        return
+    if args.command == "analyze" and not getattr(args, "analyze_command", None):
+        parser.parse_args(["analyze", "--help"])
+        return
+
+    exit_code = args.func(args)
+    sys.exit(exit_code)
+
+
+if __name__ == "__main__":
+    main()
