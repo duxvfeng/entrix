@@ -9,18 +9,19 @@ from entrix.stop_gate.model import GateAttempt
 
 def test_collect_evidence_success():
     """测试成功收集证据"""
+    dimension_score = Mock(results=[
+        Mock(metric_name="pytest_pass", hard_gate=False, passed=True, output=""),
+        Mock(metric_name="ruff_pass", hard_gate=False, passed=True, output=""),
+    ])
     report = Mock(
         final_score=85,
         hard_gate_blocked=False,
         score_blocked=False,
+        dimensions=[dimension_score],
     )
-    dimension = Mock(results=[
-        Mock(metric_name="pytest_pass", hard_gate=False, passed=True, output=""),
-        Mock(metric_name="ruff_pass", hard_gate=False, passed=True, output=""),
-    ])
 
     with patch("entrix.stop_gate.collector.run_fitness_report") as mock_fitness:
-        mock_fitness.return_value = (report, [dimension])
+        mock_fitness.return_value = (report, [Mock()])
 
         collector = EvidenceCollector()
         attempt = GateAttempt(
@@ -48,11 +49,11 @@ def test_collect_with_review_trigger_skipped():
         final_score=100,
         hard_gate_blocked=False,
         score_blocked=False,
+        dimensions=[Mock(results=[])],
     )
-    dimension = Mock(results=[])
 
     with patch("entrix.stop_gate.collector.run_fitness_report") as mock_fitness:
-        mock_fitness.return_value = (report, [dimension])
+        mock_fitness.return_value = (report, [Mock()])
 
         collector = EvidenceCollector()
         attempt = GateAttempt(

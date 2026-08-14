@@ -61,3 +61,6 @@ target-version = "py310"
 
 [tool.pytest.ini_options]
 norecursedirs = ["tests/fixtures"]
+markers = [
+    "integration: marks tests as integration tests (slow, may require external tools)",
+]

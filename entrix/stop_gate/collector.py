@@ -104,7 +104,7 @@ class EvidenceCollector:
         """运行 Entrix fitness 检查"""
         policy = GovernancePolicy()
         preset = get_project_preset()
-        report, dimensions = run_fitness_report(
+        report, _dimensions = run_fitness_report(
             attempt.workspace,
             policy,
             preset,
@@ -118,15 +118,15 @@ class EvidenceCollector:
             "final_score": report.final_score,
             "hard_gate_blocked": report.hard_gate_blocked,
             "score_blocked": report.score_blocked,
-            "metrics_count": sum(len(dim.results) for dim in dimensions),
+            "metrics_count": sum(len(score.results) for score in report.dimensions),
             "failed_metrics": [
                 {
                     "name": result.metric_name,
                     "severity": "hard_gate" if result.hard_gate else "soft_gate",
                     "output": result.output[:500],  # 限制输出长度
                 }
-                for dim in dimensions
-                for result in dim.results
+                for score in report.dimensions
+                for result in score.results
                 if not result.passed
             ],
         }
