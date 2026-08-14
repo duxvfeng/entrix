@@ -43,6 +43,7 @@ class GateAttempt:
         workspace: Path,
         changed_files: list[str],
         stop_reason: str,
+        base_ref: str | None = None,
     ) -> GateAttempt:
         """创建新的 GateAttempt，自动生成 attempt_id"""
         return cls(
@@ -50,7 +51,7 @@ class GateAttempt:
             session_id=session_id,
             task_id=task_id,
             workspace=workspace,
-            base_ref=None,
+            base_ref=base_ref,
             changed_files=changed_files,
             requested_at=datetime.now(timezone.utc),
             stop_reason=stop_reason,
