@@ -1,5 +1,7 @@
 """Entrix Stop Gate - 自动化质量门禁系统"""
 
+from entrix.stop_gate.adapter import StopGateAdapter
+from entrix.stop_gate.engine import StopGateEngine
 from entrix.stop_gate.model import (
     AttemptState,
     AttemptStatus,
@@ -17,5 +19,7 @@ __all__ = [
     "Finding",
     "GateAttempt",
     "StopDecision",
+    "StopGateAdapter",
+    "StopGateEngine",
     "Verdict",
 ]
