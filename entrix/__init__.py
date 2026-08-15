@@ -1,4 +1,4 @@
-"""Entrix fitness and review-trigger package."""
+"""Entrix fitness 与 review-trigger 包。"""
 
 from entrix.stop_gate import StopGateAdapter, StopGateEngine
 

@@ -1,4 +1,4 @@
-"""Shared execution engine for fitness runs."""
+"""fitness run 的共享执行引擎。"""
 
 from __future__ import annotations
 
@@ -22,11 +22,10 @@ ProgressSetupCallback = Callable[[list[Dimension]], None]
 
 
 def collect_changed_files(project_root: Path, base: str) -> list[str]:
-    """Collect changed files from git for incremental fitness runs.
+    """为增量 fitness run 从 git 收集变更文件。
 
-    Only includes files that are committed (ahead of base) or staged.
-    Untracked and unstaged working-tree changes are excluded so that
-    unrelated WIP doesn't pollute the fitness scope.
+    只包含已提交（相对于 base 领先）或已暂存的文件。
+    未跟踪和未暂存的工作区改动被排除，避免无关的 WIP 污染 fitness 范围。
     """
     from entrix.presets import get_project_preset
 
@@ -34,9 +33,9 @@ def collect_changed_files(project_root: Path, base: str) -> list[str]:
     files: list[str] = []
 
     commands = [
-        # Committed changes ahead of base
+        # 相对于 base 的已提交改动
         ["git", "diff", "--name-only", "--diff-filter=ACMR", base],
-        # Staged (index) changes
+        # 暂存区（index）的改动
         ["git", "diff", "--name-only", "--diff-filter=ACMR", "--cached"],
     ]
 
@@ -67,7 +66,7 @@ def matches_changed_files(
     domains: set[str],
     preset: ProjectPreset,
 ) -> bool:
-    """Check whether a metric should run for a changed file set."""
+    """检查某个 metric 是否应该对变更文件集运行。"""
     if metric.run_when_changed:
         return any(
             fnmatch.fnmatch(changed_file, pattern)
@@ -88,7 +87,7 @@ def filter_dimensions_for_incremental(
     domains: set[str],
     preset: ProjectPreset,
 ) -> list[Dimension]:
-    """Return only dimensions with metrics relevant to the changed file set."""
+    """只返回包含与变更文件集相关 metric 的 dimension。"""
     if not changed_files:
         return []
     if "config" in domains:
@@ -125,7 +124,7 @@ def run_fitness_report(
     progress_setup_callback: ProgressSetupCallback | None = None,
     shell_output_callback: OutputCallback | None = None,
 ) -> tuple[FitnessReport, list[Dimension]]:
-    """Execute a fitness run and return report plus the selected dimensions."""
+    """执行一次 fitness run，返回报告以及选中的 dimension。"""
     dimensions = filter_dimensions(load_dimensions(preset.fitness_dir(project_root)), policy)
 
     runner_env: dict[str, str] = {}
@@ -185,7 +184,7 @@ def _run_metric_batch(
     base: str,
     progress_callback: ProgressCallback | None,
 ) -> list[MetricResult]:
-    """Execute a mixed batch of shell and probe metrics while preserving order."""
+    """执行混合的 shell 和 probe metric 批次，同时保持顺序。"""
     results: list[MetricResult] = []
     shell_batch: list[Metric] = []
     shell_indexes: list[int] = []
@@ -266,7 +265,7 @@ def _run_probe_metric(
     base: str,
     progress_callback: ProgressCallback | None,
 ) -> MetricResult:
-    """Execute a graph-backed probe metric."""
+    """执行基于代码图的 probe metric。"""
     _emit_progress(progress_callback, "start", metric)
     if metric.waiver and metric.waiver.is_active():
         result = MetricResult(

@@ -1,4 +1,4 @@
-"""Shell runner — execute metric commands via subprocess."""
+"""Shell runner —— 通过 subprocess 执行 metric 命令。"""
 
 from __future__ import annotations
 
@@ -16,15 +16,15 @@ from entrix.model import Gate, Metric, MetricResult, ResultState
 
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mGKHF]")
 
-# Keep first 4KB + last 4KB so both startup context and the final
-# summary (pass/fail line) survive truncation.
+# 保留前 4KB 和后 4KB，这样启动上下文和最终的
+# 摘要（通过/失败行）在截断后仍然可见。
 _OUTPUT_HEAD = 4000
 _OUTPUT_TAIL = 4000
 _OUTPUT_MAX = _OUTPUT_HEAD + _OUTPUT_TAIL + 200  # a bit of slack
 
 
 def _smart_truncate(text: str) -> str:
-    """Keep head + tail of output so both context and verdict are visible."""
+    """保留输出的头部和尾部，使上下文和判定结果都可见。"""
     if len(text) <= _OUTPUT_MAX:
         return text
     head = text[:_OUTPUT_HEAD]
@@ -37,7 +37,7 @@ OutputCallback = Callable[[Metric, str, str], None]
 
 
 class ShellRunner:
-    """Executes Metric commands as shell subprocesses."""
+    """以 shell subprocess 方式执行 Metric 命令。"""
 
     def __init__(
         self,
@@ -54,10 +54,9 @@ class ShellRunner:
         self.output_callback = output_callback
 
     def run(self, metric: Metric, *, dry_run: bool = False) -> MetricResult:
-        """Execute a single metric's shell command.
+        """执行单个 metric 的 shell 命令。
 
-        Returns a MetricResult with pass/fail status based on either
-        regex pattern matching or process exit code.
+        返回 MetricResult，根据 regex pattern 匹配或进程 exit code 判定通过/失败。
         """
         if metric.waiver and metric.waiver.is_active():
             return MetricResult(
@@ -90,22 +89,22 @@ class ShellRunner:
 
             if metric.pattern:
                 pattern_matched = bool(re.search(metric.pattern, clean_output, re.IGNORECASE))
-                # Exit-code-first hybrid: non-zero exit always fails.
-                # Pattern is supplementary evidence when exit code is 0.
+                # 以 exit code 优先的混合策略：非零退出码一定判定为失败。
+                # 当 exit code 为 0 时，pattern 匹配结果作为补充依据。
                 passed = (returncode == 0) and pattern_matched
             else:
                 passed = returncode == 0
 
             elapsed = (time.monotonic() - start) * 1000
 
-            # Determine result state: distinguish checker infrastructure errors
-            # from genuine product failures.
+            # 判定结果状态：区分检查器基础设施错误
+            # 与真实的产品失败。
             state: ResultState | None = None
             if passed:
                 state = ResultState.PASS
             elif returncode != 0 and metric.pattern and not pattern_matched:
-                # Both exit code AND pattern failed — likely an infrastructure
-                # error (missing file, crash, stack overflow, etc.)
+                # exit code 和 pattern 同时失败——很可能是基础设施
+                # 错误（文件缺失、崩溃、栈溢出等）
                 state = ResultState.UNKNOWN
             else:
                 state = ResultState.FAIL
@@ -224,9 +223,9 @@ class ShellRunner:
         max_workers: int = 4,
         progress_callback: ProgressCallback | None = None,
     ) -> list[MetricResult]:
-        """Execute multiple metrics, optionally in parallel.
+        """执行多个 metric，可选择并行执行。
 
-        Results are returned in the same order as the input metrics.
+        返回结果与输入 metric 的顺序一致。
         """
         if not parallel or dry_run:
             results = []

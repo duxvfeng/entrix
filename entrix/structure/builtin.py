@@ -1,4 +1,4 @@
-"""Built-in Tree-sitter structural analyzer."""
+"""内置 Tree-sitter structural analyzer。"""
 
 from __future__ import annotations
 
@@ -139,7 +139,7 @@ _SUPPORTED_QUERY_TYPES = {
 
 
 class BuiltinGraphAdapter:
-    """Tree-sitter backed structural analyzer with incremental caches."""
+    """基于 Tree-sitter 的 structural analyzer，支持增量缓存。"""
 
     def __init__(self, repo_root: Path):
         if get_parser is None:
@@ -311,7 +311,7 @@ class BuiltinGraphAdapter:
         }
 
     def analyze_file(self, rel_path: str) -> dict[str, Any]:
-        """Parse a single file and return its language/symbol record."""
+        """解析单个文件并返回其 language/symbol 记录。"""
         normalized = self._resolve_repo_relative_path(rel_path)
         if not normalized:
             return {"status": "not_found", "summary": f"No file found matching '{rel_path}'."}

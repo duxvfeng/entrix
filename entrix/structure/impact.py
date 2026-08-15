@@ -1,4 +1,4 @@
-"""Change impact analysis — blast radius computation via code graph."""
+"""变更影响分析 — 通过 code graph 计算 blast radius。"""
 
 from __future__ import annotations
 
@@ -13,34 +13,34 @@ CODE_EXTENSIONS = {
 
 
 def git_changed_files(repo_root: Path, base: str = "HEAD") -> list[str]:
-    """Collect changed, unstaged, and untracked code files relative to base.
+    """收集相对于 base 的已变更、未暂存和未跟踪的 code files。
 
-    Deduplicates and returns relative paths.
+    去重并返回相对路径。
     """
     files: list[str] = []
 
-    # Committed changes vs base
+    # 相对于 base 的已提交改动
     result = subprocess.run(
         ["git", "diff", "--name-only", "--diff-filter=ACMR", base, "--", "src", "apps", "crates"],
         cwd=repo_root, capture_output=True, text=True, check=False,
     )
     files.extend(line.strip() for line in result.stdout.splitlines() if line.strip())
 
-    # Unstaged changes
+    # 未暂存的改动
     result = subprocess.run(
         ["git", "diff", "--name-only", "--diff-filter=ACMR", "--", "src", "apps", "crates"],
         cwd=repo_root, capture_output=True, text=True, check=False,
     )
     files.extend(line.strip() for line in result.stdout.splitlines() if line.strip())
 
-    # Untracked files
+    # 未跟踪的文件
     result = subprocess.run(
         ["git", "ls-files", "--others", "--exclude-standard", "src", "apps", "crates"],
         cwd=repo_root, capture_output=True, text=True, check=False,
     )
     files.extend(line.strip() for line in result.stdout.splitlines() if line.strip())
 
-    # Deduplicate preserving order
+    # 去重并保持顺序
     seen: set[str] = set()
     deduped: list[str] = []
     for f in files:
@@ -51,7 +51,7 @@ def git_changed_files(repo_root: Path, base: str = "HEAD") -> list[str]:
 
 
 def filter_code_files(files: list[str], repo_root: Path) -> list[str]:
-    """Keep only files with recognized code extensions that exist on disk."""
+    """仅保留磁盘上存在且 code extension 已识别的文件。"""
     return [
         f for f in files
         if Path(f).suffix.lower() in CODE_EXTENSIONS and (repo_root / f).exists()
@@ -59,7 +59,7 @@ def filter_code_files(files: list[str], repo_root: Path) -> list[str]:
 
 
 def classify_test_file(file_path: str) -> bool:
-    """Heuristic: is this file a test file?"""
+    """启发式判断：该文件是否为 test file。"""
     lowered = file_path.lower()
     return (
         "/tests/" in lowered
@@ -71,7 +71,7 @@ def classify_test_file(file_path: str) -> bool:
 
 
 def git_commit_changed_files(repo_root: Path, commit: str) -> list[str]:
-    """Return code files changed in a specific commit."""
+    """返回特定 commit 中变更的 code files。"""
     result = subprocess.run(
         [
             "git",
@@ -96,7 +96,7 @@ def git_commit_changed_files(repo_root: Path, commit: str) -> list[str]:
 def git_recent_commits(
     repo_root: Path, *, count: int = 10, ref: str = "HEAD"
 ) -> list[dict[str, str]]:
-    """Return recent commits with metadata for retrospective graph analysis."""
+    """返回最近 commit 的 metadata，用于 retrospective graph analysis。"""
     result = subprocess.run(
         [
             "git",

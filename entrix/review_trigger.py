@@ -1,4 +1,4 @@
-"""Review-trigger rules for human escalation on risky changes."""
+"""用于风险变更人工升级的 review-trigger 规则。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import yaml
 
 @dataclass(frozen=True)
 class DiffStats:
-    """Aggregate diff statistics for review-trigger evaluation."""
+    """review-trigger 评估的聚合 diff 统计。"""
 
     file_count: int = 0
     added_lines: int = 0
@@ -21,7 +21,7 @@ class DiffStats:
 
 @dataclass(frozen=True)
 class ReviewTriggerRule:
-    """A single review-trigger rule."""
+    """一条 review-trigger 规则。"""
 
     name: str
     type: str
@@ -39,7 +39,7 @@ class ReviewTriggerRule:
 
 @dataclass(frozen=True)
 class TriggerMatch:
-    """A triggered rule with human-readable reasons."""
+    """一条被触发的规则，附带人类可读的原因。"""
 
     name: str
     severity: str
@@ -49,7 +49,7 @@ class TriggerMatch:
 
 @dataclass(frozen=True)
 class ReviewTriggerReport:
-    """Structured result of review-trigger evaluation."""
+    """review-trigger 评估的结构化结果。"""
 
     human_review_required: bool
     base: str
@@ -58,7 +58,7 @@ class ReviewTriggerReport:
     triggers: tuple[TriggerMatch, ...] = ()
 
     def to_dict(self) -> dict:
-        """Serialize report to a JSON-friendly dictionary."""
+        """将报告序列化为 JSON 友好字典。"""
         data = asdict(self)
         data["changed_files"] = list(self.changed_files)
         data["triggers"] = [
@@ -74,7 +74,7 @@ class ReviewTriggerReport:
 
 
 def load_review_triggers(config_path: Path) -> list[ReviewTriggerRule]:
-    """Load review-trigger rules from YAML."""
+    """从 YAML 加载 review-trigger 规则。"""
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     rules: list[ReviewTriggerRule] = []
     for entry in raw.get("review_triggers", []):
@@ -104,7 +104,7 @@ def load_review_triggers(config_path: Path) -> list[ReviewTriggerRule]:
 
 
 def collect_changed_files(repo_root: Path, base: str) -> list[str]:
-    """Collect changed and untracked files relative to a git base."""
+    """收集相对于 git base 的变更和未跟踪文件。"""
     files: list[str] = []
     commands = [
         ["git", "diff", "--name-only", "--diff-filter=ACMR", base],
@@ -131,7 +131,7 @@ def collect_changed_files(repo_root: Path, base: str) -> list[str]:
 
 
 def collect_diff_stats(repo_root: Path, base: str) -> DiffStats:
-    """Collect aggregate diff stats relative to a git base."""
+    """收集相对于 git base 的聚合 diff 统计。"""
     result = subprocess.run(
         ["git", "diff", "--numstat", "--diff-filter=ACMR", base],
         cwd=repo_root,
@@ -180,7 +180,7 @@ def evaluate_review_triggers(
     base: str,
     repo_root: Path | None = None,
 ) -> ReviewTriggerReport:
-    """Evaluate review-trigger rules for a diff."""
+    """针对一次 diff 评估 review-trigger 规则。"""
     triggers: list[TriggerMatch] = []
     for rule in rules:
         if rule.type == "changed_paths":

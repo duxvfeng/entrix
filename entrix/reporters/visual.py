@@ -1,4 +1,4 @@
-"""Visual reporters for fitness summaries."""
+"""用于 fitness summary 的 visual reporter。"""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def _failing_metrics(report: FitnessReport) -> list[str]:
 
 
 class RichLiveProgressReporter:
-    """TTY live progress reporter modeled after hook-runtime's rolling dashboard."""
+    """TTY 实时进度 reporter，仿照 hook-runtime 的 rolling dashboard。"""
 
     def __init__(self, *, stream: TextIO, refresh_per_second: int = 4, tail_lines: int = 6):
         self.stream = stream
@@ -110,8 +110,8 @@ class RichLiveProgressReporter:
         if self._live is not None:
             self._live.update(self._renderable(), refresh=True)
             self._live.stop()
-            # Keep one final, static snapshot so captured log output is easier to read than
-            # only the last live frame.
+            # 保留一份最终的静态快照，使捕获的日志输出比
+            # 仅保留最后一帧实时画面更易于阅读。
             if self._console is not None:
                 for line in self.snapshot_lines():
                     self._console.print(line)
@@ -219,7 +219,7 @@ class RichLiveProgressReporter:
 
 
 class AsciiReporter:
-    """Render a compact scorecard using Unicode blocks."""
+    """使用 Unicode blocks 渲染紧凑 scorecard。"""
 
     def __init__(self, *, width: int = 18):
         self.width = width
@@ -251,7 +251,7 @@ class AsciiReporter:
 
 
 class RichReporter:
-    """Render a richer scorecard when `rich` is available."""
+    """在 `rich` 可用时渲染更丰富的 scorecard。"""
 
     def __init__(self, *, width: int = 18):
         self.width = width

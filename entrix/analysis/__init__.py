@@ -1,1 +1,1 @@
-"""Structured analysis helpers for Entrix."""
+"""Entrix 的结构化分析辅助函数。"""

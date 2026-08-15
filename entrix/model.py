@@ -1,15 +1,14 @@
-"""Domain model for evolutionary architecture fitness functions.
+"""进化架构 fitness function 的领域模型。
 
-In Entrix, "fitness" follows the evolutionary architecture term: an executable
-check that measures whether a codebase still satisfies a quality or architecture
-goal. User-facing text often calls the same concept a guardrail.
+在 Entrix 中，"fitness" 沿用进化架构中的术语：一种可执行的检查，
+用于衡量代码库是否仍然满足某个质量或架构目标。面向用户的文本通常将同一概念称为 guardrail。
 
-Aligns with concepts from "Building Evolutionary Architectures":
-- Fitness Function → Metric (an executable architectural check)
-- Dimension → architectural characteristic category
+与《Building Evolutionary Architectures》中的概念对应：
+- Fitness Function → Metric（可执行的架构检查）
+- Dimension → 架构特性类别
 - Atomic vs Holistic → FitnessKind
 - Static vs Dynamic → AnalysisMode
-- Triggered vs Continuous → Tier (execution frequency)
+- Triggered vs Continuous → Tier（执行频率）
 """
 
 from __future__ import annotations
@@ -20,7 +19,7 @@ from enum import Enum
 
 
 class Tier(Enum):
-    """Execution speed tier — maps to trigger frequency."""
+    """执行速度层级 —— 对应触发频率。"""
 
     FAST = "fast"  # <30s: lints, static analysis
     NORMAL = "normal"  # <5min: unit tests, contract checks
@@ -32,21 +31,21 @@ class Tier(Enum):
 
 
 class FitnessKind(Enum):
-    """Atomic checks one thing; holistic checks system-wide properties."""
+    """Atomic 检查单一事项；holistic 检查系统级属性。"""
 
     ATOMIC = "atomic"
     HOLISTIC = "holistic"
 
 
 class AnalysisMode(Enum):
-    """Static analyzes code structure; dynamic analyzes runtime behavior."""
+    """Static 分析代码结构；dynamic 分析运行时行为。"""
 
     STATIC = "static"
     DYNAMIC = "dynamic"
 
 
 class ExecutionScope(Enum):
-    """Execution environment where a metric is authoritative."""
+    """metric 具有权威性的执行环境。"""
 
     LOCAL = "local"
     CI = "ci"
@@ -55,7 +54,7 @@ class ExecutionScope(Enum):
 
 
 class Gate(Enum):
-    """Governance severity for a metric outcome."""
+    """metric 结果的治理严重程度。"""
 
     HARD = "hard"
     SOFT = "soft"
@@ -63,14 +62,14 @@ class Gate(Enum):
 
 
 class Stability(Enum):
-    """Signal stability classification for runtime-aware metrics."""
+    """面向运行时 metric 的信号稳定性分类。"""
 
     DETERMINISTIC = "deterministic"
     NOISY = "noisy"
 
 
 class EvidenceType(Enum):
-    """How evidence is collected or represented."""
+    """evidence 的收集或表示方式。"""
 
     COMMAND = "command"
     TEST = "test"
@@ -80,7 +79,7 @@ class EvidenceType(Enum):
 
 
 class Confidence(Enum):
-    """Confidence level for a metric's evidence quality."""
+    """metric evidence 质量的置信度。"""
 
     HIGH = "high"
     MEDIUM = "medium"
@@ -89,7 +88,7 @@ class Confidence(Enum):
 
 
 class ResultState(Enum):
-    """Expanded result states for Fitness V2."""
+    """Fitness V2 的扩展结果状态。"""
 
     PASS = "pass"
     FAIL = "fail"
@@ -100,7 +99,7 @@ class ResultState(Enum):
 
 @dataclass
 class Waiver:
-    """Optional waiver metadata for temporarily bypassed metrics."""
+    """临时绕过 metric 的可选豁免元数据。"""
 
     reason: str
     owner: str = ""
@@ -108,14 +107,14 @@ class Waiver:
     expires_at: date | None = None
 
     def is_active(self, today: date | None = None) -> bool:
-        """Return True when the waiver is still active."""
+        """当 waiver 仍然有效时返回 True。"""
         reference = today or date.today()
         return self.expires_at is None or self.expires_at >= reference
 
 
 @dataclass
 class Metric:
-    """A single executable fitness function."""
+    """一个可执行的 fitness function。"""
 
     name: str
     command: str
@@ -143,7 +142,7 @@ class Metric:
 
 @dataclass
 class Dimension:
-    """An architectural characteristic being measured (e.g. security, evolvability)."""
+    """被衡量的架构特性（例如 security、evolvability）。"""
 
     name: str
     weight: int  # percentage, all dimensions should sum to 100
@@ -155,7 +154,7 @@ class Dimension:
 
 @dataclass
 class MetricResult:
-    """Outcome of executing a single Metric."""
+    """执行单个 Metric 的结果。"""
 
     metric_name: str
     passed: bool
@@ -172,13 +171,13 @@ class MetricResult:
 
     @property
     def is_infra_error(self) -> bool:
-        """True when the failure is likely an infrastructure/checker problem, not a product defect."""
+        """当失败很可能是基础设施/检查器问题，而非产品缺陷时返回 True。"""
         return self.state == ResultState.UNKNOWN and not self.passed
 
 
 @dataclass
 class DimensionScore:
-    """Aggregated score for one Dimension."""
+    """某个 Dimension 的聚合分数。"""
 
     dimension: str
     weight: int
@@ -191,7 +190,7 @@ class DimensionScore:
 
 @dataclass
 class FitnessReport:
-    """Final report across all dimensions."""
+    """跨所有维度的最终报告。"""
 
     dimensions: list[DimensionScore] = field(default_factory=list)
     final_score: float = 0.0

@@ -1,4 +1,4 @@
-"""File size budget enforcement with legacy hotspot ratcheting."""
+"""文件大小预算强制，支持 legacy hotspot ratcheting。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class BudgetOverride:
-    """Path-specific file line budget."""
+    """针对特定路径的文件行数预算。"""
 
     path: str
     max_lines: int
@@ -21,7 +21,7 @@ class BudgetOverride:
 
 @dataclass(frozen=True)
 class FileBudgetConfig:
-    """Configuration for file line budgets."""
+    """文件行数预算的配置。"""
 
     default_max_lines: int
     include_roots: tuple[str, ...]
@@ -33,7 +33,7 @@ class FileBudgetConfig:
 
 @dataclass(frozen=True)
 class FileBudgetViolation:
-    """A file that exceeded its configured size budget."""
+    """超过配置大小预算的文件。"""
 
     path: str
     line_count: int
@@ -42,7 +42,7 @@ class FileBudgetViolation:
 
 
 def load_config(config_path: Path) -> FileBudgetConfig:
-    """Load file budget configuration from JSON."""
+    """从 JSON 加载文件预算配置。"""
     raw = json.loads(config_path.read_text(encoding="utf-8"))
     overrides = tuple(
         BudgetOverride(
@@ -66,12 +66,12 @@ def load_config(config_path: Path) -> FileBudgetConfig:
 
 
 def normalize_repo_path(path: Path, repo_root: Path) -> str:
-    """Return a stable POSIX-style relative path."""
+    """返回稳定的 POSIX 风格相对路径。"""
     return path.resolve().relative_to(repo_root.resolve()).as_posix()
 
 
 def is_tracked_source_file(relative_path: str, config: FileBudgetConfig) -> bool:
-    """Check whether a path is subject to file budget enforcement."""
+    """检查路径是否受文件预算强制约束。"""
     if not any(
         relative_path == root or relative_path.startswith(f"{root}/")
         for root in config.include_roots
@@ -83,7 +83,7 @@ def is_tracked_source_file(relative_path: str, config: FileBudgetConfig) -> bool
 
 
 def resolve_budget(relative_path: str, config: FileBudgetConfig) -> tuple[int, str]:
-    """Resolve the budget for a file path."""
+    """解析文件路径对应的预算。"""
     for override in config.overrides:
         if relative_path == override.path:
             return override.max_lines, override.reason
@@ -94,13 +94,13 @@ def resolve_budget(relative_path: str, config: FileBudgetConfig) -> tuple[int, s
 
 
 def count_lines(file_path: Path) -> int:
-    """Count lines in a UTF-8 text file."""
+    """统计 UTF-8 文本文件的行数。"""
     with file_path.open("r", encoding="utf-8") as handle:
         return sum(1 for _ in handle)
 
 
 def count_head_lines(repo_root: Path, relative_path: str) -> int | None:
-    """Count lines for a file as stored in HEAD, or return None if it is untracked there."""
+    """统计文件在 HEAD 中存储的行数；若未跟踪则返回 None。"""
     result = subprocess.run(
         ["git", "show", f"HEAD:{relative_path}"],
         cwd=repo_root,
@@ -114,7 +114,7 @@ def count_head_lines(repo_root: Path, relative_path: str) -> int | None:
 
 
 def list_changed_files(repo_root: Path, base: str = "HEAD", staged_only: bool = False) -> list[str]:
-    """List changed files from git."""
+    """从 git 列出变更文件。"""
     command = ["git", "diff"]
     if staged_only:
         command.append("--cached")
@@ -140,7 +140,7 @@ def list_changed_files(repo_root: Path, base: str = "HEAD", staged_only: bool = 
 
 
 def config_roots_for_git_diff(repo_root: Path) -> list[str]:
-    """Return common code roots that may contain tracked source files."""
+    """返回可能包含跟踪源文件的通用代码根目录。"""
     roots = ["src", "apps", "crates", "scripts", "tests", "e2e", "tools"]
     return [root for root in roots if (repo_root / root).exists()]
 
@@ -152,7 +152,7 @@ def evaluate_paths(
     *,
     use_head_ratchet: bool = True,
 ) -> list[FileBudgetViolation]:
-    """Evaluate file size budgets for the given relative paths."""
+    """评估给定相对路径的文件大小预算。"""
     violations: list[FileBudgetViolation] = []
     for relative_path in sorted(set(relative_paths)):
         if not is_tracked_source_file(relative_path, config):
@@ -259,7 +259,7 @@ def _resolve_paths(args: argparse.Namespace, repo_root: Path, config: FileBudget
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry point."""
+    """CLI 入口点。"""
     args = _parse_args(argv or sys.argv[1:])
     repo_root = Path(args.repo_root).resolve()
     config = load_config(Path(args.config))

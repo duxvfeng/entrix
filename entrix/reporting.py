@@ -1,4 +1,4 @@
-"""Shared serialization helpers for fitness reports."""
+"""fitness report 的共享序列化辅助函数。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from entrix.model import FitnessReport
 
 
 def report_to_dict(report: FitnessReport) -> dict:
-    """Serialize a fitness report into a stable JSON-friendly structure."""
+    """将 fitness report 序列化为稳定的 JSON 友好结构。"""
     return {
         "final_score": report.final_score,
         "hard_gate_blocked": report.hard_gate_blocked,
@@ -41,7 +41,7 @@ def report_to_dict(report: FitnessReport) -> dict:
 
 
 def write_report_output(path: str | None, payload: dict) -> None:
-    """Write JSON payload to a file path or stdout marker."""
+    """将 JSON payload 写入文件路径或 stdout 标记。"""
     if not path:
         return
     serialized = json.dumps(payload, indent=2, ensure_ascii=False)

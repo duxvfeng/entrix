@@ -1,4 +1,4 @@
-"""Preset protocol for repository-specific fitness behavior."""
+"""用于 repository 专用 fitness 行为的 preset protocol。"""
 
 from __future__ import annotations
 
@@ -9,22 +9,22 @@ from entrix.model import Metric
 
 
 class ProjectPreset(Protocol):
-    """Repository-specific hooks that customize fitness behavior."""
+    """用于自定义 fitness 行为的 repository 专用 hook。"""
 
     def fitness_dir(self, project_root: Path) -> Path:
-        """Return the default fitness directory for this project."""
+        """返回该项目的默认 fitness directory。"""
 
     def review_trigger_config(self, project_root: Path) -> Path:
-        """Return the default review-trigger config path for this project."""
+        """返回该项目的默认 review-trigger config 路径。"""
 
     def release_trigger_config(self, project_root: Path) -> Path:
-        """Return the default release-trigger config path for this project."""
+        """返回该项目的默认 release-trigger config 路径。"""
 
     def should_ignore_changed_file(self, file_path: str) -> bool:
-        """Return True when a changed file should be excluded from incremental fitness logic."""
+        """当变更文件应从增量 fitness 逻辑中排除时返回 True。"""
 
     def domains_from_files(self, files: list[str]) -> set[str]:
-        """Infer changed domains from file paths."""
+        """从文件路径推断变更 domain。"""
 
     def metric_domains(self, metric: Metric) -> set[str]:
-        """Infer metric domains for fallback change matching."""
+        """为 fallback 变更匹配推断 metric domain。"""

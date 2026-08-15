@@ -1,4 +1,4 @@
-"""SARIF runner — evaluate metrics from SARIF evidence."""
+"""SARIF runner —— 从 SARIF evidence 评估 metric。"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from entrix.model import Gate, Metric, MetricResult, ResultState
 
 
 class SarifRunner:
-    """Loads SARIF evidence from file path or command stdout and evaluates findings."""
+    """从文件路径或命令 stdout 加载 SARIF evidence，并评估发现。"""
 
     def __init__(
         self,
@@ -27,7 +27,7 @@ class SarifRunner:
         self.env_overrides = env_overrides or {}
 
     def run(self, metric: Metric, *, dry_run: bool = False) -> MetricResult:
-        """Execute a SARIF metric and evaluate it into PASS/FAIL/UNKNOWN."""
+        """执行 SARIF metric 并将其评估为 PASS/FAIL/UNKNOWN。"""
         if metric.waiver and metric.waiver.is_active():
             return MetricResult(
                 metric_name=metric.name,
@@ -96,11 +96,11 @@ class SarifRunner:
             )
 
     def run_batch(self, metrics: list[Metric], *, dry_run: bool = False) -> list[MetricResult]:
-        """Execute multiple SARIF metrics in order."""
+        """按顺序执行多个 SARIF metric。"""
         return [self.run(metric, dry_run=dry_run) for metric in metrics]
 
     def _load_payload(self, command: str, *, timeout: int) -> dict[str, Any]:
-        # If the command resolves to an existing file path, treat it as SARIF file input.
+        # 如果 command 解析为已存在的文件路径，则将其视为 SARIF 文件输入。
         candidate = (self.project_root / command).resolve()
         if candidate.is_file():
             content = candidate.read_text(encoding="utf-8")

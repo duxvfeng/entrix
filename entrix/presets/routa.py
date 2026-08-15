@@ -1,4 +1,4 @@
-"""Routa-specific preset for path roots and domain inference."""
+"""用于路径根与 domain 推断的 Routa 专用 preset。"""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from entrix.model import Metric
 
 
 class RoutaPreset:
-    """Repository-specific behavior for the Routa monorepo."""
+    """针对 Routa monorepo 的 repository 专用行为。"""
 
     def fitness_dir(self, project_root: Path) -> Path:
         return project_root / "docs" / "fitness"

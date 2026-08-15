@@ -1,4 +1,4 @@
-"""Scoring engine — weighted score calculation across dimensions."""
+"""评分引擎 —— 跨维度加权分数计算。"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ _SCORABLE_TOTAL_STATES = {ResultState.PASS, ResultState.FAIL, ResultState.WAIVED
 
 
 def score_dimension(results: list[MetricResult], dimension_name: str, weight: int) -> DimensionScore:
-    """Calculate score for a single dimension from its metric results."""
+    """根据 metric 结果计算单个 dimension 的分数。"""
     if not results:
         return DimensionScore(
             dimension=dimension_name, weight=weight, passed=0, total=0, score=0.0
@@ -39,9 +39,9 @@ def score_dimension(results: list[MetricResult], dimension_name: str, weight: in
 def score_report(
     dimension_scores: list[DimensionScore], min_score: float = 80.0
 ) -> FitnessReport:
-    """Calculate final weighted score across all dimensions.
+    """计算跨所有维度的最终加权分数。
 
-    Score formula: Σ(Weight_i × Score_i) / Σ(Weight_i)
+    分数公式：Σ(Weight_i × Score_i) / Σ(Weight_i)
     """
     all_hard_gate_failures = []
     weighted_sum = 0.0

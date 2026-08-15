@@ -1,4 +1,4 @@
-"""MCP server — expose guardrail checks as tools for AI agent integration."""
+"""MCP server —— 将 guardrail 检查作为工具暴露给 AI agent 集成。"""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from pathlib import Path
 
 
 def create_server(project_root: Path | None = None):
-    """Create and configure the FastMCP server.
+    """创建并配置 FastMCP server。
 
-    Requires the [mcp] optional dependency: pip install entrix[mcp]
+    需要 [mcp] 可选依赖：pip install entrix[mcp]
     """
     try:
         from fastmcp import FastMCP
@@ -36,14 +36,14 @@ def create_server(project_root: Path | None = None):
         dry_run: bool = False,
         min_score: float = 80.0,
     ) -> dict:
-        """Run guardrail checks and return a structured fitness report.
+        """运行 guardrail 检查并返回结构化的 fitness report。
 
         Args:
-            tier: Filter by tier (fast, normal, deep). None runs all.
-            scope: Filter by execution scope (local, ci, staging, prod_observation).
-            parallel: Run metrics in parallel.
-            dry_run: Show what would run without executing.
-            min_score: Minimum weighted score before the result is considered blocked.
+            tier: 按 tier 过滤（fast、normal、deep）。None 表示全部运行。
+            scope: 按执行范围过滤（local、ci、staging、prod_observation）。
+            parallel: 并行运行 metric。
+            dry_run: 显示将要运行的内容而不实际执行。
+            min_score: 结果被视为阻塞前的最低加权分数。
         """
         from entrix.engine import run_fitness_report
         from entrix.governance import GovernancePolicy
@@ -66,10 +66,10 @@ def create_server(project_root: Path | None = None):
 
     @mcp.tool()
     def get_dimension_status(dimension: str) -> dict:
-        """Get current status of a specific fitness dimension.
+        """获取特定 fitness dimension 的当前状态。
 
         Args:
-            dimension: Dimension name (e.g. 'code_quality', 'security').
+            dimension: Dimension 名称（例如 'code_quality'、'security'）。
         """
         from entrix.engine import run_fitness_report
         from entrix.governance import GovernancePolicy
@@ -111,14 +111,14 @@ def create_server(project_root: Path | None = None):
         depth: int = 2,
         base: str = "HEAD",
     ) -> dict:
-        """Analyze blast radius of changes using the code graph.
+        """使用 code graph 分析变更的 blast radius。
 
-        Requires an available graph backend.
+        需要可用的 graph backend。
 
         Args:
-            changed_files: Explicit list of files, or None to auto-detect via git.
-            depth: BFS traversal depth for impact analysis.
-            base: Git ref to diff against.
+            changed_files: 显式文件列表，或 None 以通过 git 自动检测。
+            depth: 影响分析的 BFS 遍历深度。
+            base: 用于 diff 的 Git ref。
         """
         from entrix.runners.graph import GraphRunner
 
@@ -137,6 +137,6 @@ def create_server(project_root: Path | None = None):
 
 
 def main() -> None:
-    """Entry point for `entrix serve`."""
+    """`entrix serve` 的入口点。"""
     server = create_server()
     server.run(transport="stdio")

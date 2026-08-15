@@ -1,4 +1,4 @@
-"""Terminal reporter — colored output matching the original fitness.py format."""
+"""Terminal reporter — 彩色输出，匹配原始 fitness.py 格式。"""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from entrix.model import DimensionScore, FitnessReport, MetricResult, ResultStat
 
 
 class TerminalReporter:
-    """Prints fitness results to the terminal with emoji status indicators."""
+    """将 fitness 结果打印到 terminal，并附带 emoji 状态指示器。"""
 
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
@@ -75,8 +75,8 @@ class TerminalReporter:
         hard = " [HARD GATE]" if result.hard_gate else ""
         tier_label = f" [{result.tier.value}]" if show_tier else ""
 
-        # Annotate infrastructure errors distinctly so developers know the
-        # checker itself is broken, not their code.
+        # 明显标注基础设施错误，让开发者知道是
+        # 检查器本身出了问题，而不是他们的代码。
         infra_tag = ""
         if result.is_infra_error:
             infra_tag = " [INFRA ERROR]"
@@ -86,7 +86,7 @@ class TerminalReporter:
         if result.state in (ResultState.FAIL, ResultState.UNKNOWN) and (self.verbose or result.hard_gate or result.is_infra_error):
             if result.output and result.output != f"TIMEOUT ({result.duration_ms:.0f}s)":
                 lines = result.output.strip().split("\n")
-                # Show head + tail of output so both context and verdict are visible
+                # 显示输出的头部和尾部，使上下文和判定结果都可见
                 max_head = 20
                 max_tail = 30
                 if len(lines) <= max_head + max_tail:
@@ -104,7 +104,7 @@ class TerminalReporter:
         print("\n" + "=" * 60)
         scored_dimensions = [ds for ds in report.dimensions if ds.weight > 0 and ds.total > 0]
 
-        # Collect infrastructure errors across all dimensions
+        # 收集所有维度中的基础设施错误
         infra_errors = []
         for ds in report.dimensions:
             for r in ds.results:
@@ -138,7 +138,7 @@ class TerminalReporter:
         print("=" * 60)
 
     def report(self, report: FitnessReport, *, show_tier: bool = False) -> None:
-        """Print a complete fitness report."""
+        """打印完整的 fitness report。"""
         for ds in report.dimensions:
             self.print_dimension(ds, show_tier=show_tier)
         self.print_footer(report)

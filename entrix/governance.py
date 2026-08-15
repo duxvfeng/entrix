@@ -1,4 +1,4 @@
-"""Governance — policy enforcement for fitness function execution."""
+"""Governance —— fitness function 执行的策略强制。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ StreamOutputMode = Literal["off", "failures", "all"]
 
 @dataclass
 class GovernancePolicy:
-    """Controls which metrics run, when, and what blocks."""
+    """控制哪些 metric 运行、何时运行，以及什么会阻塞。"""
 
     tier_filter: Tier | None = None
     parallel: bool = False
@@ -27,16 +27,16 @@ class GovernancePolicy:
 
 
 def _tier_passes_filter(metric_tier: Tier, filter_tier: Tier) -> bool:
-    """Check if a metric's tier is at or below the filter level.
+    """检查 metric 的 tier 是否处于或低于过滤级别。
 
-    Tier hierarchy: fast(0) < normal(1) < deep(2).
-    --tier normal runs both fast and normal metrics.
+    Tier 层级：fast(0) < normal(1) < deep(2)。
+    --tier normal 会运行 fast 和 normal 两类 metric。
     """
     return Tier.order(metric_tier) <= Tier.order(filter_tier)
 
 
 def filter_metrics(metrics: list[Metric], policy: GovernancePolicy) -> list[Metric]:
-    """Apply tier filtering to a list of metrics."""
+    """对 metric 列表应用 tier 过滤。"""
     result = metrics
     if policy.tier_filter is not None:
         result = [m for m in result if _tier_passes_filter(m.tier, policy.tier_filter)]
@@ -51,7 +51,7 @@ def filter_metrics(metrics: list[Metric], policy: GovernancePolicy) -> list[Metr
 def filter_dimensions(
     dimensions: list[Dimension], policy: GovernancePolicy
 ) -> list[Dimension]:
-    """Apply tier filtering to dimensions, returning only those with remaining metrics."""
+    """对 dimension 应用 tier 过滤，只返回仍有 metric 的 dimension。"""
     result: list[Dimension] = []
     allowed_dimensions = {name.strip().lower() for name in policy.dimension_filters if name.strip()}
     for dim in dimensions:
@@ -73,12 +73,12 @@ def filter_dimensions(
 
 
 def enforce(report: FitnessReport, policy: GovernancePolicy) -> int:
-    """Determine exit code from a fitness report.
+    """根据 fitness 报告确定退出码。
 
     Returns:
-        0 — pass
-        1 — score below minimum threshold
-        2 — hard gate failure
+        0 —— 通过
+        1 —— 分数低于最低阈值
+        2 —— hard gate 失败
     """
     if policy.fail_on_hard_gate and report.hard_gate_blocked:
         return 2

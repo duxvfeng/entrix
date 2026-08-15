@@ -1,4 +1,4 @@
-"""Release-trigger rules for guarding release surface drift."""
+"""用于防范 release surface drift 的 release-trigger 规则。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import yaml
 
 @dataclass(frozen=True)
 class ReleaseArtifact:
-    """A normalized artifact entry from the release manifest."""
+    """来自 release manifest 的规范化 artifact 条目。"""
 
     kind: str
     path: str
@@ -46,7 +46,7 @@ class ReleaseArtifact:
 
 @dataclass(frozen=True)
 class ReleaseTriggerRule:
-    """A single release-trigger rule."""
+    """一条 release-trigger 规则。"""
 
     name: str
     type: str
@@ -65,7 +65,7 @@ class ReleaseTriggerRule:
 
 @dataclass(frozen=True)
 class TriggerMatch:
-    """A triggered rule with human-readable reasons."""
+    """一条被触发的规则，附带人类可读的原因。"""
 
     name: str
     severity: str
@@ -75,7 +75,7 @@ class TriggerMatch:
 
 @dataclass(frozen=True)
 class ReleaseTriggerReport:
-    """Structured result of release-trigger evaluation."""
+    """release-trigger 评估的结构化结果。"""
 
     blocked: bool
     human_review_required: bool
@@ -103,7 +103,7 @@ class ReleaseTriggerReport:
 
 
 def load_release_triggers(config_path: Path) -> list[ReleaseTriggerRule]:
-    """Load release-trigger rules from YAML."""
+    """从 YAML 加载 release-trigger 规则。"""
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     rules: list[ReleaseTriggerRule] = []
     for entry in raw.get("release_triggers", []):
@@ -130,7 +130,7 @@ def load_release_triggers(config_path: Path) -> list[ReleaseTriggerRule]:
 
 
 def load_release_manifest(manifest_path: Path) -> tuple[str, tuple[ReleaseArtifact, ...]]:
-    """Load a release manifest from JSON."""
+    """从 JSON 加载 release manifest。"""
     raw = json.loads(manifest_path.read_text(encoding="utf-8"))
     artifacts = tuple(
         ReleaseArtifact(
@@ -193,7 +193,7 @@ def evaluate_release_triggers(
     baseline_artifacts: tuple[ReleaseArtifact, ...] = (),
     baseline_manifest_path: str | None = None,
 ) -> ReleaseTriggerReport:
-    """Evaluate release-trigger rules for the current release surface."""
+    """针对当前 release surface 评估 release-trigger 规则。"""
     changed_files = changed_files or []
     triggers: list[TriggerMatch] = []
 

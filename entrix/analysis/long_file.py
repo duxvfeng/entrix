@@ -1,4 +1,4 @@
-"""Long-file structural analysis based on existing tree-sitter symbols."""
+"""基于现有 tree-sitter symbol 的长文件结构分析。"""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def analyze_long_files(
     use_head_ratchet: bool = True,
     comment_review_commit_threshold: int = _COMMENT_REVIEW_COMMIT_THRESHOLD,
 ) -> dict[str, Any]:
-    """Return ClassMap/FunctionMap payloads for oversized or explicit files."""
+    """为超大或显式指定的文件返回 ClassMap/FunctionMap payload。"""
     repo_root = repo_root.resolve()
     config_path = (config_path or repo_root / "tools" / "entrix" / "file_budgets.json").resolve()
     config = load_config(config_path)

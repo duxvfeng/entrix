@@ -1,4 +1,4 @@
-"""Evidence loader — parse YAML frontmatter into Dimension objects."""
+"""Evidence loader — 将 YAML frontmatter 解析为 Dimension 对象。"""
 
 from __future__ import annotations
 
@@ -23,14 +23,14 @@ from entrix.model import (
     Waiver,
 )
 
-# Files to skip when scanning the fitness directory
+# 扫描 fitness 目录时要跳过的文件
 _SKIP_FILES = {"README.md", "REVIEW.md"}
 _MANIFEST_FILE = "manifest.yaml"
 _EnumT = TypeVar("_EnumT")
 
 
 def parse_frontmatter(content: str) -> dict | None:
-    """Extract YAML frontmatter from markdown content."""
+    """从 markdown 内容中提取 YAML frontmatter。"""
     match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
     if not match:
         return None
@@ -38,7 +38,7 @@ def parse_frontmatter(content: str) -> dict | None:
 
 
 def _parse_enum(raw: dict, key: str, enum_type: type[_EnumT], default: _EnumT) -> _EnumT:
-    """Parse an enum value from frontmatter, falling back safely on invalid values."""
+    """从 frontmatter 解析 enum 值，遇到无效值时安全回退。"""
     value = raw.get(key)
     if value is None:
         return default
@@ -49,7 +49,7 @@ def _parse_enum(raw: dict, key: str, enum_type: type[_EnumT], default: _EnumT) -
 
 
 def _parse_waiver(raw: dict) -> Waiver | None:
-    """Parse optional waiver metadata."""
+    """解析可选的 waiver 元数据。"""
     waiver = raw.get("waiver")
     if not isinstance(waiver, dict):
         return None
@@ -73,7 +73,7 @@ def _parse_waiver(raw: dict) -> Waiver | None:
 
 
 def _parse_string_list(raw: dict, key: str) -> list[str]:
-    """Return a normalized list of strings or an empty list for invalid input."""
+    """返回规范化的字符串列表；输入无效时返回空列表。"""
     value = raw.get(key)
     if not isinstance(value, list):
         return []
@@ -81,7 +81,7 @@ def _parse_string_list(raw: dict, key: str) -> list[str]:
 
 
 def _build_metric(raw: dict) -> Metric:
-    """Convert a raw YAML metric dict into a Metric dataclass."""
+    """将原始 YAML metric dict 转换为 Metric dataclass。"""
     tier = _parse_enum(raw, "tier", Tier, Tier.NORMAL)
     hard_gate = raw.get("hard_gate", False)
 
@@ -113,7 +113,7 @@ def _build_metric(raw: dict) -> Metric:
 
 
 def _load_manifest_paths(fitness_dir: Path) -> list[Path] | None:
-    """Return manifest-listed evidence files when a manifest exists."""
+    """当 manifest 存在时，返回 manifest 中列出的 evidence 文件。"""
     manifest_path = fitness_dir / _MANIFEST_FILE
     if not manifest_path.is_file():
         return None
@@ -135,7 +135,7 @@ def _load_manifest_paths(fitness_dir: Path) -> list[Path] | None:
 
 
 def _discover_evidence_files(fitness_dir: Path) -> list[Path]:
-    """Find evidence files from manifest or the legacy top-level glob."""
+    """从 manifest 或传统顶层 glob 中查找 evidence 文件。"""
     manifest_paths = _load_manifest_paths(fitness_dir)
     if manifest_paths is not None:
         return sorted(manifest_paths)
@@ -143,7 +143,7 @@ def _discover_evidence_files(fitness_dir: Path) -> list[Path]:
 
 
 def load_dimensions(fitness_dir: Path) -> list[Dimension]:
-    """Scan evidence files in fitness_dir for YAML frontmatter, return Dimension objects."""
+    """扫描 fitness_dir 中的 evidence 文件以提取 YAML frontmatter，返回 Dimension 对象。"""
     dimensions: list[Dimension] = []
 
     for md_file in _discover_evidence_files(fitness_dir):
@@ -175,6 +175,6 @@ def load_dimensions(fitness_dir: Path) -> list[Dimension]:
 
 
 def validate_weights(dimensions: list[Dimension]) -> tuple[bool, int]:
-    """Check that dimension weights sum to 100%."""
+    """检查 dimension weight 是否合计为 100%。"""
     total = sum(d.weight for d in dimensions)
     return total == 100, total

@@ -1,4 +1,4 @@
-"""Graph runner — execute graph-backed fitness probes via the StructuralAnalyzer."""
+"""Graph runner —— 通过 StructuralAnalyzer 执行基于 graph 的 fitness probe。"""
 
 from __future__ import annotations
 
@@ -51,9 +51,9 @@ def _resolver_breakdown(mappings: list[dict[str, Any]]) -> str:
 
 
 class GraphRunner:
-    """Runs fitness probes backed by the code graph.
+    """使用 code graph 支撑的方式运行 fitness probe。
 
-    Gracefully skips when no graph backend is available.
+    当没有可用的 graph 后端时，会优雅地跳过。
     """
 
     _QUERYABLE_NODE_KINDS = {"Function", "Class", "Method", "Type", "Interface", "Enum"}
@@ -83,7 +83,7 @@ class GraphRunner:
         )
 
     def build_graph(self, *, base: str = "HEAD", build_mode: str = "auto") -> dict[str, Any]:
-        """Build or update the backing code graph."""
+        """构建或更新支撑的 code graph。"""
         if not self.available:
             return self._unavailable_result()
 
@@ -97,7 +97,7 @@ class GraphRunner:
             return self._adapter_failure_result("graph build", exc)
 
     def stats(self) -> dict[str, Any]:
-        """Return graph statistics if the backend is available."""
+        """如果后端可用，返回 graph 统计信息。"""
         if not self.available:
             return self._unavailable_result()
         try:
@@ -116,7 +116,7 @@ class GraphRunner:
         base: str = "HEAD",
         build_mode: str = "auto",
     ) -> dict[str, Any]:
-        """Run a graph query after ensuring the graph is current."""
+        """在确保 graph 为最新状态后，运行一次 graph query。"""
         if not self.available:
             return self._unavailable_result()
 
@@ -143,7 +143,7 @@ class GraphRunner:
         max_impacted_files: int = 200,
         build_mode: str = "auto",
     ) -> dict[str, Any]:
-        """Return structured blast-radius analysis for the current graph."""
+        """为当前 graph 返回结构化的 blast radius 分析结果。"""
         if not self.available:
             return self._unavailable_result()
 
@@ -216,7 +216,7 @@ class GraphRunner:
         build_mode: str = "auto",
         max_targets: int = 25,
     ) -> dict[str, Any]:
-        """Return changed-node-to-test relationships for a diff."""
+        """为一次 diff 返回 changed node 到 test 的关联关系。"""
         impact = self.analyze_impact(
             changed_files,
             base=base,
@@ -422,7 +422,7 @@ class GraphRunner:
         build_mode: str = "auto",
         max_targets: int = 25,
     ) -> dict[str, Any]:
-        """Estimate test radius for recent commits using the current graph."""
+        """使用当前 graph 估算最近 commit 的 test radius。"""
         if not self.available:
             return self._unavailable_result()
 
@@ -482,7 +482,7 @@ class GraphRunner:
         max_files: int = 12,
         max_lines_per_file: int = 120,
     ) -> dict[str, Any]:
-        """Build an AI-friendly review context from graph impact and test radius."""
+        """从 graph impact 和 test radius 构建适合 AI 消费的 review context。"""
         radius = self.analyze_test_radius(
             changed_files,
             base=base,
@@ -545,7 +545,7 @@ class GraphRunner:
         build_mode: str = "auto",
         require_graph: bool = False,
     ) -> MetricResult:
-        """Run blast-radius analysis and return a structured MetricResult."""
+        """执行 blast radius 分析，并返回结构化的 MetricResult。"""
         impact = self.analyze_impact(
             changed_files,
             base=base,
@@ -589,7 +589,7 @@ class GraphRunner:
     def probe_test_coverage(
         self, changed_files: list[str] | None = None, *, base: str = "HEAD"
     ) -> MetricResult:
-        """Check if changed functions have TESTED_BY edges in the graph."""
+        """检查发生变更的 function 在 graph 中是否拥有 TESTED_BY edge。"""
         radius = self.analyze_test_radius(changed_files, base=base, max_depth=1)
         if radius.get("status") == "unavailable":
             return MetricResult(
@@ -633,7 +633,7 @@ class GraphRunner:
         base: str = "HEAD",
         build_mode: str = "auto",
     ) -> MetricResult:
-        """Check whether changed source files have related tests or inline evidence."""
+        """检查发生变更的 source file 是否拥有相关的 test 或内联证据。"""
         from entrix.test_mapping import analyze_test_mappings
 
         result = analyze_test_mappings(

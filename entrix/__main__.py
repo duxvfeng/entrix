@@ -1,4 +1,4 @@
-"""Allow running as `python -m entrix`."""
+"""允许以 `python -m entrix` 方式运行。"""
 
 from entrix.cli import main
 

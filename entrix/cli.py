@@ -1,4 +1,4 @@
-"""CLI entry point — wires all modules together, feature parity with fitness.py."""
+"""CLI 入口 — 连接所有模块，功能与 fitness.py 保持一致。"""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ from entrix.test_mapping import analyze_test_mappings
 
 
 class _ShellOutputController:
-    """Coordinates progress output with optional shell log streaming modes."""
+    """协调 progress 输出，支持可选的 shell 日志流模式。"""
 
     def __init__(self, reporter: TerminalReporter, *, mode: StreamOutputMode = "off"):
         self.reporter = reporter
@@ -83,7 +83,7 @@ class _ShellOutputController:
 
 
 def _find_project_root() -> Path:
-    """Walk up from CWD to find the project root (contains package.json or Cargo.toml)."""
+    """从 CWD 向上遍历，查找包含 package.json 或 Cargo.toml 的项目根目录。"""
     cwd = Path.cwd().resolve()
     for parent in [cwd, *cwd.parents]:
         if (parent / "package.json").exists() or (parent / "Cargo.toml").exists():
@@ -287,7 +287,7 @@ def _default_mcp_config() -> dict:
 
 
 def cmd_install(args: argparse.Namespace) -> int:
-    """Write `.mcp.json` for Claude Code MCP integration."""
+    """为 Claude Code MCP 集成写入 `.mcp.json`。"""
     target = Path(args.repo).resolve() if args.repo else Path.cwd().resolve()
     mcp_path = target / ".mcp.json"
     config_text = json.dumps(_default_mcp_config(), indent=2) + "\n"
@@ -304,7 +304,7 @@ def cmd_install(args: argparse.Namespace) -> int:
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
-    """Run Entrix MCP server."""
+    """运行 Entrix MCP server。"""
     from entrix.server import create_server
 
     create_server().run(transport="stdio")
@@ -312,7 +312,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
 
 def _find_fitness_dir(project_root: Path) -> Path:
-    """Locate the docs/fitness/ directory relative to project root."""
+    """相对于 project root 定位 docs/fitness/ 目录。"""
     fitness_dir = get_project_preset().fitness_dir(project_root)
     if not fitness_dir.is_dir():
         print(f"Error: fitness directory not found at {fitness_dir}")
@@ -321,7 +321,7 @@ def _find_fitness_dir(project_root: Path) -> Path:
 
 
 def _find_review_trigger_config(project_root: Path) -> Path:
-    """Locate the default review-trigger config."""
+    """定位默认的 review-trigger config。"""
     config_path = get_project_preset().review_trigger_config(project_root)
     if not config_path.is_file():
         print(f"Error: review-trigger config not found at {config_path}")
@@ -330,7 +330,7 @@ def _find_review_trigger_config(project_root: Path) -> Path:
 
 
 def _find_release_trigger_config(project_root: Path) -> Path:
-    """Locate the default release-trigger config."""
+    """定位默认的 release-trigger config。"""
     config_path = get_project_preset().release_trigger_config(project_root)
     if not config_path.is_file():
         print(f"Error: release-trigger config not found at {config_path}")
@@ -598,7 +598,7 @@ def _collect_run_files(args: argparse.Namespace, project_root: Path) -> list[str
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    """Run architecture fitness functions as executable guardrail checks."""
+    """将架构 fitness 函数作为可执行的 guardrail 检查运行。"""
     project_root = _find_project_root()
     _find_fitness_dir(project_root)
     preset = get_project_preset()
@@ -803,7 +803,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
-    """Validate that dimension weights sum to 100%."""
+    """验证 dimension 权重之和为 100%。"""
     project_root = _find_project_root()
     fitness_dir = _find_fitness_dir(project_root)
 
@@ -823,7 +823,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 
 def cmd_review_trigger(args: argparse.Namespace) -> int:
-    """Evaluate review-trigger rules for the current diff."""
+    """针对当前 diff 评估 review-trigger 规则。"""
     project_root = _find_project_root()
     config_path = Path(args.config).resolve() if args.config else _find_review_trigger_config(project_root)
 
@@ -875,7 +875,7 @@ def _print_release_trigger_report(report: dict) -> None:
 
 
 def cmd_release_trigger(args: argparse.Namespace) -> int:
-    """Evaluate release-trigger rules for a release manifest."""
+    """针对 release manifest 评估 release-trigger 规则。"""
     project_root = _find_project_root()
     config_path = Path(args.config).resolve() if args.config else _find_release_trigger_config(project_root)
 
@@ -911,7 +911,7 @@ def cmd_release_trigger(args: argparse.Namespace) -> int:
 
 
 def cmd_graph_build(args: argparse.Namespace) -> int:
-    """Build or update the backing code graph."""
+    """构建或更新底层 code graph。"""
     runner = GraphRunner(_find_project_root())
     result = runner.build_graph(base=args.base, build_mode=args.build_mode)
     if args.json:
@@ -922,7 +922,7 @@ def cmd_graph_build(args: argparse.Namespace) -> int:
 
 
 def cmd_graph_stats(args: argparse.Namespace) -> int:
-    """Show graph statistics."""
+    """显示 graph 统计信息。"""
     runner = GraphRunner(_find_project_root())
     result = runner.stats()
     if args.json:
@@ -936,7 +936,7 @@ def cmd_graph_stats(args: argparse.Namespace) -> int:
 
 
 def cmd_graph_impact(args: argparse.Namespace) -> int:
-    """Show blast radius for changed files or an explicit file list."""
+    """显示变更文件或显式文件列表的 blast radius。"""
     runner = GraphRunner(_find_project_root())
     result = runner.analyze_impact(
         args.files or None,
@@ -955,7 +955,7 @@ def cmd_graph_impact(args: argparse.Namespace) -> int:
 
 
 def cmd_graph_test_radius(args: argparse.Namespace) -> int:
-    """Show tests in the radius of the current diff or explicit files."""
+    """显示当前 diff 或显式文件的 test radius 内的 tests。"""
     runner = GraphRunner(_find_project_root())
     result = runner.analyze_test_radius(
         args.files or None,
@@ -975,7 +975,7 @@ def cmd_graph_test_radius(args: argparse.Namespace) -> int:
 
 
 def cmd_graph_test_mapping(args: argparse.Namespace) -> int:
-    """Show cross-language source-to-test mappings for changed files."""
+    """显示变更文件的跨语言 source-to-test mappings。"""
     result = analyze_test_mappings(
         _find_project_root(),
         args.files or None,
@@ -994,7 +994,7 @@ def cmd_graph_test_mapping(args: argparse.Namespace) -> int:
 
 
 def cmd_graph_query(args: argparse.Namespace) -> int:
-    """Run a graph query such as callers_of or tests_for."""
+    """运行 graph query，例如 callers_of 或 tests_for。"""
     runner = GraphRunner(_find_project_root())
     result = runner.query(
         args.pattern,
@@ -1013,7 +1013,7 @@ def cmd_graph_query(args: argparse.Namespace) -> int:
 
 
 def cmd_graph_history(args: argparse.Namespace) -> int:
-    """Estimate test radius for recent commits using the current graph."""
+    """使用当前 graph 估算最近 commits 的 test radius。"""
     runner = GraphRunner(_find_project_root())
     result = runner.analyze_history(
         count=args.count,
@@ -1033,7 +1033,7 @@ def cmd_graph_history(args: argparse.Namespace) -> int:
 
 
 def cmd_graph_review_context(args: argparse.Namespace) -> int:
-    """Build an AI-friendly review context for the current diff or files."""
+    """为当前 diff 或文件构建 AI-friendly 的 review context。"""
     runner = GraphRunner(_find_project_root())
     file_args = (args.files_positional or []) + (args.files or [])
     result = runner.review_context(
@@ -1060,7 +1060,7 @@ def cmd_graph_review_context(args: argparse.Namespace) -> int:
 
 
 def cmd_hook_file_length(args: argparse.Namespace) -> int:
-    """Run a reusable file-length guard suitable for pre-commit hooks."""
+    """运行一个可复用的 file-length guard，适用于 pre-commit hooks。"""
     project_root = _find_project_root()
     config_path = Path(args.config).resolve()
     config = load_config(config_path)
@@ -1116,7 +1116,7 @@ def cmd_hook_file_length(args: argparse.Namespace) -> int:
 
 
 def cmd_analyze_long_file(args: argparse.Namespace) -> int:
-    """Analyze oversized or explicit files into ClassMap/FunctionMap payloads."""
+    """将超大或显式文件分析为 ClassMap/FunctionMap payload。"""
     project_root = _find_project_root()
     explicit_files = list(dict.fromkeys((args.files or []) + (args.paths or [])))
     result = analyze_long_files(

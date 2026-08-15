@@ -1,13 +1,13 @@
-"""Structural analyzer adapters.
+"""Structural analyzer 适配器。
 
-Supports:
-- built-in Tree-sitter analyzer
-- external `code-review-graph` as an optional compatibility backend
+支持：
+- 内置 Tree-sitter 分析器
+- 外部 `code-review-graph` 作为可选的兼容 backend
 
-The external adapter handles:
-- Lazy import (only when actually used)
-- ROUTA_CODE_REVIEW_GRAPH_SOURCE env for local dev
-- Graceful error reporting when not installed
+外部 adapter 处理：
+- Lazy import（仅在真正使用时）
+- ROUTA_CODE_REVIEW_GRAPH_SOURCE 环境变量用于本地开发
+- 未安装时优雅地报错
 """
 
 from __future__ import annotations
@@ -20,14 +20,14 @@ from entrix.structure.builtin import BuiltinGraphAdapter
 
 
 class CodeReviewGraphAdapter:
-    """Wraps code_review_graph as a StructuralAnalyzer implementation."""
+    """将 code_review_graph 包装为 StructuralAnalyzer 实现。"""
 
     def __init__(self, repo_root: Path):
         self.repo_root = repo_root
         self._tools = None
 
     def _ensure_loaded(self) -> None:
-        """Lazy-load code_review_graph, respecting ROUTA_CODE_REVIEW_GRAPH_SOURCE."""
+        """根据 ROUTA_CODE_REVIEW_GRAPH_SOURCE 懒加载 code_review_graph。"""
         if self._tools is not None:
             return
 
@@ -74,12 +74,12 @@ class CodeReviewGraphAdapter:
 
 
 def try_create_adapter(repo_root: Path):
-    """Create the best available structural analyzer backend.
+    """创建当前可用的最佳 structural analyzer backend。
 
-    Backend selection can be forced via `ROUTA_FITNESS_GRAPH_BACKEND`:
-    - `external`: require code-review-graph
-    - `builtin`: always use the local Tree-sitter analyzer
-    - `auto` (default): prefer builtin, then fall back to external
+    Backend 选择可通过 `ROUTA_FITNESS_GRAPH_BACKEND` 强制指定：
+    - `external`：要求使用 code-review-graph
+    - `builtin`：始终使用本地 Tree-sitter 分析器
+    - `auto`（默认）：优先使用 builtin，然后回退到 external
     """
     backend = os.environ.get("ROUTA_FITNESS_GRAPH_BACKEND", "auto").strip().lower() or "auto"
 

@@ -1,4 +1,4 @@
-"""Cross-language test mapping with optional graph enrichment."""
+"""跨语言 test mapping，可选通过 graph 增强。"""
 
 from __future__ import annotations
 
