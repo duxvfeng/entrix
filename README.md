@@ -327,8 +327,24 @@ entrix/stop_gate/
 ├── arbiter.py      # 门禁裁决器
 ├── formatter.py    # 反馈格式化器
 ├── state_manager.py # 会话状态管理器
+├── hook.py         # Claude Code Stop hook 入口
 ├── model.py        # 核心数据模型
 └── errors.py       # 错误处理系统
+```
+
+### 插件 Hook 集成（自动生效）
+
+安装 Claude Code 插件后，Stop Gate 通过 `hooks/hooks.json` 注册的 `Stop` hook 自动接管任务结束裁决，无需手动配置：
+
+- **仅对配置了 `docs/fitness/` 的仓库激活**——未配置的仓库直接放行，插件可以放心全局安装
+- Claude 请求结束任务时，hook 独立收集证据并裁决：PASS 放行，FAIL/BLOCKED 以 `{"decision": "block", "reason": ...}` 阻止停止并把失败原因回传给 Claude 继续修复
+- 内置防循环保护（`stop_hook_active`）与禁用开关（`export ENTRIX_STOP_GATE_DISABLED=1`）
+- 优先使用 PATH 上的 `entrix`，其次 `uvx entrix`，最后回退到插件内的源码副本；全部不可用时放行
+
+手动测试 hook 行为：
+
+```bash
+echo "{\"session_id\": \"t\", \"cwd\": \"$PWD\"}" | entrix stop-gate
 ```
 
 ### 快速使用

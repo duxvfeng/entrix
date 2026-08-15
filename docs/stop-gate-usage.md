@@ -62,6 +62,35 @@ python -m pytest tests/stop_gate/test_integration.py -v -m integration
 entrix run --tier normal
 ```
 
+### 4. Claude Code 插件 Hook（推荐）
+
+安装 Claude Code 插件（`/plugin install entrix@entrix`）后，Stop hook 自动生效，无需手动调用 Python API：
+
+```text
+Claude 请求 Stop
+  -> hooks/stop-gate.sh 调用 entrix stop-gate
+  -> 读取 stdin 的 hook 载荷（session_id / cwd / stop_hook_active）
+  -> 工作区无 docs/fitness/？直接放行
+  -> 有规格？收集证据并裁决
+       -> PASS: 退出码 0，无输出，允许停止
+       -> FAIL/BLOCKED: 输出 {"decision": "block", "reason": "..."}，Claude 继续修复
+```
+
+要点：
+
+- **激活条件**：仓库存在 `docs/fitness/*.md` 或 `docs/fitness/manifest.yaml`
+- **防循环**：`stop_hook_active` 为真时立即放行（Claude Code 已因此 hook 继续工作）
+- **禁用**：`export ENTRIX_STOP_GATE_DISABLED=1`
+- **超时**：hook 层 295 秒；`ENTRIX_STOP_GATE_TIMEOUT` 或 `--timeout` 控制证据收集
+- **查找链**：PATH 上的 `entrix` → `uvx entrix` → 插件内源码副本 → 全部失败时放行
+
+手动验证（模拟 Claude Code 输入）：
+
+```bash
+echo "{\"session_id\": \"t\", \"cwd\": \"$PWD\"}" | entrix stop-gate
+# 阻断时输出：{"decision": "block", "reason": "..."}
+```
+
 ## 架构概述
 
 Stop Gate 系统包含以下核心组件：

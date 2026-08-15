@@ -311,6 +311,18 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_stop_gate(args: argparse.Namespace) -> int:
+    """作为 Claude Code Stop hook 运行质量门禁。"""
+    from entrix.stop_gate.hook import main as stop_gate_hook_main
+
+    hook_args: list[str] = []
+    if args.timeout is not None:
+        hook_args += ["--timeout", str(args.timeout)]
+    if args.base:
+        hook_args += ["--base", args.base]
+    return stop_gate_hook_main(hook_args)
+
+
 def _find_fitness_dir(project_root: Path) -> Path:
     """相对于 project root 定位 docs/fitness/ 目录。"""
     fitness_dir = get_project_preset().fitness_dir(project_root)
@@ -1253,6 +1265,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run Entrix MCP server over stdio.",
     )
     serve_parser.set_defaults(func=cmd_serve)
+
+    stop_gate_parser = subparsers.add_parser(
+        "stop-gate",
+        help="Run the quality gate as a Claude Code Stop hook (reads hook payload from stdin)",
+    )
+    stop_gate_parser.add_argument(
+        "--timeout",
+        type=int,
+        default=None,
+        help="Evidence collection timeout in seconds (env: ENTRIX_STOP_GATE_TIMEOUT).",
+    )
+    stop_gate_parser.add_argument(
+        "--base",
+        default=None,
+        help="Optional git base ref for diff-based checks.",
+    )
+    stop_gate_parser.set_defaults(func=cmd_stop_gate)
 
     validate_parser = subparsers.add_parser("validate", help="Check dimension weights sum to 100%%")
     validate_parser.set_defaults(func=cmd_validate)
