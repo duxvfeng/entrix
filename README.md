@@ -1,7 +1,7 @@
 <h1 align="center">Entrix</h1>
 
 <p align="center">
-  <strong>Shift quality from manual review to executable change guardrails.</strong>
+  <strong>将质量保障从人工审查转变为可执行的变更门禁。</strong>
 </p>
 
 <p align="center">
@@ -17,100 +17,97 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/phodal/entrix/main/docs/lifecycle.svg" alt="Entrix Lifecycle" width="85%" />
+  <img src="https://raw.githubusercontent.com/phodal/entrix/main/docs/lifecycle.svg" alt="Entrix 生命周期" width="85%" />
 </p>
 
 <br>
 
-## Install
+## 安装
 
-Choose one installation path:
+选择一种安装方式：
 
-### Claude Code Plugin (recommended)
+### Claude Code 插件（推荐）
 
 ```bash
 /plugin marketplace add phodal/entrix
 /plugin install entrix@entrix
 ```
 
-Restart Claude Code after plugin installation.
+安装插件后请重启 Claude Code。
 
-### Standalone CLI (`uv` or `pip`)
+### 独立 CLI（`uv` 或 `pip`）
 
 ```bash
 uv tool install entrix
-# or
+# 或
 pip install entrix
 
 entrix --help
 ```
 
-If you want Claude Code MCP integration in the current repository after installing the CLI:
+安装 CLI 后，如果希望在当前仓库中集成 Claude Code MCP：
 
 ```bash
 entrix install --repo .
 ```
 
-Requires Python 3.10+. `uv` is only needed for the `uv` / `uvx` workflow.
+需要 Python 3.10+。`uv` 仅用于 `uv` / `uvx` 工作流。
 
 <details>
-<summary><strong>What it does</strong></summary>
+<summary><strong>它能做什么</strong></summary>
 <br>
 
-- codify quality gates and architecture constraints as reusable guardrail specs
-- run checks by `fast` / `normal` / `deep` tiers
-- run change-aware checks on diffs with weighted scoring and hard gates
-- route risky changes to deeper validation with `review-trigger`
-- optionally add graph-based impact, test-radius, and review context analysis
+- 将质量门禁和架构约束编码为可复用的护栏规格
+- 按 `fast` / `normal` / `deep` 层级运行检查
+- 基于 diff 运行变更感知检查，支持加权评分和硬门禁
+- 通过 `review-trigger` 将高风险变更路由到更深入的验证
+- 可选添加基于图的影响分析、测试半径和审查上下文分析
 
 </details>
 
 <details>
-<summary><strong>Guardrails in the change lifecycle</strong></summary>
+<summary><strong>变更生命周期中的护栏</strong></summary>
 <br>
 
-- checks run before risky code lands
-- each run generates evidence
-- policy can hard-stop, warn, or escalate to human review automatically
+- 在风险代码落地前运行检查
+- 每次运行都会生成证据
+- 策略可以自动硬阻断、警告或升级至人工审查
 
 </details>
 
-## Lifecycle View
+## 生命周期视图
 
-![Entrix Lifecycle](https://raw.githubusercontent.com/phodal/entrix/main/docs/lifecycle.svg)
+![Entrix 生命周期](https://raw.githubusercontent.com/phodal/entrix/main/docs/lifecycle.svg)
 
-Additional design context:
+更多设计背景：
 
-- `tools/entrix/docs/adr/README.md`: Entrix architecture decisions and rationale
+- `tools/entrix/docs/adr/README.md`：Entrix 架构决策与原理
 
-## Terminology
+## 术语
 
-Entrix uses **fitness** in the evolutionary architecture sense: a fitness
-function is an executable check that measures whether a codebase still satisfies
-a quality or architecture goal. In product-facing language, you can think of
-these as versioned quality guardrails.
+Entrix 使用**适应度（fitness）**的演进架构含义：适应度函数是一种可执行检查，用于衡量代码库是否仍然满足质量或架构目标。面向产品的语言中，你可以将其理解为版本化的质量护栏。
 
-## Requirements
+## 环境要求
 
 - Python 3.10+
-- Git repository context for commands that use `--base HEAD~1`
+- 使用 `--base HEAD~1` 的命令需要在 Git 仓库上下文中运行
 
-Optional:
+可选：
 
-- `uv` for `uv tool install ...` and `uvx ...`
-- `pip install entrix[graph]` for graph commands
+- `uv` 用于 `uv tool install ...` 和 `uvx ...`
+- `pip install entrix[graph]` 用于图相关命令
 
-## Advanced Installation
+## 高级安装
 
-### Alternate CLI Invocations
+### 替代 CLI 调用方式
 
 <details>
-<summary><strong>CLI invocation options</strong></summary>
+<summary><strong>CLI 调用选项</strong></summary>
 <br>
 
 ```bash
 uv tool install entrix
-# or
+# 或
 pip install entrix
 
 uvx entrix --help
@@ -123,7 +120,7 @@ uvx entrix review-trigger --base HEAD~1
 </details>
 
 <details>
-<summary><strong>Optional extras</strong></summary>
+<summary><strong>可选 extras</strong></summary>
 <br>
 
 ```bash
@@ -136,21 +133,19 @@ uvx entrix install --repo .
 
 </details>
 
-## First Run
+## 首次运行
 
-### 1. Create a guardrail spec
+### 1. 创建护栏规格
 
-By default, `entrix run` looks for specs under the current project's:
+默认情况下，`entrix run` 会在当前项目的以下位置查找规格：
 
 ```text
 docs/fitness/*.md
 ```
 
-When `docs/fitness/manifest.yaml` is present, Entrix uses the manifest as the
-source of truth. That allows nested evidence files such as
-`docs/fitness/runtime/observability.md` and `docs/fitness/runtime/performance.md`.
+当存在 `docs/fitness/manifest.yaml` 时，Entrix 会将其作为权威来源。这允许使用嵌套的证据文件，例如 `docs/fitness/runtime/observability.md` 和 `docs/fitness/runtime/performance.md`。
 
-Example `docs/fitness/code-quality.md`:
+示例 `docs/fitness/code-quality.md`：
 
 ```yaml
 ---
@@ -164,24 +159,24 @@ metrics:
     command: npm run lint 2>&1
     hard_gate: true
     tier: fast
-    description: ESLint must pass
+    description: ESLint 必须通过
 
   - name: unit_tests
     command: npm run test:run 2>&1
     pattern: "Tests\\s+\\d+\\s+passed"
     hard_gate: true
     tier: normal
-    description: unit tests must pass
+    description: 单元测试必须通过
 ---
 
-# Code Quality
+# 代码质量
 
-Narrative evidence, rules, and ownership notes can live below the frontmatter.
+叙事性证据、规则和归属说明可以放在 frontmatter 下方。
 ```
 
-### Advanced metric fields
+### 高级指标字段
 
-Beyond the basic fields shown above, each metric in the frontmatter supports additional options:
+除了上述基本字段外，frontmatter 中的每个指标还支持更多选项：
 
 ```yaml
 metrics:
@@ -189,50 +184,50 @@ metrics:
     command: npm run test:contract 2>&1
     hard_gate: false
     tier: normal
-    description: API contract tests
+    description: API 契约测试
 
-    # Execution scope — where this metric is authoritative
-    # Values: local, ci, staging, prod_observation
+    # 执行范围 — 该指标在何处具有权威性
+    # 取值：local, ci, staging, prod_observation
     execution_scope: ci
 
-    # Timeout in seconds (null = no limit)
+    # 超时时间（秒），null 表示无限制
     timeout_seconds: 120
 
-    # Gate severity: hard, soft, advisory
+    # 门禁严重级别：hard, soft, advisory
     gate: soft
 
-    # Evidence type: command, test, probe, sarif, manual_attestation
+    # 证据类型：command, test, probe, sarif, manual_attestation
     evidence_type: test
 
-    # Confidence level: high, medium, low, unknown
+    # 置信度：high, medium, low, unknown
     confidence: high
 
-    # Signal stability: deterministic, noisy
+    # 信号稳定性：deterministic, noisy
     stability: deterministic
 
-    # Fitness kind: atomic (single check) or holistic (system-wide)
+    # 适应度类型：atomic（单一检查）或 holistic（系统范围）
     kind: atomic
 
-    # Analysis mode: static (code structure) or dynamic (runtime)
+    # 分析模式：static（代码结构）或 dynamic（运行时）
     analysis: dynamic
 
-    # Owner responsible for this metric
+    # 该指标负责人
     owner: team-platform
 
-    # Only run when these file patterns change
+    # 仅当这些文件模式发生变化时运行
     run_when_changed:
       - "src/api/**"
       - "openapi.yaml"
 
-    # Temporary waiver to bypass a failing metric
+    # 临时豁免，用于绕过失败的指标
     waiver:
-      reason: "Known flaky test, fix tracked in issue #42"
+      reason: "已知不稳定测试，问题 #42 跟踪修复"
       owner: team-platform
       tracking_issue: 42
       expires_at: "2025-06-01"
 ```
 
-### 2. Run the checks
+### 2. 运行检查
 
 ```bash
 entrix run --tier fast
@@ -243,17 +238,17 @@ entrix run --changed-only --base HEAD~1
 entrix validate
 ```
 
-Use `--metric` when you want to run only specific metric names without creating a temporary dimension file split. Commands that use `--base HEAD~1` must run inside a git repository with a valid base revision.
+使用 `--metric` 可以在不创建临时维度文件的情况下仅运行特定指标。使用 `--base HEAD~1` 的命令必须在具有有效 base revision 的 Git 仓库内运行。
 
-### 3. Add review triggers
+### 3. 添加审查触发器
 
-By default, `review-trigger` loads the current project's:
+默认情况下，`review-trigger` 会加载当前项目的：
 
 ```text
 docs/fitness/review-triggers.yaml
 ```
 
-Example `docs/fitness/review-triggers.yaml`:
+示例 `docs/fitness/review-triggers.yaml`：
 
 ```yaml
 review_triggers:
@@ -275,14 +270,14 @@ review_triggers:
     action: require_human_review
 ```
 
-Run it:
+运行：
 
 ```bash
 entrix review-trigger --base HEAD~1
 entrix review-trigger --base HEAD~1 --json
 ```
 
-Example output:
+示例输出：
 
 ```json
 {
@@ -309,10 +304,76 @@ Example output:
 }
 ```
 
-### Develop from the Routa.js checkout
+## Claude Stop Gate（新增）
 
-If you are using the copy of `entrix` vendored in the Routa.js monorepo, the
-current repository workflow is:
+Entrix 现在包含 **Claude Stop Gate** —— 一个自动化质量门禁系统，用于在 Claude 请求结束任务时独立收集证据并做出是否允许停止的裁决。
+
+### 为什么需要 Stop Gate
+
+AI 代理在完成任务后请求停止时，传统上依赖代理自身判断质量。Stop Gate 引入了一个独立的审查层：
+
+- **独立证据收集**：在 Claude 进程之外运行 Entrix fitness 检查和 review-trigger
+- **无偏裁决**：基于收集到的证据自动判定 PASS / FAIL / BLOCKED
+- **可操作反馈**：生成用户可读的 Markdown 反馈和机器可解析的 JSON 指令
+- **状态持久化**：使用内存+文件系统的混合状态管理，支持中断恢复
+
+### 核心组件
+
+```text
+entrix/stop_gate/
+├── adapter.py      # Claude Code 插件接口
+├── engine.py       # 核心编排引擎
+├── collector.py    # 证据收集器
+├── arbiter.py      # 门禁裁决器
+├── formatter.py    # 反馈格式化器
+├── state_manager.py # 会话状态管理器
+├── model.py        # 核心数据模型
+└── errors.py       # 错误处理系统
+```
+
+### 快速使用
+
+```python
+from entrix.stop_gate import StopGateAdapter
+from pathlib import Path
+
+adapter = StopGateAdapter()
+
+decision = adapter.on_before_stop({
+    "session_id": "current-session",
+    "task_id": "current-task",
+    "workspace": Path.cwd(),
+    "changed_files": ["src/main.py", "tests/test_main.py"],
+    "stop_reason": "agent_completed",
+})
+
+if decision.allow_stop:
+    print("✅ 质量检查通过，可以结束任务")
+else:
+    print(f"❌ {decision.feedback}")
+```
+
+### 裁决规则
+
+- **PASS**：所有检查通过，无硬门禁失败，无人工审查要求 → 允许停止
+- **FAIL**：硬门禁失败或分数不足 → 阻止停止，需要修复后重试
+- **BLOCKED**：证据缺失或需要人工审查 → 阻止停止，需要人工干预
+
+### 测试
+
+```bash
+# 运行 Stop Gate 单元测试
+python -m pytest tests/stop_gate/ -v
+
+# 运行端到端集成测试
+python -m pytest tests/stop_gate/test_integration.py -v -m integration
+```
+
+更多详情见 [docs/stop-gate-usage.md](docs/stop-gate-usage.md)。
+
+## 从 Routa.js 检出中开发
+
+如果你使用的是 vendored 在 Routa.js monorepo 中的 `entrix` 副本，当前仓库工作流为：
 
 ```bash
 pip install -e tools/entrix
@@ -322,16 +383,13 @@ PYTHONPATH=tools/entrix python3 -m entrix run --tier fast
 PYTHONPATH=tools/entrix python3 -m entrix review-trigger --base HEAD~1
 ```
 
-Most local hooks and helper scripts in this repository use the
-`PYTHONPATH=tools/entrix python3 -m entrix ...` form so they can run directly
-from the monorepo checkout without requiring a separately installed global
-binary.
+本仓库中的大多数本地 hook 和辅助脚本都使用 `PYTHONPATH=tools/entrix python3 -m entrix ...` 形式，以便可以直接从 monorepo 检出运行，无需单独安装全局二进制文件。
 
-### Develop the package itself from source
+## 从源码开发本包
 
-If you are working on the `entrix` package source itself, clone this repository and install it from the repository root.
+如果你正在处理 `entrix` 包本身的源码，请克隆本仓库并从仓库根目录安装。
 
-From the repository root:
+从仓库根目录：
 
 ```bash
 git clone https://github.com/phodal/entrix.git
@@ -339,7 +397,7 @@ cd entrix
 uv pip install -e .
 ```
 
-With `pip`:
+使用 `pip`：
 
 ```bash
 git clone https://github.com/phodal/entrix.git
@@ -347,28 +405,28 @@ cd entrix
 pip install -e .
 ```
 
-## CLI Reference
+## CLI 参考
 
-Most repositories only need these three commands:
+大多数仓库只需要这三个命令：
 
-- `entrix run`: execute guardrail checks from `docs/fitness/*.md`
-- `entrix validate`: validate the guardrail configuration
-- `entrix review-trigger`: escalate risky diffs to human review
+- `entrix run`：执行 `docs/fitness/*.md` 中的护栏检查
+- `entrix validate`：验证护栏配置
+- `entrix review-trigger`：将高风险 diff 升级至人工审查
 
-Use `entrix analyze long-file` for oversized-file structure analysis and `entrix graph ...` for graph-backed impact analysis.
+使用 `entrix analyze long-file` 进行超大文件结构分析，使用 `entrix graph ...` 进行基于图的影响分析。
 
-## Example Packs
+## 示例包
 
-Entrix includes copyable examples under [`examples/`](./examples/):
+Entrix 在 [`examples/`](./examples/) 下提供了可复制示例：
 
-- [`examples/file-length-hook/`](./examples/file-length-hook/): pre-commit file budget hook
-- [`examples/frontend-quality-pack/`](./examples/frontend-quality-pack/): layered frontend quality gates with review-trigger guidance
+- [`examples/file-length-hook/`](./examples/file-length-hook/)：pre-commit 文件预算 hook
+- [`examples/frontend-quality-pack/`](./examples/frontend-quality-pack/)：分层前端质量门禁与 review-trigger 指南
 
 ### `entrix run`
 
-Runs dimension-based guardrail checks loaded from `docs/fitness/*.md`.
+从 `docs/fitness/*.md` 加载基于维度的护栏检查。
 
-Common flags:
+常用标志：
 
 ```bash
 entrix run --tier fast
@@ -380,15 +438,15 @@ entrix run --format rich
 entrix run --changed-only --base HEAD~1
 entrix run --files src/app.ts src/lib.ts
 entrix run --output report.json
-entrix run --output -              # JSON to stdout
+entrix run --output -              # JSON 输出到 stdout
 entrix run --min-score 90
 ```
 
-Use `--output` to write a JSON report to a file (or `-` for stdout), useful for CI artifact collection. Use `--files` to pass an explicit list of changed files for incremental metric selection. Use `--format ascii` for a zero-dependency visual scorecard, or `--format rich` for richer terminal rendering when `rich` is installed (`pip install entrix[visual]`).
+使用 `--output` 将 JSON 报告写入文件（或 `-` 输出到 stdout），便于 CI 收集产物。使用 `--files` 传递显式变更文件列表以进行增量指标选择。使用 `--format ascii` 获取零依赖的可视化评分卡，或在安装了 `rich` 时使用 `--format rich` 获得更丰富的终端渲染（`pip install entrix[visual]`）。
 
 ### `entrix install` / `entrix init`
 
-Generate `.mcp.json` for Claude Code MCP integration in a target repository.
+为目标仓库生成 Claude Code MCP 集成的 `.mcp.json`。
 
 ```bash
 entrix install --repo .
@@ -397,7 +455,7 @@ entrix init --dry-run
 
 ### `entrix serve`
 
-Run the Entrix MCP server over stdio.
+通过 stdio 运行 Entrix MCP 服务器。
 
 ```bash
 entrix serve
@@ -405,7 +463,7 @@ entrix serve
 
 ### `entrix validate`
 
-Checks that dimension weights sum to `100%`.
+检查维度权重是否总和为 `100%`。
 
 ```bash
 entrix validate
@@ -413,9 +471,9 @@ entrix validate
 
 ### `entrix review-trigger`
 
-Evaluates governance-oriented trigger rules for risky changes.
+评估面向治理的风险变更触发规则。
 
-Common flags:
+常用标志：
 
 ```bash
 entrix review-trigger --base HEAD~1
@@ -426,10 +484,9 @@ entrix review-trigger --config docs/fitness/review-triggers.yaml
 
 ### `entrix analyze long-file`
 
-Structural analysis for oversized or explicit source files. Returns ClassMap / FunctionMap payloads showing classes, methods, and standalone functions with line spans.
+对超大或显式指定的源文件进行结构分析。返回 ClassMap / FunctionMap 载荷，展示类、方法、独立函数及其行范围。
 
-Supported languages: Python, Rust, Go, Java, and TypeScript/JavaScript
-(including `tsx` / `jsx` files).
+支持语言：Python、Rust、Go、Java、TypeScript/JavaScript（包括 `tsx` / `jsx` 文件）。
 
 ```bash
 entrix analyze long-file --files src/app.ts src/lib.ts
@@ -438,17 +495,17 @@ entrix analyze long-file --config file_budgets.json --strict-limit
 entrix analyze long-file --min-lines 100
 ```
 
-When no `--files` are given, the command auto-discovers files that exceed their configured line budget.
+未提供 `--files` 时，自动发现超出配置行预算的文件。
 
 ### `entrix graph ...`
 
-Graph-backed commands support building the code graph, querying relationships, impact analysis, test radius estimation, commit history analysis, and AI-friendly review context generation.
+基于图的命令支持构建代码图、查询关系、影响分析、测试半径估计、提交历史分析以及面向 AI 的审查上下文生成。
 
-Requires the optional graph dependency: `pip install entrix[graph]`.
+需要可选的图依赖：`pip install entrix[graph]`。
 
 #### `entrix graph build`
 
-Build or update the code graph.
+构建或更新代码图。
 
 ```bash
 entrix graph build --base HEAD~1
@@ -457,7 +514,7 @@ entrix graph build --build-mode full --json
 
 #### `entrix graph stats`
 
-Show graph statistics (node and edge counts).
+显示图统计信息（节点和边数量）。
 
 ```bash
 entrix graph stats
@@ -466,7 +523,7 @@ entrix graph stats --json
 
 #### `entrix graph impact`
 
-Analyze the blast radius of changed files.
+分析变更文件的爆炸半径。
 
 ```bash
 entrix graph impact --base HEAD~1
@@ -475,7 +532,7 @@ entrix graph impact --base HEAD~1 --depth 3 --json
 
 #### `entrix graph test-radius`
 
-Estimate which tests are affected by changed files.
+估计受变更文件影响的测试。
 
 ```bash
 entrix graph test-radius --base HEAD~1
@@ -484,9 +541,9 @@ entrix graph test-radius --base HEAD~1 --max-targets 50 --json
 
 #### `entrix graph query`
 
-Run a structural query against the code graph.
+针对代码图运行结构查询。
 
-Available patterns: `callers_of`, `callees_of`, `imports_of`, `importers_of`, `children_of`, `tests_for`, `inheritors_of`, `file_summary`.
+可用模式：`callers_of`、`callees_of`、`imports_of`、`importers_of`、`children_of`、`tests_for`、`inheritors_of`、`file_summary`。
 
 ```bash
 entrix graph query callers_of "mymodule.MyClass.my_method"
@@ -495,7 +552,7 @@ entrix graph query tests_for "src/core/engine.py" --json
 
 #### `entrix graph history`
 
-Estimate test radius for recent commits using the current graph.
+使用当前图估计近期提交的测试半径。
 
 ```bash
 entrix graph history --count 20 --ref main
@@ -504,7 +561,7 @@ entrix graph history --json
 
 #### `entrix graph review-context`
 
-Build an AI-friendly review context from the current graph.
+从当前图构建面向 AI 的审查上下文。
 
 ```bash
 entrix graph review-context --base HEAD~1 --json
@@ -512,31 +569,31 @@ entrix graph review-context --base HEAD~1 --max-files 20 --no-source
 entrix graph review-context --base HEAD~1 --output context.json
 ```
 
-## Preset System
+## 预设系统
 
-Entrix uses a preset system to adapt behavior to different project layouts. The default `ProjectPreset` looks for guardrail specs in `docs/fitness/` and review triggers in `docs/fitness/review-triggers.yaml`.
+Entrix 使用预设系统来适应不同的项目布局。默认 `ProjectPreset` 在 `docs/fitness/` 中查找护栏规格，在 `docs/fitness/review-triggers.yaml` 中查找审查触发器。
 
-Custom presets can override:
+自定义预设可以覆盖：
 
-- `fitness_dir(project_root)` — where to find guardrail spec files
-- `review_trigger_config(project_root)` — path to the review trigger YAML
-- `should_ignore_changed_file(file_path)` — filter out irrelevant changed files
-- `domains_from_files(files)` — extract domain tags from changed file paths
+- `fitness_dir(project_root)` — 护栏规格文件位置
+- `review_trigger_config(project_root)` — review trigger YAML 路径
+- `should_ignore_changed_file(file_path)` — 过滤无关变更文件
+- `domains_from_files(files)` — 从变更文件路径提取域标签
 
-A built-in `RoutaPreset` is included as a reference implementation for monorepo layouts.
+内置的 `RoutaPreset` 作为 monorepo 布局的参考实现。
 
-## AI-Friendly Authoring Notes
+## 面向 AI 的创作建议
 
-If an AI agent is generating or updating guardrail specs, these conventions work best:
+如果 AI 代理正在生成或更新护栏规格，以下约定效果最佳：
 
-- keep one dimension per file
-- make the frontmatter executable and the body explanatory
-- prefer stable command outputs over fragile text matching
-- use `hard_gate: true` only when failure should really block progress
-- keep review-trigger rules separate from scoring metrics
-- treat markdown as the narrative layer, not the only source of structure
+- 每个文件一个维度
+- frontmatter 可执行，正文用于解释
+- 优先使用稳定的命令输出，而非脆弱的文本匹配
+- 仅在失败确实应该阻塞进度时使用 `hard_gate: true`
+- 将 review-trigger 规则与评分指标分开
+- 将 markdown 视为叙事层，而非唯一的结构来源
 
-Recommended file layout:
+推荐文件布局：
 
 ```text
 your-project/
@@ -552,7 +609,7 @@ your-project/
       review-triggers.yaml
 ```
 
-Minimal bootstrap flow for a new repository:
+新仓库最小启动流程：
 
 ```bash
 mkdir -p docs/fitness
@@ -577,49 +634,60 @@ entrix validate
 entrix run --tier fast
 ```
 
-Bootstrap authoring rules:
+启动创作规则：
 
-- keep default local `entrix run` green on a fresh machine
-- if a command is authoritative only in CI or a provisioned environment, model
-  it with `execution_scope: ci` instead of leaving it in the default local path
-- update every existing agent entry document consistently:
-  `AGENTS.md`, `CLAUDE.md`, or both
-- if neither entry document exists, create only `AGENTS.md`
+- 保持默认本地 `entrix run` 在新机器上为绿色
+- 如果某个命令仅在 CI 或预配置环境中具有权威性，请使用 `execution_scope: ci` 建模，而不是放在默认本地路径中
+- 一致地更新每个现有代理入口文档：`AGENTS.md`、`CLAUDE.md` 或两者
+- 如果两者都不存在，则仅创建 `AGENTS.md`
 
-Recommended bootstrap policy:
+推荐启动策略：
 
-- do not stop at a plausible draft; the bootstrap is done only after local
-  `entrix validate` and plain local `entrix run` pass
-- keep default local runs backed by repo-safe wrappers or cheap smoke checks
-- move authoritative but provisioned checks into `execution_scope: ci`
-- treat `AGENTS.md` and `CLAUDE.md` discoverability as part of the bootstrap,
-  not optional follow-up cleanup
+- 不要停留在看似合理的草稿；启动完成的标志是本地 `entrix validate` 和普通本地 `entrix run` 均通过
+- 默认本地运行应由仓库安全包装器或廉价冒烟检查支持
+- 将权威但需预配置的检查移入 `execution_scope: ci`
+- 将 `AGENTS.md` 和 `CLAUDE.md` 的可发现性视为启动的一部分，而非可选的后续清理
 
-The repository also ships a bundled skill at `skills/entrix/` for agents that
-need to generate or repair `docs/fitness/` automatically. The skill follows the
-same bootstrap rules above and is validated against multiple real repositories.
+本仓库还附带一个打包技能 `skills/entrix/`，供需要自动生成或修复 `docs/fitness/` 的代理使用。该技能遵循上述相同的启动规则，并针对多个真实仓库进行验证。
 
-## Skill Regression Harness
+## Skill 回归测试工具
 
-The bundled `/entrix` skill ships with two regression modes:
+捆绑的 `/entrix` skill 提供两种回归模式：
 
 ```bash
 bash scripts/skill_regression.sh --fixtures
 bash scripts/skill_regression.sh /abs/path/to/repo-a /abs/path/to/repo-b
 ```
 
-- `--fixtures` validates bundled repository profiles under
-  `tests/fixtures/skill_regression/`
-- path mode injects the bundled skill into each target repository, runs
-  `claude -p /entrix`, then verifies the result with `entrix validate`,
-  `entrix run --dry-run`, `entrix run --tier fast`, and plain `entrix run`
+- `--fixtures` 验证 `tests/fixtures/skill_regression/` 下的打包仓库配置
+- 路径模式将打包技能注入每个目标仓库，运行 `claude -p /entrix`，然后使用 `entrix validate`、`entrix run --dry-run`、`entrix run --tier fast` 和普通 `entrix run` 验证结果
 
-Use fixture mode in CI and path mode for local forward validation against real
-repositories before publishing skill changes.
+在 CI 中使用 fixture 模式，在发布技能变更前使用路径模式对真实仓库进行本地前向验证。
 
 ## Python API
 
-### Review trigger example
+### Stop Gate 示例
+
+```python
+from pathlib import Path
+
+from entrix.stop_gate import StopGateAdapter
+
+adapter = StopGateAdapter()
+
+decision = adapter.on_before_stop({
+    "session_id": "session-1",
+    "task_id": "task-1",
+    "workspace": Path.cwd(),
+    "changed_files": ["src/main.py"],
+    "stop_reason": "agent_completed",
+})
+
+print(decision.allow_stop)
+print(decision.feedback)
+```
+
+### Review trigger 示例
 
 ```python
 from pathlib import Path
@@ -639,7 +707,7 @@ report = evaluate_review_triggers(rules, changed_files, diff_stats, base="HEAD~1
 print(report.to_dict())
 ```
 
-### Fitness spec loading example
+### Fitness 规格加载示例
 
 ```python
 from pathlib import Path
@@ -651,42 +719,39 @@ for dimension in dimensions:
     print(dimension.name, len(dimension.metrics))
 ```
 
-## Recommended Hook Integration
+## 推荐的 Hook 集成
 
-For generic repositories, a practical pattern is:
+对于通用仓库，一个实用的模式是：
 
-- `pre-commit`: run `entrix hook file-length` first, then quick lint
-- `pre-push`: run full checks, then print review-trigger warnings
-- CI: run `entrix run` and publish JSON/report output
+- `pre-commit`：先运行 `entrix hook file-length`，然后快速 lint
+- `pre-push`：运行完整检查，然后打印 review-trigger 警告
+- CI：运行 `entrix run` 并发布 JSON/报告输出
 
-That lets automation catch deterministic failures early while still escalating ambiguous risky changes to humans.
+这样可以在早期通过自动化捕获确定性失败，同时将模糊的高风险变更升级给人类处理。
 
-### Current Routa.js hook layout
+### 当前 Routa.js hook 布局
 
-The current Routa.js monorepo intentionally uses a slightly different split:
+当前 Routa.js monorepo 故意使用略有不同的拆分：
 
-- `pre-commit`: `npm run lint`
-- `post-commit`: `PYTHONPATH=tools/entrix python3 -m entrix hook file-length --config tools/entrix/file_budgets.pre_commit.json --strict-limit ...` as a warning-only budget report
-- `pre-push`: `./scripts/smart-check.sh`, which runs a curated `entrix run --metric ...` set and then evaluates `review-trigger`
+- `pre-commit`：`npm run lint`
+- `post-commit`：`PYTHONPATH=tools/entrix python3 -m entrix hook file-length --config tools/entrix/file_budgets.pre_commit.json --strict-limit ...` 作为仅警告的预算报告
+- `pre-push`：`./scripts/smart-check.sh`，运行精选的 `entrix run --metric ...` 集合，然后评估 `review-trigger`
 
-This keeps commit-time friction low while still surfacing file-budget drift and
-enforcing the higher-signal fitness gates before push.
+这样保持了提交时摩擦较低，同时仍能暴露文件预算漂移并在推送前强制执行高信号的适应度门禁。
 
-## Submodule Bump Guidance
+## Submodule 升级指南
 
-If Entrix is vendored into a larger repository as a git submodule:
+如果 Entrix 作为 git submodule vendored 到更大的仓库中：
 
-- push the Entrix release commit first from a clean `tools/entrix` worktree
-- update the superproject pointer in its own commit
-- prefer a clean superproject branch or worktree for the pointer bump so
-  unrelated application fitness hooks do not block a pure submodule update
+- 首先从干净的 `tools/entrix` worktree 推送 Entrix 发布提交
+- 在单独的提交中更新 superproject 指针
+- 优先使用干净的 superproject 分支或 worktree 进行指针升级，以免无关的应用适应度 hook 阻塞纯粹的 submodule 更新
 
-This keeps Entrix releases and superproject pointer bumps reviewable as separate
-changes.
+这样可以将 Entrix 发布和 superproject 指针升级作为独立的变更进行审查。
 
-### Reusable file-length guard
+### 可复用的文件长度护栏
 
-`entrix` now exposes a reusable hook entrypoint:
+`entrix` 现在暴露了一个可复用的 hook 入口：
 
 ```bash
 python3 -m entrix hook file-length \
@@ -695,34 +760,34 @@ python3 -m entrix hook file-length \
   --strict-limit
 ```
 
-Use it when you want AI-friendly oversized-file failures during `pre-commit`, for example:
+用于在 `pre-commit` 期间获得 AI 友好的超大文件失败，例如：
 
 ```text
 current file length 2383 exceeds limit 1600: src/app/page.tsx
 ```
 
-A copy-pasteable template lives in [`examples/file-length-hook/`](examples/file-length-hook/).
+可复制的模板位于 [`examples/file-length-hook/`](examples/file-length-hook/)。
 
-## Project Status
+## 项目状态
 
-Current state:
+当前状态：
 
-- stable for production use in real repository workflows
-- installable as a standalone PyPI package
-- suitable for AI-assisted project configuration
+- 已在真实仓库工作流中稳定用于生产
+- 可作为独立 PyPI 包安装
+- 适用于 AI 辅助项目配置
 
-Current boundaries:
+当前边界：
 
-- the default authoring format is markdown frontmatter under `docs/fitness`
-- graph commands require the optional graph dependency: `pip install entrix[graph]`
-- the current public CLI in this checkout exposes `run`, `validate`, `review-trigger`, `hook`, `analyze`, and `graph`
-- `analyze long-file` structural analysis supports Python, Rust, Go, Java, TypeScript, and JavaScript
-- the internal architecture is still evolving toward a cleaner core / adapter / preset split
+- 默认创作格式为 `docs/fitness/` 下的 markdown frontmatter
+- 图命令需要可选的图依赖：`pip install entrix[graph]`
+- 当前检出中的公共 CLI 暴露 `run`、`validate`、`review-trigger`、`hook`、`analyze` 和 `graph`
+- `analyze long-file` 结构分析支持 Python、Rust、Go、Java、TypeScript 和 JavaScript
+- 内部架构仍在向更清晰的核心 / 适配器 / 预设拆分演进
 
-## Contributing
+## 贡献
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines and contribution workflow.
+参见 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发指南和贡献流程。
 
-## License
+## 许可证
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+本项目采用 MIT 许可证。详见 [LICENSE](LICENSE)。
