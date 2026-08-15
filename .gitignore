@@ -9,3 +9,7 @@ build/
 .venv/
 venv/
 .artifacts/
+
+# Claude Code 运行时产物（本地权限积累与 Stop Gate 状态）
+.claude/settings.json
+.claude/stop-gate/
