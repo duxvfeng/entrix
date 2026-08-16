@@ -29,11 +29,13 @@
 ### Claude Code 插件（推荐）
 
 ```bash
-/plugin marketplace add https://gitee.com/duxvfeng/entrix.git
+/plugin marketplace add https://gitee.com/duxvfeng/entrix/repository/archive/main.zip
 /plugin install entrix@entrix
 ```
 
 安装插件后请重启 Claude Code。
+
+> 注意：部分 Claude Code 版本可能不支持 Gitee 源直接安装。如果提示 "source type ... does not support"，请改用下面的[手动配置方式](docs/local-plugin-install.md)。
 
 ### 独立 CLI（`uv` 或 `pip`）
 

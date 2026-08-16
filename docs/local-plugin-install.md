@@ -19,9 +19,11 @@ entrix --help
 ## 方式一：官方 marketplace 安装（非本地，但最稳定）
 
 ```text
-/plugin marketplace add https://gitee.com/duxvfeng/entrix.git
+/plugin marketplace add https://gitee.com/duxvfeng/entrix/repository/archive/main.zip
 /plugin install entrix@entrix
 ```
+
+> 如果 Claude Code 提示不支持该 source 类型，请改用下面的[手动配置](#方式三手动配置-mcp--stop-gate)。
 
 安装后重启 Claude Code。MCP + Stop Gate 同时生效。
 
