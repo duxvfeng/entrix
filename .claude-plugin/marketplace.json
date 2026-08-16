@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "entrix",
-      "source": "https://gitee.com/duxvfeng/entrix.git",
+      "source": "https://gitee.com/duxvfeng/entrix/repository/archive/main.zip",
       "description": "Harness Engineering plugin exposing executable fitness functions for architecture quality, change-aware validation, and MCP-powered review context.",
       "version": "0.1.20",
       "author": {
