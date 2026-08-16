@@ -144,7 +144,7 @@ class EvidenceBundle:
 
 ### `harness/gate/`
 
-- `policy.py`: `GatePolicy`、`GateRule`、`Severity`。
+- `policy.py`: `GatePolicy`、`GateRule`、`Severity`。每个 `GateRule` 必须指定 `evidence_id` 或 `evidence_type` 之一，用于匹配要评估的 evidence。
 - `dsl.py`: 表达式解析器。MVP 支持 `==`、`!=`、`<`、`<=`、`>`、`>=`、算术（`+ - * /`）、`in`、`and`/`or`/`not`、显式括号。
 - `arbiter.py`: `GateEngine` 对所有 gate 求值，返回 `PASS` / `FAIL` / `BLOCKED`。
 
