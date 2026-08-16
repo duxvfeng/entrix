@@ -10,7 +10,7 @@ Please do not report security vulnerabilities through public issues.
 
 Use one of these channels instead:
 
-- GitHub Security Advisories: `https://github.com/phodal/entrix/security/advisories/new`
+- Gitee Issues（私有安全报告请通过私信/邮件，勿公开敏感细节）: `https://gitee.com/duxvfeng/entrix/issues`
 - If advisories are unavailable, contact the maintainer directly and include reproduction details, impact, and any proposed remediation.
 
 You can expect an initial response within a reasonable time after the report is received. Reports should include:

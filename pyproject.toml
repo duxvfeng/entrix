@@ -30,9 +30,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/phodal/entrix"
-Repository = "https://github.com/phodal/entrix"
-Issues = "https://github.com/phodal/entrix/issues"
+Homepage = "https://gitee.com/duxvfeng/entrix"
+Repository = "https://gitee.com/duxvfeng/entrix.git"
+Issues = "https://gitee.com/duxvfeng/entrix/issues"
 
 [project.optional-dependencies]
 graph = [

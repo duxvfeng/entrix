@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/phodal/entrix/main/docs/lifecycle.svg" alt="Entrix 生命周期" width="85%" />
+  <img src="https://gitee.com/duxvfeng/entrix/raw/main/docs/lifecycle.svg" alt="Entrix 生命周期" width="85%" />
 </p>
 
 <br>
@@ -29,7 +29,7 @@
 ### Claude Code 插件（推荐）
 
 ```bash
-/plugin marketplace add phodal/entrix
+/plugin marketplace add https://gitee.com/duxvfeng/entrix.git
 /plugin install entrix@entrix
 ```
 
@@ -77,7 +77,7 @@ entrix install --repo .
 
 ## 生命周期视图
 
-![Entrix 生命周期](https://raw.githubusercontent.com/phodal/entrix/main/docs/lifecycle.svg)
+![Entrix 生命周期](https://gitee.com/duxvfeng/entrix/raw/main/docs/lifecycle.svg)
 
 更多设计背景：
 
@@ -408,7 +408,7 @@ PYTHONPATH=tools/entrix python3 -m entrix review-trigger --base HEAD~1
 从仓库根目录：
 
 ```bash
-git clone https://github.com/phodal/entrix.git
+git clone https://gitee.com/duxvfeng/entrix.git
 cd entrix
 uv pip install -e .
 ```
@@ -416,7 +416,7 @@ uv pip install -e .
 使用 `pip`：
 
 ```bash
-git clone https://github.com/phodal/entrix.git
+git clone https://gitee.com/duxvfeng/entrix.git
 cd entrix
 pip install -e .
 ```

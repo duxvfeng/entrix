@@ -66,6 +66,8 @@ entrix run --tier normal
 
 安装 Claude Code 插件（`/plugin install entrix@entrix`）后，Stop hook 自动生效，无需手动调用 Python API：
 
+>  marketplace 源地址：`https://gitee.com/duxvfeng/entrix.git`
+
 ```text
 Claude 请求 Stop
   -> hooks/stop-gate.sh 调用 entrix stop-gate
