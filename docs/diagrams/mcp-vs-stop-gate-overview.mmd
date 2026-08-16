@@ -1,0 +1,47 @@
+flowchart TB
+    subgraph Claude["Claude Code"]
+        C1[用户对话进行中]
+        C2[Agent 准备结束任务<br/>触发 Stop 生命周期]
+    end
+
+    subgraph MCP["MCP 通道"]
+        M1[Claude 调用工具]
+        M2[entrix serve<br/>stdio 长连接]
+        M3[tool: run_fitness]
+        M4[tool: get_dimension_status]
+        M5[tool: analyze_change_impact]
+    end
+
+    subgraph Hook["Stop Gate Hook 通道"]
+        H1[Claude Code 调用 Stop Hook]
+        H2[hooks/stop-gate.sh]
+        H3[entrix stop-gate]
+        H4[读取 stdin payload]
+        H5[StopGateEngine 裁决]
+    end
+
+    subgraph Result["结果"]
+        R1[JSON 工具结果<br/>返回给对话上下文]
+        R2[stdout block decision<br/>阻止/放行停止]
+    end
+
+    C1 -->|主动调用| M1
+    M1 --> M2
+    M2 --> M3
+    M2 --> M4
+    M2 --> M5
+    M3 --> R1
+    M4 --> R1
+    M5 --> R1
+
+    C2 -->|生命周期触发| H1
+    H1 --> H2
+    H2 --> H3
+    H3 --> H4
+    H4 --> H5
+    H5 --> R2
+
+    style M2 fill:#fff3e0
+    style H3 fill:#ffebee
+    style R1 fill:#e8f5e9
+    style R2 fill:#f3e5f5

@@ -1,0 +1,55 @@
+flowchart TB
+    subgraph Config["配置层"]
+        CFG1[fitness/*.md<br/>Dimension + Metric]
+        CFG2[.claude/settings.json<br/>hook 配置]
+        CFG3[pyproject.toml<br/>可选依赖/项目元数据]
+        CFG4[review-triggers.yaml]
+        CFG5[release-manifest.yaml]
+    end
+
+    subgraph Engine["Entrix 引擎"]
+        ENG1[CLI / MCP 入口]
+        ENG2[engine.run_fitness_report]
+        ENG3[StopGateEngine]
+        ENG4[GraphRunner]
+        ENG5[Trigger 评估]
+    end
+
+    subgraph State["状态/产物"]
+        ST1[.claude/stop-gate/]
+        ST2[/tmp/harness-monitor/runtime/]
+        ST3[stdout / JSON 报告]
+    end
+
+    subgraph Consumer["Claude 消费"]
+        CON1[Claude Code 拦截提示]
+        CON2[Claude 工具返回结果]
+        CON3[Runtime 事件面板/日志]
+    end
+
+    CFG1 --> ENG2
+    CFG2 --> ENG3
+    CFG3 --> ENG1
+    CFG4 --> ENG5
+    CFG5 --> ENG5
+
+    ENG1 --> ENG2
+    ENG1 --> ENG3
+    ENG1 --> ENG4
+    ENG1 --> ENG5
+
+    ENG2 --> ST2
+    ENG2 --> ST3
+    ENG3 --> ST1
+    ENG3 --> ST3
+    ENG4 --> ST2
+    ENG5 --> ST3
+
+    ST1 --> CON1
+    ST3 --> CON2
+    ST2 --> CON3
+
+    style Config fill:#e1f5fe
+    style Engine fill:#fff3e0
+    style State fill:#f3e5f5
+    style Consumer fill:#e8f5e9

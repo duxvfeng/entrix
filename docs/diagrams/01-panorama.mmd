@@ -1,0 +1,57 @@
+flowchart TB
+    subgraph Claude["Claude 侧"]
+        C1[Claude Code 编辑器/终端]
+        C2[Claude Desktop / MCP Client]
+        C3[.mcp.json 配置]
+        C4[Claude Code Stop Hook]
+    end
+
+    subgraph Entrix["Entrix 进程"]
+        E1[entrix CLI<br/>entrix/cli.py]
+        E2[entrix serve<br/>entrix/server.py]
+        E3[entrix stop-gate<br/>entrix/stop_gate/]
+        E4[entrix run<br/>fitness guardrail]
+        E5[entrix graph<br/>代码图分析]
+    end
+
+    subgraph Runtime["运行时产物 /tmp/harness-monitor/runtime/<hash>"]
+        R1[events.jsonl]
+        R2[artifacts/fitness/*.json]
+        R3[mailbox/fitness/new/*.json]
+    end
+
+    subgraph Project["项目目录"]
+        P1[fitness/*.md 配置]
+        P2[.claude/settings.json]
+        P3[.claude/stop-gate/ 状态]
+        P4[target/coverage/ 可选]
+    end
+
+    C1 <-->|1. 安装配置| E1
+    C1 -->|2a. 变更文件| C4
+    C4 -->|2b. 调用 stop-gate| E3
+    C2 <-->|3. MCP stdio| E2
+    E2 -->|4. 调用工具| E4
+    E2 -->|5. 调用工具| E5
+    E1 -->|6. 直接命令| E4
+    E1 -->|7. 直接命令| E5
+    E4 -->|8. 写入| R1
+    E4 -->|9. 写入| R2
+    E5 -->|10. 写入| R2
+    R1 -->|11. 消费| C1
+    R2 -->|12. 消费| C1
+    R3 -->|13. 邮箱待处理| C1
+    P1 -->|14. 配置来源| E4
+    P2 -->|15. 配置来源| C4
+    P3 -->|16. 状态来源| E3
+    P4 -->|17. 覆盖率输入| E4
+
+    style C1 fill:#e1f5fe
+    style C2 fill:#e1f5fe
+    style E2 fill:#fff3e0
+    style E3 fill:#ffebee
+    style E4 fill:#e8f5e9
+    style E5 fill:#e8f5e9
+    style R1 fill:#f3e5f5
+    style R2 fill:#f3e5f5
+    style R3 fill:#f3e5f5

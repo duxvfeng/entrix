@@ -1,0 +1,30 @@
+flowchart LR
+    A[entrix run 结束] --> B{执行结果}
+    B -->|通过| C1[status: passed]
+    B -->|失败| C2[status: failed]
+    B -->|跳过| C3[status: skipped]
+
+    C1 --> D[_build_runtime_fitness_snapshot]
+    C2 --> D
+    C3 --> D
+
+    D --> E1[snapshot JSON]
+    E1 --> F1[_write_runtime_fitness_artifacts]
+    E1 --> F2[_emit_runtime_fitness_event]
+
+    F1 --> G1["/tmp/harness-monitor/runtime/<hash>/artifacts/fitness/<timestamp>.json"]
+    F2 --> G2["/tmp/harness-monitor/runtime/<hash>/events.jsonl"]
+    F2 --> G3["mailbox/fitness/new/<timestamp>.json"]
+
+    G1 --> H[Claude 读取产物]
+    G2 --> H
+    G3 --> H
+    H --> I[Claude 生成反馈/建议]
+    I --> J[用户查看结果]
+
+    style A fill:#fff3e0
+    style D fill:#e8f5e9
+    style G1 fill:#f3e5f5
+    style G2 fill:#f3e5f5
+    style G3 fill:#f3e5f5
+    style H fill:#e1f5fe

@@ -1,0 +1,29 @@
+sequenceDiagram
+    autonumber
+    participant Claude as Claude Code
+    participant Hook as hooks/stop-gate.sh
+    participant CLI as entrix stop-gate
+    participant Adapter as StopGateAdapter
+    participant Engine as StopGateEngine
+    participant Collector as EvidenceCollector
+    participant Arbiter as GateArbiter
+
+    Claude->>Hook: 触发 Stop 生命周期
+    Hook->>CLI: 执行 entrix stop-gate
+    CLI->>CLI: read_hook_payload(stdin)
+    CLI->>Adapter: on_before_stop(context)
+    Adapter->>Engine: process_stop_request(attempt)
+    Engine->>Collector: collect_evidence(attempt)
+    Collector-->>Engine: evidence_pack
+    Engine->>Arbiter: arbitrate(evidence_pack)
+    Arbiter-->>Engine: verdict
+    Engine-->>Adapter: decision
+    Adapter-->>CLI: decision
+    alt 允许停止
+        CLI-->>Hook: exit 0, 无 stdout
+        Hook-->>Claude: 放行，任务结束
+    else 阻止停止
+        CLI-->>Hook: exit 0, stdout JSON
+        Hook-->>Claude: {"decision": "block", "reason": "..."}
+        Claude->>Claude: 继续修复问题
+    end

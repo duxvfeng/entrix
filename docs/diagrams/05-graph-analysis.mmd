@@ -1,0 +1,47 @@
+flowchart TB
+    subgraph Init["初始化"]
+        I1[Claude 请求分析变更影响]
+        I2[entrix graph build]
+    end
+
+    subgraph Build["构建代码图"]
+        B1[BuiltinGraphAdapter]
+        B2[tree-sitter 解析源码]
+        B3[构建符号索引]
+        B4[持久化缓存]
+    end
+
+    subgraph Query["查询分析"]
+        Q1[impact 影响半径]
+        Q2[test-radius 测试半径]
+        Q3[test-mapping 测试映射]
+        Q4[review-context 审查上下文]
+        Q5[history 变更历史]
+    end
+
+    subgraph Output["输出给 Claude"]
+        O1[JSON 报告]
+        O2[文本摘要]
+        O3[推荐审查文件列表]
+    end
+
+    I1 --> I2
+    I2 --> B1
+    B1 --> B2
+    B2 --> B3
+    B3 --> B4
+    B4 --> Q1
+    B4 --> Q2
+    B4 --> Q3
+    B4 --> Q4
+    B4 --> Q5
+    Q1 --> O1
+    Q2 --> O1
+    Q3 --> O2
+    Q4 --> O3
+    Q5 --> O2
+
+    style I1 fill:#e1f5fe
+    style B1 fill:#fff3e0
+    style Q1 fill:#e8f5e9
+    style O3 fill:#f3e5f5

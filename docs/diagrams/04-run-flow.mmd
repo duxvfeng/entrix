@@ -1,0 +1,48 @@
+flowchart LR
+    A[Claude 触发<br/>run / review / stop-gate] --> B{调用方式}
+    B -->|直接 CLI| C1[entrix run]
+    B -->|MCP 工具| C2[tool: run_fitness]
+    B -->|Stop Gate| C3[entrix stop-gate]
+
+    C1 --> D[engine.run_fitness_report]
+    C2 --> D
+    C3 --> D
+
+    D --> E1[load_dimensions<br/>读取 fitness/ YAML]
+    D --> E2[get_project_preset<br/>识别项目类型]
+    D --> E3[collect_changed_files<br/>git diff 增量]
+
+    E1 --> F[GovernancePolicy<br/>tier/scope/parallel/dry-run]
+    E2 --> F
+    E3 --> F
+
+    F --> G[filter_dimensions<br/>过滤 metric]
+    G --> H1[ShellRunner<br/>shell/test metric]
+    G --> H2[SarifRunner<br/>sarif metric]
+    G --> H3[GraphRunner<br/>probe metric]
+
+    H1 --> I1[MetricResult
+    pass/fail/unknown]
+    H2 --> I1
+    H3 --> I1
+
+    I1 --> J[score_dimension
+    score_report]
+    J --> K[FitnessReport]
+
+    K --> L1[Reporter 输出<br/>Terminal/Rich/Ascii]
+    K --> L2[write_report_output<br/>JSON 文件]
+    K --> L3[governance.enforce<br/>exit code]
+    K --> L4[Runtime artifacts<br/>/tmp/harness-monitor/...]
+
+    L4 --> M[Claude 读取<br/>events.jsonl + artifacts]
+    L3 --> N{是否阻塞?}
+    N -->|是| O[Claude 停止/提示]
+    N -->|否| P[Claude 继续]
+
+    style A fill:#e1f5fe
+    style D fill:#fff3e0
+    style K fill:#e8f5e9
+    style L4 fill:#f3e5f5
+    style O fill:#ffebee
+    style P fill:#e8f5e9
