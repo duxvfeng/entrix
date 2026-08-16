@@ -35,6 +35,13 @@ from entrix.reporters.visual import AsciiReporter, RichLiveProgressReporter, Ric
 from entrix.runners.graph import GraphRunner
 from entrix.test_mapping import analyze_test_mappings
 
+# Harness system imports
+from entrix.harness.config import load_harness_config
+from entrix.harness.engine import EvidenceEngine, HarnessRunContext
+from entrix.harness.gate.arbiter import GateEngine
+from entrix.harness.conditions import WhenContext
+from entrix.harness.store import EvidenceStore
+
 
 class _ShellOutputController:
     """协调 progress 输出，支持可选的 shell 日志流模式。"""
@@ -301,6 +308,89 @@ def cmd_install(args: argparse.Namespace) -> int:
     print("Run `entrix --help` to verify the command is available.")
     print("Restart Claude Code after changing MCP settings.")
     return 0
+
+
+def cmd_harness_validate(args: argparse.Namespace) -> int:
+    """验证harness.yaml配置。"""
+    config_path = Path(args.config).resolve() if args.config else Path.cwd() / "harness.yaml"
+
+    try:
+        config = load_harness_config(config_path)
+        print(f"✓ Valid harness configuration: {config_path}")
+        print(f"  Version: {config.version}")
+        print(f"  Evidence producers: {len(config.evidence_producers)}")
+        print(f"  Gate policies: {len(config.gate_policies)}")
+        return 0
+    except Exception as e:
+        print(f"✗ Invalid configuration: {e}", file=sys.stderr)
+        return 1
+
+
+def cmd_harness_run(args: argparse.Namespace) -> int:
+    """执行harness收集和门禁仲裁。"""
+    config_path = Path(args.config).resolve() if args.config else Path.cwd() / "harness.yaml"
+
+    try:
+        config = load_harness_config(config_path)
+        repo_root = Path.cwd()
+
+        # 创建上下文
+        context = HarnessRunContext(
+            task_id="manual-run",
+            repo_root=repo_root,
+            when_context=WhenContext(repo_root=repo_root, changed_files=[], current_branch="manual"),
+            store=EvidenceStore(repo_root),
+        )
+
+        # 收集证据
+        print("Collecting evidence...", file=sys.stderr)
+        engine = EvidenceEngine(config)
+        bundle = engine.collect(context)
+
+        print(f"Collected {len(bundle.evidence)} evidence items", file=sys.stderr)
+
+        # 仲裁门禁
+        print("Arbitrating gates...", file=sys.stderr)
+        gate_engine = GateEngine(config.gate_policies)
+        verdict = gate_engine.arbitrate(bundle)
+
+        # 输出结果
+        if args.json:
+            result = {
+                "status": verdict.status.value if hasattr(verdict.status, 'value') else verdict.status,
+                "summary": verdict.summary,
+                "evidence_count": len(bundle.evidence),
+                "gate_results": [
+                    {
+                        "policy": r.policy_name,
+                        "severity": r.severity.value if hasattr(r.severity, 'value') else r.severity,
+                        "passed": r.passed,
+                        "message": r.message,
+                    }
+                    for r in verdict.gate_results
+                ],
+            }
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            status_value = verdict.status.value if hasattr(verdict.status, 'value') else verdict.status
+            print(f"\n{'=' * 50}")
+            print(f"Verdict: {str(status_value).upper()}")
+            print(f"{'=' * 50}")
+            print(f"Summary: {verdict.summary}")
+
+            if verdict.gate_results:
+                print(f"\nGate results:")
+                for result in verdict.gate_results:
+                    status_icon = "✓" if result.passed else "✗"
+                    severity_value = result.severity.value if hasattr(result.severity, 'value') else result.severity
+                    print(f"  {status_icon} {result.policy_name} ({severity_value}): {result.message}")
+
+        # 返回适当的退出码
+        return 0 if (verdict.status.value if hasattr(verdict.status, 'value') else verdict.status) == "pass" else 1
+
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
@@ -1317,6 +1407,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     release_trigger_parser.add_argument("--json", action="store_true", help="Emit JSON output")
     release_trigger_parser.set_defaults(func=cmd_release_trigger)
+
+    # Harness system commands
+    harness_parser = subparsers.add_parser("harness", help="Harness evidence collection and gate arbitration")
+    harness_subparsers = harness_parser.add_subparsers(dest="harness_command")
+
+    harness_validate = harness_subparsers.add_parser("validate", help="Validate harness.yaml configuration")
+    harness_validate.add_argument("config", nargs="?", default="harness.yaml", help="Path to harness.yaml (default: harness.yaml)")
+    harness_validate.set_defaults(func=cmd_harness_validate)
+
+    harness_run = harness_subparsers.add_parser("run", help="Execute harness collection and arbitration")
+    harness_run.add_argument("--config", default="harness.yaml", help="Path to harness.yaml (default: harness.yaml)")
+    harness_run.add_argument("--json", action="store_true", help="Emit JSON output")
+    harness_run.set_defaults(func=cmd_harness_run)
 
     hook_parser = subparsers.add_parser("hook", help="Reusable local hook helpers")
     hook_subparsers = hook_parser.add_subparsers(dest="hook_command")
