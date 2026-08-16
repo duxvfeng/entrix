@@ -11,3 +11,4 @@ Use ADRs here for decisions that are:
 Current ADRs:
 
 - [0001-git-history-signals-for-long-file-analysis.md](./0001-git-history-signals-for-long-file-analysis.md)
+- [0002-harness-yaml-evidence-gate.md](./0002-harness-yaml-evidence-gate.md)

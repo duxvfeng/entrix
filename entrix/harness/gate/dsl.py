@@ -22,12 +22,12 @@ class ExpressionEvaluator:
 
         Returns:
             Boolean result of evaluation
+
+        Raises:
+            Exception: If expression evaluation fails
         """
-        try:
-            result = self._parse_expression(evidence)
-            return bool(result)
-        except Exception:
-            return False
+        result = self._parse_expression(evidence)
+        return bool(result)
 
     def _parse_expression(self, evidence: Evidence):
         """Parse and evaluate expression."""
@@ -161,7 +161,8 @@ class ExpressionEvaluator:
             elif isinstance(value, dict) and part in value:
                 value = value[part]
             else:
-                return None
+                # Field doesn't exist - raise an error instead of returning None
+                raise AttributeError(f"Field '{field_path}' not found in evidence")
 
         return value
 
