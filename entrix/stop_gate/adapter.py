@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Dict, Any
 
+from entrix.harness.conditions import WhenContext
+from entrix.harness.engine import HarnessRunContext
+from entrix.harness.store import EvidenceStore
 from entrix.stop_gate.engine import StopGateEngine
 from entrix.stop_gate.model import GateAttempt, StopDecision
 
@@ -57,6 +61,35 @@ class StopGateAdapter:
         except Exception as e:
             logger.exception("适配器处理失败")
             return self._create_error_decision(e)
+
+    def adapt_payload(self, payload: Dict[str, Any]) -> HarnessRunContext:
+        """Convert hook payload to HarnessRunContext.
+
+        Args:
+            payload: Hook payload dictionary
+
+        Returns:
+            HarnessRunContext for harness execution
+        """
+        repo_root = Path(payload.get("repo_path", "/"))
+        task_id = payload.get("task_id", "unknown")
+
+        # Create when context
+        when_context = WhenContext(
+            repo_root=repo_root,
+            changed_files=payload.get("changed_files", []),
+            current_branch=payload.get("branch", "unknown"),
+        )
+
+        # Create evidence storage
+        store = EvidenceStore(repo_root)
+
+        return HarnessRunContext(
+            task_id=task_id,
+            repo_root=repo_root,
+            when_context=when_context,
+            store=store,
+        )
 
     def _validate_context(self, context: dict) -> None:
         """验证会话上下文完整性"""

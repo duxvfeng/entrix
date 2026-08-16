@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List
 
-from entrix.harness.gate.policy import GatePolicy, Severity
+from entrix.harness.gate.policy import GatePolicy, Severity, GateRule
 from entrix.harness.gate.dsl import evaluate_condition
 from entrix.harness.evidence import EvidenceBundle, Evidence
 
@@ -87,8 +87,11 @@ class GateEngine:
         Returns:
             GateResult containing evaluation results
         """
+        # Ensure policy.rule is a GateRule object
+        rule = policy.rule if isinstance(policy.rule, GateRule) else GateRule(**(policy.rule if isinstance(policy.rule, dict) else {}))
+
         # Find matching evidence
-        matching_evidences = self._find_matching_evidence(policy.rule, bundle)
+        matching_evidences = self._find_matching_evidence(rule, bundle)
 
         if not matching_evidences:
             return GateResult(
