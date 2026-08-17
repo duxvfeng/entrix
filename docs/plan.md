@@ -92,3 +92,15 @@ python -m entrix.cli harness validate harness.yaml
 ```
 
 在没有真实 `harness.yaml` 的仓库中，CLI smoke test 使用临时目录生成最小配置，不在仓库中留下 evidence。
+
+---
+
+# Entrix 单文件 Harness 配置实施计划
+
+**目标：** 用 `harness.yaml` 取代 Fitness Markdown、manifest 与 review trigger 文件，并由 `entrix init` 生成默认配置。
+
+**里程碑与预估：** 领域配置和执行迁移约 3 小时；初始化、帮助与 Hook 路由约 2 小时；旧格式、示例和文档迁移约 3 小时；全量验证与用户测试约 1 小时。
+
+**详细计划：** `docs/superpowers/plans/2026-08-17-unified-harness-configuration.md`。
+
+**测试策略：** 每个阶段先添加失败测试；覆盖内联 YAML 解析、初始化覆盖保护、命令帮助、Fitness/Review 执行、Stop Hook 与无旧目录依赖。最终执行 pytest、Ruff、Mypy 和构建。

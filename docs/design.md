@@ -96,3 +96,61 @@ Harness 路径不创建 `StopGateAdapter`，避免新层为了适配 context 初
 4. DSL 支持设计文档声明的列表、`int` 和表达式尾部校验。
 5. 默认 `pytest` 能完成全量测试收集；受影响测试在 Windows/Linux 上不依赖 `/tmp`。
 6. `ruff check .`、`mypy .`（若环境已安装）和 `python -m build` 的结果被记录。
+
+---
+
+# Entrix 单文件 Harness 配置设计
+
+## 决策
+
+Entrix 的项目级质量配置统一为仓库根目录的 `harness.yaml`。`entrix init` 在初始化 MCP 配置的同时生成该文件。Fitness 维度、指标和 review trigger 规则都以内联 YAML 保存；运行时不再读取 `docs/fitness/`、`manifest.yaml` 或 `review-triggers.yaml`，也不提供旧格式兼容路径。
+
+## 数据流
+
+```text
+entrix init
+  -> .mcp.json + harness.yaml（默认质量策略）
+
+entrix run / review-trigger / harness run / stop-gate
+  -> load_harness_config(harness.yaml)
+  -> inline Fitness dimensions / review rules
+  -> FitnessReport / ReviewTriggerReport / EvidenceBundle
+  -> GateEngine verdict
+```
+
+`harness.yaml` 是唯一事实来源。缺少该文件的项目被视为未配置：`stop-gate` 放行，其他需要质量规则的 CLI 命令返回清晰的配置缺失错误。
+
+## 配置结构
+
+顶级 `fitness.dimensions` 保留现有 `Dimension`/`Metric` 的全部可执行字段，例如 `weight`、`tier`、`threshold`、`command`、`pattern`、`hard_gate`、`execution_scope`、`run_when_changed` 和元数据。顶级 `review_triggers.rules` 保留原规则匹配字段。Harness loader 负责把两部分分别转换为领域 `Dimension` 与 `ReviewTriggerRule`，不保留中间文件或路径引用。
+
+内置 `entrix-fitness` producer 使用已解析的 `Dimension` 列表执行；内置 `entrix-review-trigger` producer 使用已解析的规则列表评估。两者不再根据 `repo_root/docs/fitness` 推导配置。
+
+## 初始化与覆盖规则
+
+`entrix init`：
+
+1. 保持现有 `.mcp.json` 写入行为。
+2. 创建 `harness.yaml`，预置当前项目的 Ruff、debug print、pytest、CLI help、构建、observability 和 performance 策略，以及 review trigger 和 Stop Gate 规则。
+3. 若 `harness.yaml` 已存在，默认报错且不改写；显式 `--force` 才允许以默认模板重建。
+
+初始化不会创建 `docs/fitness/` 或任意旁路质量配置文件。
+
+## 命令可发现性
+
+根命令 `entrix --help` 增加按任务分组的中文命令导览，至少覆盖：初始化（`init`）、执行 Fitness（`run`）、配置校验（`harness validate`）、完整 Harness 裁决（`harness run`）、审查触发检查（`review-trigger`）、Stop Hook（`stop-gate`）以及 MCP 服务（`serve`）。每项给出一句用途和一个最短可运行示例。
+
+`entrix init` 成功后打印固定的“下一步”清单：`harness validate` 用于检查生成配置，`run` 用于执行 Fitness，`harness run` 用于收集 evidence 并裁决，`stop-gate` 用于供 Claude Hook 调用。提示不执行任何检查、不依赖终端颜色，也不输出与机器路径无关的环境假设。
+
+## 迁移边界
+
+本次变更为有意的不兼容变更：删除当前仓库的 `docs/fitness/`，删除相关 fixture 副本，并移除 Markdown fitness loader、manifest 发现和基于路径的 review-trigger 默认加载。README、示例、技能规格和 CLI 文档改为只描述 `harness.yaml`。
+
+## 验收标准
+
+1. 全新临时仓库执行 `entrix init` 后只新增 `.mcp.json` 和 `harness.yaml`，其中不含 `docs/fitness/`。
+2. 从生成的 `harness.yaml` 可运行 Fitness、review trigger、Harness 和 Stop Gate，且不依赖旧文件路径。
+3. 已存在 `harness.yaml` 的 `entrix init` 不改写内容；`--force` 明确重建。
+4. 旧 `docs/fitness/` 不再被任何命令读取；没有 `harness.yaml` 的 `stop-gate` 仅按未配置项目放行。
+5. 默认模板维持当前质量策略的命令、硬门禁和 advisory 指标语义。
+6. `entrix --help` 与 `entrix init` 成功输出均清楚列出子命令及其用途；命令帮助测试锁定关键文字和示例。
