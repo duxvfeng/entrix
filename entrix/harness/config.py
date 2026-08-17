@@ -16,7 +16,7 @@ from entrix.review_trigger import ReviewTriggerRule, parse_review_trigger_rules
 
 SUPPORTED_VERSIONS = ("harness/v1",)
 BUILTIN_PRODUCERS = frozenset({"entrix-fitness", "entrix-review-trigger", "diff-stats"})
-PARSER_TYPES = frozenset({"exit_code", "regex"})
+PARSER_TYPES = frozenset({"exit_code", "regex", "junit"})
 
 
 @dataclass
@@ -92,6 +92,10 @@ def _load_producer_configs(producers_data: Any) -> list[EvidenceProducerConfig]:
         pattern = parser_data.get("pattern")
         if parser_type == "regex" and (not isinstance(pattern, str) or not pattern):
             raise ValueError("regex parser 必须配置非空 pattern")
+        if parser_type == "junit" and (
+            not isinstance(parser_data.get("path"), str) or not parser_data["path"]
+        ):
+            raise ValueError("junit parser 必须配置非空 path")
 
         timeout_seconds = producer_data.get("timeout_seconds", 60)
         if not isinstance(timeout_seconds, int) or timeout_seconds <= 0:

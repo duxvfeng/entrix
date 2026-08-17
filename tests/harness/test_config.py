@@ -218,6 +218,29 @@ gate_policies:
     assert "passed" in config.evidence_producers[0].parser["pattern"]
 
 
+def test_junit_parser_config(tmp_path: Path) -> None:
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        '''version: "harness/v1"
+evidence_producers:
+  - id: tests
+    type: test
+    name: Tests
+    command: pytest --junitxml=report.xml
+    parser: {type: junit, path: report.xml}
+gate_policies:
+  - name: Tests pass
+    severity: hard
+    rule: {evidence_id: tests, condition: 'status == "pass"'}
+''',
+        encoding="utf-8",
+    )
+
+    config = load_harness_config(config_path)
+
+    assert config.evidence_producers[0].parser == {"type": "junit", "path": "report.xml"}
+
+
 @pytest.mark.parametrize(
     ("producer", "error"),
     [

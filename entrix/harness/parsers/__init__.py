@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 from entrix.harness.parsers.base import EvidenceParser
+from entrix.harness.parsers.junit import JUnitParser
 from entrix.harness.parsers.process import ExitCodeParser, RegexParser
 
 _PARSERS: dict[str, EvidenceParser] = {
     "exit_code": ExitCodeParser(),
     "regex": RegexParser(),
+    "junit": JUnitParser(),
 }
 
 
