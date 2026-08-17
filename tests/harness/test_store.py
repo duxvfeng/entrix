@@ -1,6 +1,8 @@
 """EvidenceStore persistence layer tests."""
 from pathlib import Path
 
+import pytest
+
 from entrix.harness.evidence import Artifact, Evidence, EvidenceBundle
 from entrix.harness.store import EvidenceStore
 
@@ -115,3 +117,22 @@ def test_load_corrupt_json_returns_none(tmp_path: Path) -> None:
     result = store.load(bad_file)
 
     assert result is None
+
+
+def test_store_does_not_leave_partial_bundle_when_replace_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = EvidenceStore(tmp_path)
+    bundle = EvidenceBundle(task_id="task", attempt_id="attempt")
+
+    def fail_replace(_source: Path, _target: Path) -> Path:
+        raise OSError("disk unavailable")
+
+    monkeypatch.setattr(Path, "replace", fail_replace)
+
+    with pytest.raises(OSError, match="disk unavailable"):
+        store.save(bundle)
+
+    evidence_root = tmp_path / ".harness" / "evidence"
+    assert not list(evidence_root.rglob("*-bundle.json"))
+    assert not list(evidence_root.rglob("*.tmp"))

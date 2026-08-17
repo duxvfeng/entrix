@@ -1,9 +1,13 @@
 """Evidence bundle persistence layer."""
+from __future__ import annotations
+
 import json
+import os
 from dataclasses import asdict, fields, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TypeVar, get_args, get_origin, get_type_hints
+from uuid import uuid4
 
 from entrix.harness.evidence import EvidenceBundle
 
@@ -52,8 +56,16 @@ class EvidenceStore:
             else:
                 raise OSError("Unable to generate a unique evidence bundle filename")
 
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(asdict(bundle), f, indent=2, ensure_ascii=False)
+        temporary_path = task_dir / f".{filepath.name}.{uuid4().hex}.tmp"
+        try:
+            with temporary_path.open("x", encoding="utf-8") as file:
+                json.dump(asdict(bundle), file, indent=2, ensure_ascii=False)
+                file.flush()
+                os.fsync(file.fileno())
+            temporary_path.replace(filepath)
+        except Exception:
+            temporary_path.unlink(missing_ok=True)
+            raise
 
         return filepath
 
