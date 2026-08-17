@@ -123,20 +123,16 @@ class FakeSarifRunner:
 
 def test_run_fitness_report_dispatches_probe_metrics(monkeypatch, tmp_path: Path):
     graph_runner = FakeGraphRunner(tmp_path)
-    monkeypatch.setattr(
-        engine_module,
-        "load_dimensions",
-        lambda _fitness_dir: [
-            Dimension(
-                name="observability",
-                weight=0,
-                metrics=[
-                    Metric(name="graph_impact", command="graph:impact", evidence_type=EvidenceType.PROBE),
-                    Metric(name="lint", command="npm run lint"),
-                ],
-            )
-        ],
-    )
+    configured_dimensions = [
+        Dimension(
+            name="observability",
+            weight=0,
+            metrics=[
+                Metric(name="graph_impact", command="graph:impact", evidence_type=EvidenceType.PROBE),
+                Metric(name="lint", command="npm run lint"),
+            ],
+        )
+    ]
     monkeypatch.setattr(engine_module, "ShellRunner", FakeShellRunner)
     monkeypatch.setattr(engine_module, "SarifRunner", FakeSarifRunner)
     monkeypatch.setattr(engine_module, "GraphRunner", lambda _project_root: graph_runner)
@@ -145,6 +141,7 @@ def test_run_fitness_report_dispatches_probe_metrics(monkeypatch, tmp_path: Path
         tmp_path,
         GovernancePolicy(),
         get_project_preset(),
+        dimensions=configured_dimensions,
         changed_files=["src/app/page.tsx"],
         base="HEAD~1",
     )
@@ -156,19 +153,13 @@ def test_run_fitness_report_dispatches_probe_metrics(monkeypatch, tmp_path: Path
 
 
 def test_run_fitness_report_excludes_skipped_probe_from_score(monkeypatch, tmp_path: Path):
-    monkeypatch.setattr(
-        engine_module,
-        "load_dimensions",
-        lambda _fitness_dir: [
-            Dimension(
-                name="observability",
-                weight=0,
-                metrics=[
-                    Metric(name="graph_test_radius", command="graph:test-radius", evidence_type=EvidenceType.PROBE)
-                ],
-            )
-        ],
-    )
+    configured_dimensions = [
+        Dimension(
+            name="observability",
+            weight=0,
+            metrics=[Metric(name="graph_test_radius", command="graph:test-radius", evidence_type=EvidenceType.PROBE)],
+        )
+    ]
     monkeypatch.setattr(engine_module, "ShellRunner", FakeShellRunner)
     monkeypatch.setattr(engine_module, "SarifRunner", FakeSarifRunner)
     monkeypatch.setattr(engine_module, "GraphRunner", FakeGraphRunner)
@@ -177,6 +168,7 @@ def test_run_fitness_report_excludes_skipped_probe_from_score(monkeypatch, tmp_p
         tmp_path,
         GovernancePolicy(),
         get_project_preset(),
+        dimensions=configured_dimensions,
     )
 
     assert report.dimensions[0].results[0].state == ResultState.SKIPPED
@@ -185,23 +177,19 @@ def test_run_fitness_report_excludes_skipped_probe_from_score(monkeypatch, tmp_p
 
 def test_run_fitness_report_dispatches_test_mapping_probe(monkeypatch, tmp_path: Path):
     graph_runner = FakeGraphRunner(tmp_path)
-    monkeypatch.setattr(
-        engine_module,
-        "load_dimensions",
-        lambda _fitness_dir: [
-            Dimension(
-                name="testability",
-                weight=20,
-                metrics=[
-                    Metric(
-                        name="graph_test_mapping",
-                        command="graph:test-mapping",
-                        evidence_type=EvidenceType.PROBE,
-                    )
-                ],
-            )
-        ],
-    )
+    configured_dimensions = [
+        Dimension(
+            name="testability",
+            weight=20,
+            metrics=[
+                Metric(
+                    name="graph_test_mapping",
+                    command="graph:test-mapping",
+                    evidence_type=EvidenceType.PROBE,
+                )
+            ],
+        )
+    ]
     monkeypatch.setattr(engine_module, "ShellRunner", FakeShellRunner)
     monkeypatch.setattr(engine_module, "SarifRunner", FakeSarifRunner)
     monkeypatch.setattr(engine_module, "GraphRunner", lambda _project_root: graph_runner)
@@ -210,6 +198,7 @@ def test_run_fitness_report_dispatches_test_mapping_probe(monkeypatch, tmp_path:
         tmp_path,
         GovernancePolicy(),
         get_project_preset(),
+        dimensions=configured_dimensions,
         changed_files=["src/service.ts"],
         base="HEAD~1",
     )
@@ -219,22 +208,18 @@ def test_run_fitness_report_dispatches_test_mapping_probe(monkeypatch, tmp_path:
 
 
 def test_run_fitness_report_filters_dimensions_from_policy(monkeypatch, tmp_path: Path):
-    monkeypatch.setattr(
-        engine_module,
-        "load_dimensions",
-        lambda _fitness_dir: [
-            Dimension(
-                name="code_quality",
-                weight=24,
-                metrics=[Metric(name="lint", command="npm run lint")],
-            ),
-            Dimension(
-                name="security",
-                weight=20,
-                metrics=[Metric(name="audit", command="npm audit")],
-            ),
-        ],
-    )
+    configured_dimensions = [
+        Dimension(
+            name="code_quality",
+            weight=24,
+            metrics=[Metric(name="lint", command="npm run lint")],
+        ),
+        Dimension(
+            name="security",
+            weight=20,
+            metrics=[Metric(name="audit", command="npm audit")],
+        ),
+    ]
     monkeypatch.setattr(engine_module, "ShellRunner", FakeShellRunner)
     monkeypatch.setattr(engine_module, "SarifRunner", FakeSarifRunner)
     monkeypatch.setattr(engine_module, "GraphRunner", FakeGraphRunner)
@@ -243,6 +228,7 @@ def test_run_fitness_report_filters_dimensions_from_policy(monkeypatch, tmp_path
         tmp_path,
         GovernancePolicy(dimension_filters=("security",)),
         get_project_preset(),
+        dimensions=configured_dimensions,
     )
 
     assert [dimension.name for dimension in dimensions] == ["security"]
@@ -251,20 +237,16 @@ def test_run_fitness_report_filters_dimensions_from_policy(monkeypatch, tmp_path
 
 def test_run_fitness_report_dispatches_sarif_metrics(monkeypatch, tmp_path: Path):
     sarif_runner = FakeSarifRunner(tmp_path)
-    monkeypatch.setattr(
-        engine_module,
-        "load_dimensions",
-        lambda _fitness_dir: [
-            Dimension(
-                name="security",
-                weight=100,
-                metrics=[
-                    Metric(name="semgrep_sarif", command="reports/semgrep.sarif", evidence_type=EvidenceType.SARIF),
-                    Metric(name="lint", command="npm run lint"),
-                ],
-            )
-        ],
-    )
+    configured_dimensions = [
+        Dimension(
+            name="security",
+            weight=100,
+            metrics=[
+                Metric(name="semgrep_sarif", command="reports/semgrep.sarif", evidence_type=EvidenceType.SARIF),
+                Metric(name="lint", command="npm run lint"),
+            ],
+        )
+    ]
     monkeypatch.setattr(engine_module, "ShellRunner", FakeShellRunner)
     monkeypatch.setattr(engine_module, "SarifRunner", lambda _project_root, **kwargs: sarif_runner)
     monkeypatch.setattr(engine_module, "GraphRunner", FakeGraphRunner)
@@ -273,6 +255,7 @@ def test_run_fitness_report_dispatches_sarif_metrics(monkeypatch, tmp_path: Path
         tmp_path,
         GovernancePolicy(),
         get_project_preset(),
+        dimensions=configured_dimensions,
     )
 
     assert sarif_runner.calls == ["semgrep_sarif"]
@@ -283,21 +266,17 @@ def test_run_fitness_report_dispatches_sarif_metrics(monkeypatch, tmp_path: Path
 def test_run_fitness_report_emits_progress_events(monkeypatch, tmp_path: Path):
     events: list[tuple[str, str, str | None]] = []
 
-    monkeypatch.setattr(
-        engine_module,
-        "load_dimensions",
-        lambda _fitness_dir: [
-            Dimension(
-                name="mixed",
-                weight=100,
-                metrics=[
-                    Metric(name="probe_metric", command="graph:impact", evidence_type=EvidenceType.PROBE),
-                    Metric(name="shell_metric", command="npm run lint"),
-                    Metric(name="sarif_metric", command="reports/semgrep.sarif", evidence_type=EvidenceType.SARIF),
-                ],
-            )
-        ],
-    )
+    configured_dimensions = [
+        Dimension(
+            name="mixed",
+            weight=100,
+            metrics=[
+                Metric(name="probe_metric", command="graph:impact", evidence_type=EvidenceType.PROBE),
+                Metric(name="shell_metric", command="npm run lint"),
+                Metric(name="sarif_metric", command="reports/semgrep.sarif", evidence_type=EvidenceType.SARIF),
+            ],
+        )
+    ]
     monkeypatch.setattr(engine_module, "ShellRunner", FakeShellRunner)
     monkeypatch.setattr(engine_module, "SarifRunner", FakeSarifRunner)
     monkeypatch.setattr(engine_module, "GraphRunner", FakeGraphRunner)
@@ -309,6 +288,7 @@ def test_run_fitness_report_emits_progress_events(monkeypatch, tmp_path: Path):
         tmp_path,
         GovernancePolicy(),
         get_project_preset(),
+        dimensions=configured_dimensions,
         progress_callback=capture,
     )
 
@@ -331,17 +311,13 @@ def test_run_fitness_report_passes_streaming_shell_options(monkeypatch, tmp_path
             captured["stream_output"] = self.stream_output
             captured["output_callback"] = self.output_callback
 
-    monkeypatch.setattr(
-        engine_module,
-        "load_dimensions",
-        lambda _fitness_dir: [
-            Dimension(
-                name="code_quality",
-                weight=100,
-                metrics=[Metric(name="shell_metric", command="npm run lint")],
-            )
-        ],
-    )
+    configured_dimensions = [
+        Dimension(
+            name="code_quality",
+            weight=100,
+            metrics=[Metric(name="shell_metric", command="npm run lint")],
+        )
+    ]
     monkeypatch.setattr(engine_module, "ShellRunner", CapturingShellRunner)
     monkeypatch.setattr(engine_module, "SarifRunner", FakeSarifRunner)
     monkeypatch.setattr(engine_module, "GraphRunner", FakeGraphRunner)
@@ -353,6 +329,7 @@ def test_run_fitness_report_passes_streaming_shell_options(monkeypatch, tmp_path
         tmp_path,
         GovernancePolicy(stream_output="failures"),
         get_project_preset(),
+        dimensions=configured_dimensions,
         shell_output_callback=capture_output,
     )
 

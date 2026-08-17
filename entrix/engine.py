@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Callable
 
 from entrix.governance import GovernancePolicy, filter_dimensions
-from entrix.loaders import load_dimensions
 from entrix.model import Dimension, EvidenceType, FitnessReport, Gate, Metric, MetricResult, ResultState
 from entrix.presets.base import ProjectPreset
 from entrix.runners.graph import GraphRunner
@@ -118,6 +117,7 @@ def run_fitness_report(
     policy: GovernancePolicy,
     preset: ProjectPreset,
     *,
+    dimensions: list[Dimension],
     changed_files: list[str] | None = None,
     base: str = "HEAD",
     progress_callback: ProgressCallback | None = None,
@@ -125,7 +125,7 @@ def run_fitness_report(
     shell_output_callback: OutputCallback | None = None,
 ) -> tuple[FitnessReport, list[Dimension]]:
     """执行一次 fitness run，返回报告以及选中的 dimension。"""
-    dimensions = filter_dimensions(load_dimensions(preset.fitness_dir(project_root)), policy)
+    dimensions = filter_dimensions(dimensions, policy)
 
     runner_env: dict[str, str] = {}
     effective_changed_files = changed_files or []

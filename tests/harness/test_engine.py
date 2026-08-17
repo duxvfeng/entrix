@@ -4,6 +4,8 @@ from entrix.harness.engine import EvidenceEngine, HarnessRunContext
 from entrix.harness.config import HarnessConfig, EvidenceProducerConfig
 from entrix.harness.conditions import WhenContext
 from entrix.harness.store import EvidenceStore
+from entrix.model import Dimension, Metric
+from entrix.review_trigger import ReviewTriggerRule
 
 
 def test_collect_evidence_with_command_producer():
@@ -135,6 +137,31 @@ def test_collect_with_builtin_producer():
     assert len(bundle.evidence) == 1
     assert bundle.evidence[0].id == "diff-1"
     assert bundle.evidence[0].type == "diff"
+
+
+def test_create_builtin_producers_injects_inline_harness_rules():
+    """EvidenceEngine passes parsed Harness rules to builtin producers."""
+    dimensions = [Dimension(name="quality", weight=100, metrics=[Metric(name="lint", command="true")])]
+    rules = [ReviewTriggerRule(name="sensitive", type="sensitive_file_change")]
+    config = HarnessConfig(
+        version="harness/v1",
+        fitness_dimensions=dimensions,
+        review_trigger_rules=rules,
+        gate_policies=[],
+    )
+    engine = EvidenceEngine(config)
+
+    fitness = engine._create_producer(
+        EvidenceProducerConfig(id="fitness", type="fitness", name="Fitness", builtin="entrix-fitness")
+    )
+    review = engine._create_producer(
+        EvidenceProducerConfig(
+            id="review", type="review-trigger", name="Review", builtin="entrix-review-trigger"
+        )
+    )
+
+    assert fitness.dimensions == dimensions
+    assert review.rules == rules
 
 
 def test_collect_handles_producer_errors():

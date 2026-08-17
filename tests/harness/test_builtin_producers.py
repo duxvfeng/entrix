@@ -7,8 +7,77 @@ from entrix.harness.producers.builtin import (
 from entrix.harness.config import EvidenceProducerConfig
 from entrix.harness.producers.base import ProducerContext
 from entrix.harness.conditions import WhenContext
-from entrix.model import FitnessReport
-from entrix.review_trigger import DiffStats, ReviewTriggerReport, TriggerMatch
+from entrix.model import Dimension, FitnessReport, Metric
+from entrix.review_trigger import DiffStats, ReviewTriggerReport, ReviewTriggerRule, TriggerMatch
+
+
+def test_fitness_producer_uses_injected_dimensions(monkeypatch, tmp_path):
+    """Fitness producer passes Harness dimensions to the shared engine."""
+    config = EvidenceProducerConfig(
+        id="fitness",
+        type="fitness",
+        name="Entrix fitness 报告",
+        builtin="entrix-fitness",
+    )
+    dimensions = [Dimension(name="quality", weight=100, metrics=[Metric(name="lint", command="true")])]
+    producer = EntrixFitnessProducer(config, dimensions)
+    calls = {}
+
+    def fake_run_fitness_report(project_root, policy, preset, **kwargs):
+        calls["dimensions"] = kwargs["dimensions"]
+        return FitnessReport(final_score=91.0), dimensions
+
+    monkeypatch.setattr("entrix.engine.run_fitness_report", fake_run_fitness_report)
+
+    context = ProducerContext(
+        task_id="task-1",
+        repo_root=tmp_path,
+        when_context=WhenContext(repo_root=tmp_path),
+    )
+
+    evidence = producer.run(context)
+
+    assert evidence.status == "pass"
+    assert calls["dimensions"] == dimensions
+
+
+def test_review_trigger_producer_uses_injected_rules(monkeypatch, tmp_path):
+    """Review producer evaluates rules supplied by HarnessConfig."""
+    config = EvidenceProducerConfig(
+        id="review-trigger",
+        type="review-trigger",
+        name="审查触发评估",
+        builtin="entrix-review-trigger",
+    )
+    rules = [ReviewTriggerRule(name="sensitive", type="sensitive_file_change")]
+    producer = EntrixReviewTriggerProducer(config, rules)
+    calls = {}
+
+    monkeypatch.setattr(
+        "entrix.review_trigger.collect_changed_files",
+        lambda _repo_root, _base: [],
+    )
+    monkeypatch.setattr(
+        "entrix.review_trigger.collect_diff_stats",
+        lambda _repo_root, _base: DiffStats(),
+    )
+
+    def fake_evaluate_review_triggers(rules_arg, changed_files, diff_stats, *, base, repo_root):
+        calls["rules"] = rules_arg
+        return ReviewTriggerReport(human_review_required=False, base=base)
+
+    monkeypatch.setattr("entrix.review_trigger.evaluate_review_triggers", fake_evaluate_review_triggers)
+
+    context = ProducerContext(
+        task_id="task-1",
+        repo_root=tmp_path,
+        when_context=WhenContext(repo_root=tmp_path),
+    )
+
+    evidence = producer.run(context)
+
+    assert evidence.status == "pass"
+    assert calls["rules"] == rules
 
 
 def test_entrix_fitness_producer(monkeypatch, tmp_path):
@@ -20,7 +89,7 @@ def test_entrix_fitness_producer(monkeypatch, tmp_path):
         builtin="entrix-fitness",
     )
 
-    producer = EntrixFitnessProducer(config)
+    producer = EntrixFitnessProducer(config, [])
     calls = {}
 
     def fake_run_fitness_report(project_root, policy, preset, **kwargs):
@@ -60,12 +129,9 @@ def test_entrix_review_trigger_producer(monkeypatch, tmp_path):
         builtin="entrix-review-trigger",
     )
 
-    producer = EntrixReviewTriggerProducer(config)
+    rules = [ReviewTriggerRule(name="sensitive", type="sensitive_file_change")]
+    producer = EntrixReviewTriggerProducer(config, rules)
     calls = {}
-
-    def fake_load_review_triggers(config_path):
-        calls["config_path"] = config_path
-        return [object()]
 
     def fake_collect_changed_files(repo_root, base):
         calls["changed_files"] = (repo_root, base)
@@ -85,7 +151,6 @@ def test_entrix_review_trigger_producer(monkeypatch, tmp_path):
             triggers=(TriggerMatch(name="sensitive", severity="high", action="require_human_review"),),
         )
 
-    monkeypatch.setattr("entrix.review_trigger.load_review_triggers", fake_load_review_triggers)
     monkeypatch.setattr("entrix.review_trigger.collect_changed_files", fake_collect_changed_files)
     monkeypatch.setattr("entrix.review_trigger.collect_diff_stats", fake_collect_diff_stats)
     monkeypatch.setattr("entrix.review_trigger.evaluate_review_triggers", fake_evaluate_review_triggers)
@@ -104,7 +169,7 @@ def test_entrix_review_trigger_producer(monkeypatch, tmp_path):
     assert evidence.status == "fail"
     assert evidence.summary["human_review_required"] is True
     assert evidence.summary["triggered_rules"] == ["sensitive"]
-    assert calls["config_path"] == tmp_path / "docs" / "fitness" / "review-triggers.yaml"
+    assert calls["evaluate"][0] == rules
     assert calls["changed_files"] == (tmp_path, "origin/main")
     assert calls["diff_stats"] == (tmp_path, "origin/main")
     assert calls["evaluate"][3] == "origin/main"

@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from entrix.harness.config import EvidenceProducerConfig
 from entrix.harness.evidence import Evidence
 from entrix.harness.producers.base import Producer, ProducerContext
+from entrix.model import Dimension
+from entrix.review_trigger import ReviewTriggerRule
 
 
 def _new_evidence(config: EvidenceProducerConfig, producer: str, context: ProducerContext) -> Evidence:
@@ -23,8 +25,9 @@ def _new_evidence(config: EvidenceProducerConfig, producer: str, context: Produc
 class EntrixFitnessProducer(Producer):
     """Produce fitness evidence through Entrix's shared fitness engine."""
 
-    def __init__(self, config: EvidenceProducerConfig) -> None:
+    def __init__(self, config: EvidenceProducerConfig, dimensions: list[Dimension]) -> None:
         self.config = config
+        self.dimensions = dimensions
 
     def run(self, context: ProducerContext) -> Evidence:
         evidence = _new_evidence(self.config, "entrix-fitness", context)
@@ -37,6 +40,7 @@ class EntrixFitnessProducer(Producer):
                 context.repo_root,
                 GovernancePolicy(),
                 get_project_preset(),
+                dimensions=self.dimensions,
                 changed_files=context.when_context.changed_files,
                 base=context.base_ref,
             )
@@ -56,8 +60,9 @@ class EntrixFitnessProducer(Producer):
 class EntrixReviewTriggerProducer(Producer):
     """Produce review-trigger evidence through the public review-trigger API."""
 
-    def __init__(self, config: EvidenceProducerConfig) -> None:
+    def __init__(self, config: EvidenceProducerConfig, rules: list[ReviewTriggerRule]) -> None:
         self.config = config
+        self.rules = rules
 
     def run(self, context: ProducerContext) -> Evidence:
         evidence = _new_evidence(self.config, "entrix-review-trigger", context)
@@ -66,16 +71,13 @@ class EntrixReviewTriggerProducer(Producer):
                 collect_changed_files,
                 collect_diff_stats,
                 evaluate_review_triggers,
-                load_review_triggers,
             )
 
             base = context.base_ref
-            config_path = context.repo_root / "docs" / "fitness" / "review-triggers.yaml"
-            rules = load_review_triggers(config_path)
             changed_files = collect_changed_files(context.repo_root, base)
             diff_stats = collect_diff_stats(context.repo_root, base)
             report = evaluate_review_triggers(
-                rules,
+                self.rules,
                 changed_files,
                 diff_stats,
                 base=base,

@@ -131,6 +131,10 @@ class EvidenceEngine:
         if config.builtin:
             producer_class = self._producer_registry.get(config.builtin)
             if producer_class:
+                if config.builtin == "entrix-fitness":
+                    return producer_class(config, self.config.fitness_dimensions)
+                if config.builtin == "entrix-review-trigger":
+                    return producer_class(config, self.config.review_trigger_rules)
                 return producer_class(config)
             else:
                 raise ValueError(f"Unknown builtin producer: {config.builtin}")
