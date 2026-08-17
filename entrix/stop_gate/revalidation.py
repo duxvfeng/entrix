@@ -58,6 +58,10 @@ class StopGateStateStore:
         temporary.write_text(json.dumps(payload, ensure_ascii=False) + "\n", encoding="utf-8")
         temporary.replace(target)
 
+    def delete(self, workspace: Path, session_id: str) -> None:
+        """Delete cached authorization state for one workspace session."""
+        self._path(workspace, session_id).unlink(missing_ok=True)
+
     def evidence_root(self, workspace: Path) -> Path:
         """Return the external EvidenceStore root for a workspace."""
         root = self.state_dir / "evidence" / self._workspace_marker(workspace)
