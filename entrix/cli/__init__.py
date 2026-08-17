@@ -1,1 +1,0 @@
-"""Entrix CLI commands."""
