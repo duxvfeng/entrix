@@ -6,7 +6,7 @@ import os
 from dataclasses import asdict, fields, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, TypeVar, get_args, get_origin, get_type_hints
+from typing import Any, TypeVar, cast, get_args, get_origin, get_type_hints
 from uuid import uuid4
 
 from entrix.harness.evidence import EvidenceBundle
@@ -97,7 +97,8 @@ def _dict_to_dataclass(cls: type[T], data: dict[str, Any]) -> T:
     """Reconstruct a dataclass instance from a plain dictionary."""
     type_hints = get_type_hints(cls)
     converted: dict[str, Any] = {}
-    for field in fields(cls):
+    # Dataclass reflection is dynamic; JSON values are normalized below.
+    for field in fields(cast(Any, cls)):
         name = field.name
         if name not in data:
             continue
@@ -109,7 +110,7 @@ def _dict_to_dataclass(cls: type[T], data: dict[str, Any]) -> T:
 def _convert_value(value: Any, field_type: Any) -> Any:
     """Convert a deserialized value to the expected dataclass field type."""
     if is_dataclass(field_type) and isinstance(value, dict):
-        return _dict_to_dataclass(field_type, value)
+        return _dict_to_dataclass(cast(type[Any], field_type), value)
 
     origin = get_origin(field_type)
     args = get_args(field_type)

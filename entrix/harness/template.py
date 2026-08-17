@@ -11,6 +11,7 @@ def default_harness_config() -> dict[str, Any]:
     """Return the default Harness configuration as structured data."""
     return {
         "version": "harness/v1",
+        "settings": {"failure_mode": "closed"},
         "fitness": {
             "dimensions": [
                 {

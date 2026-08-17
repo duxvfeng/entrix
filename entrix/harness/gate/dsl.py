@@ -273,8 +273,12 @@ class _SyntaxValue:
         return self
 
 
-class _SyntaxEvidence(_SyntaxValue):
+class _SyntaxEvidence(Evidence, _SyntaxValue):
     """Evidence-shaped placeholder that accepts arbitrary field access."""
+
+    def __init__(self) -> None:
+        # Do not populate Evidence defaults: missing fields must remain symbolic.
+        pass
 
 
 def validate_condition_syntax(condition: str) -> None:

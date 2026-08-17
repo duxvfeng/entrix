@@ -63,16 +63,19 @@ def _branch(config: dict[str, list[str]], context: WhenContext) -> bool:
     """检查分支 include/exclude 条件。"""
     include_patterns = config.get("include", [])
     exclude_patterns = config.get("exclude", [])
+    current_branch = context.current_branch
+    if current_branch is None:
+        current_branch = "unknown"
 
     # 先检查 exclude
     for pattern in exclude_patterns:
-        if fnmatch.fnmatch(context.current_branch, pattern):
+        if fnmatch.fnmatch(current_branch, pattern):
             return False
 
     # 检查 include
     if include_patterns:
         for pattern in include_patterns:
-            if fnmatch.fnmatch(context.current_branch, pattern):
+            if fnmatch.fnmatch(current_branch, pattern):
                 return True
         return False
 
