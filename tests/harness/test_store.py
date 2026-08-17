@@ -100,6 +100,19 @@ def test_save_uses_explicit_task_id(tmp_path: Path) -> None:
     assert "bundle-task" not in str(saved_path)
 
 
+@pytest.mark.parametrize("task_id", ["../../outside", "", "../escape"])
+def test_save_rejects_task_ids_that_escape_evidence_directory(
+    tmp_path: Path, task_id: str
+) -> None:
+    store = EvidenceStore(root_dir=tmp_path)
+
+    with pytest.raises(ValueError, match="task_id"):
+        store.save(EvidenceBundle(task_id=task_id))
+
+    assert not (tmp_path / "outside").exists()
+    assert not (tmp_path / ".harness" / "escape").exists()
+
+
 def test_load_missing_file_returns_none(tmp_path: Path) -> None:
     """Loading a non-existent file returns None instead of raising."""
     store = EvidenceStore(root_dir=tmp_path)

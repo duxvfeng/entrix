@@ -14,6 +14,21 @@ from entrix.harness.evidence import EvidenceBundle
 T = TypeVar("T")
 
 
+def _validated_task_id(task_id: object) -> str:
+    """Accept only one non-empty path segment for an Evidence task directory."""
+    if not isinstance(task_id, str) or not task_id:
+        raise ValueError("task_id 必须是非空安全路径段")
+    task_path = Path(task_id)
+    if (
+        task_path.is_absolute()
+        or len(task_path.parts) != 1
+        or task_path.name != task_id
+        or task_id in {".", ".."}
+    ):
+        raise ValueError("task_id 必须是非空安全路径段")
+    return task_id
+
+
 class EvidenceStore:
     """Manage persistence of evidence bundles to disk."""
 
@@ -38,7 +53,7 @@ class EvidenceStore:
         Returns:
             The path of the written bundle file.
         """
-        target_task_id = task_id if task_id is not None else bundle.task_id
+        target_task_id = _validated_task_id(task_id if task_id is not None else bundle.task_id)
         task_dir = self.evidence_dir / target_task_id
         task_dir.mkdir(parents=True, exist_ok=True)
 
