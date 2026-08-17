@@ -47,6 +47,7 @@ def create_server(project_root: Path | None = None):
         """
         from entrix.engine import run_fitness_report
         from entrix.governance import GovernancePolicy
+        from entrix.harness.config import load_harness_config
         from entrix.model import ExecutionScope, Tier
         from entrix.presets import get_project_preset
         from entrix.reporting import report_to_dict
@@ -61,7 +62,13 @@ def create_server(project_root: Path | None = None):
             execution_scope=execution_scope,
         )
 
-        report, _ = run_fitness_report(project_root, policy, get_project_preset())
+        config = load_harness_config(project_root / "harness.yaml")
+        report, _ = run_fitness_report(
+            project_root,
+            policy,
+            get_project_preset(),
+            dimensions=config.fitness_dimensions,
+        )
         return report_to_dict(report)
 
     @mcp.tool()
@@ -73,12 +80,14 @@ def create_server(project_root: Path | None = None):
         """
         from entrix.engine import run_fitness_report
         from entrix.governance import GovernancePolicy
+        from entrix.harness.config import load_harness_config
         from entrix.presets import get_project_preset
 
         report, _ = run_fitness_report(
             project_root,
             GovernancePolicy(),
             get_project_preset(),
+            dimensions=load_harness_config(project_root / "harness.yaml").fitness_dimensions,
         )
 
         for ds in report.dimensions:

@@ -11,12 +11,6 @@ from entrix.model import Metric
 class ProjectPreset(Protocol):
     """用于自定义 fitness 行为的 repository 专用 hook。"""
 
-    def fitness_dir(self, project_root: Path) -> Path:
-        """返回该项目的默认 fitness directory。"""
-
-    def review_trigger_config(self, project_root: Path) -> Path:
-        """返回该项目的默认 review-trigger config 路径。"""
-
     def release_trigger_config(self, project_root: Path) -> Path:
         """返回该项目的默认 release-trigger config 路径。"""
 

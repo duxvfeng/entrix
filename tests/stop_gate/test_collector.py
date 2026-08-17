@@ -70,7 +70,7 @@ def test_collect_with_review_trigger_skipped():
         evidence_pack = collector.collect_evidence(attempt)
 
         assert evidence_pack.review_trigger["status"] == "skipped"
-        assert evidence_pack.review_trigger["reason"] == "无规则文件"
+        assert evidence_pack.review_trigger["reason"] == "无 Harness review 规则"
 
 
 def test_collect_timeout_handling():
@@ -147,13 +147,13 @@ def test_collect_review_trigger_required(tmp_path: Path):
 
     with (
         patch("entrix.stop_gate.collector.run_fitness_report") as mock_fitness,
-        patch("entrix.stop_gate.collector.load_review_triggers") as mock_load_rules,
+        patch("entrix.stop_gate.collector.load_harness_config") as mock_load_config,
         patch("entrix.stop_gate.collector.collect_changed_files") as mock_changed,
         patch("entrix.stop_gate.collector.collect_diff_stats") as mock_stats,
         patch("entrix.stop_gate.collector.evaluate_review_triggers") as mock_eval,
     ):
         mock_fitness.return_value = (report, [dimension])
-        mock_load_rules.return_value = []
+        mock_load_config.return_value = Mock(fitness_dimensions=[], review_trigger_rules=[Mock()])
         mock_changed.return_value = ["src/main.py"]
         mock_stats.return_value = Mock(file_count=1, added_lines=10, deleted_lines=0)
         mock_eval.return_value = review_report

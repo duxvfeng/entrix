@@ -7,7 +7,6 @@ import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-import yaml
 
 
 @dataclass(frozen=True)
@@ -116,14 +115,6 @@ def parse_review_trigger_rules(raw_rules: object) -> list[ReviewTriggerRule]:
             )
         )
     return rules
-
-
-def load_review_triggers(config_path: Path) -> list[ReviewTriggerRule]:
-    """Load legacy review-trigger rules from YAML."""
-    raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-    if not isinstance(raw, dict):
-        raise ValueError("review-trigger 配置必须是对象")
-    return parse_review_trigger_rules(raw.get("review_triggers", []))
 
 
 def collect_changed_files(repo_root: Path, base: str) -> list[str]:

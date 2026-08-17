@@ -154,3 +154,9 @@ def parse_dimensions(raw_value: object) -> list[Dimension]:
             )
         )
     return dimensions
+
+
+def validate_weights(dimensions: list[Dimension]) -> tuple[bool, int]:
+    """Return whether configured dimension weights add up to 100."""
+    total = sum(dimension.weight for dimension in dimensions)
+    return total == 100, total

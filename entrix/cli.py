@@ -16,7 +16,6 @@ from entrix.analysis.long_file import analyze_long_files
 from entrix.engine import collect_changed_files, run_fitness_report
 from entrix.file_budgets import evaluate_paths, is_tracked_source_file, load_config
 from entrix.governance import GovernancePolicy, StreamOutputMode, enforce
-from entrix.loaders import validate_weights
 from entrix.model import ExecutionScope, FitnessReport, Gate, Metric, MetricResult, ResultState, Tier
 from entrix.presets import get_project_preset
 from entrix.reporting import report_to_dict, write_report_output
@@ -38,6 +37,7 @@ from entrix.test_mapping import analyze_test_mappings
 # Harness system imports
 from entrix.harness.config import HarnessConfig, load_harness_config
 from entrix.harness.engine import EvidenceEngine, HarnessRunContext
+from entrix.harness.fitness import validate_weights
 from entrix.harness.gate.arbiter import GateEngine
 from entrix.harness.conditions import WhenContext
 from entrix.harness.store import EvidenceStore
@@ -462,15 +462,6 @@ def cmd_stop_gate(args: argparse.Namespace) -> int:
     return stop_gate_hook_main(hook_args)
 
 
-def _find_fitness_dir(project_root: Path) -> Path:
-    """相对于 project root 定位 docs/fitness/ 目录。"""
-    fitness_dir = get_project_preset().fitness_dir(project_root)
-    if not fitness_dir.is_dir():
-        print(f"Error: fitness directory not found at {fitness_dir}")
-        sys.exit(1)
-    return fitness_dir
-
-
 def _find_harness_config(project_root: Path) -> Path | None:
     """查找项目根目录的 Harness 配置。"""
     for config_path in (project_root / "harness.yaml", project_root / ".harness" / "harness.yaml"):
@@ -488,15 +479,6 @@ def _load_project_harness(
     if selected_path is None:
         raise FileNotFoundError(f"未找到 Harness 配置：{project_root / 'harness.yaml'}")
     return load_harness_config(selected_path)
-
-
-def _find_review_trigger_config(project_root: Path) -> Path:
-    """定位默认的 review-trigger config。"""
-    config_path = get_project_preset().review_trigger_config(project_root)
-    if not config_path.is_file():
-        print(f"Error: review-trigger config not found at {config_path}")
-        sys.exit(1)
-    return config_path
 
 
 def _find_release_trigger_config(project_root: Path) -> Path:

@@ -8,12 +8,12 @@ from datetime import datetime, timezone
 
 from entrix.engine import run_fitness_report
 from entrix.governance import GovernancePolicy
+from entrix.harness.config import load_harness_config
 from entrix.presets import get_project_preset
 from entrix.review_trigger import (
     collect_changed_files,
     collect_diff_stats,
     evaluate_review_triggers,
-    load_review_triggers,
 )
 from entrix.stop_gate.errors import EvidenceCollectionError, TimeoutError
 from entrix.stop_gate.model import EvidencePack, GateAttempt
@@ -104,10 +104,12 @@ class EvidenceCollector:
         """运行 Entrix fitness 检查"""
         policy = GovernancePolicy()
         preset = get_project_preset()
+        config = self._load_harness_config(attempt)
         report, _dimensions = run_fitness_report(
             attempt.workspace,
             policy,
             preset,
+            dimensions=config.fitness_dimensions if config is not None else [],
             changed_files=attempt.changed_files,
             base=attempt.base_ref or "HEAD~1",
         )
@@ -133,12 +135,11 @@ class EvidenceCollector:
 
     def _collect_review_trigger_evidence(self, attempt: GateAttempt, evidence: EvidencePack) -> None:
         """运行 review trigger 检查"""
-        rules_file = attempt.workspace / "docs" / "fitness" / "review-triggers.yaml"
-        if not rules_file.exists():
-            evidence.review_trigger = {"status": "skipped", "reason": "无规则文件"}
+        config = self._load_harness_config(attempt)
+        rules = config.review_trigger_rules if config is not None else []
+        if not rules:
+            evidence.review_trigger = {"status": "skipped", "reason": "无 Harness review 规则"}
             return
-
-        rules = load_review_triggers(rules_file)
         base = attempt.base_ref or "HEAD~1"
         changed_files = collect_changed_files(attempt.workspace, base)
         diff_stats = collect_diff_stats(attempt.workspace, base)
@@ -158,3 +159,11 @@ class EvidenceCollector:
                 for trigger in report.triggers
             ],
         }
+
+    @staticmethod
+    def _load_harness_config(attempt: GateAttempt):
+        """Return inline Harness configuration when this legacy API is used directly."""
+        try:
+            return load_harness_config(attempt.workspace / "harness.yaml")
+        except FileNotFoundError:
+            return None

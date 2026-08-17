@@ -5,16 +5,16 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
+import yaml
+
 from entrix.review_trigger import (
     DiffStats,
     evaluate_review_triggers,
-    load_review_triggers,
     parse_review_trigger_rules,
 )
 
-def _write_review_trigger_config(tmp_path: Path) -> Path:
-    config = tmp_path / "review-triggers.yaml"
-    config.write_text(
+def _review_trigger_rules() -> list:
+    raw = yaml.safe_load(
         textwrap.dedent(
             """\
             review_triggers:
@@ -38,7 +38,7 @@ def _write_review_trigger_config(tmp_path: Path) -> Path:
                 paths:
                   - src/core/acp/**
                 evidence_paths:
-                  - docs/fitness/**
+                  - harness.yaml
               - name: cross_boundary_change
                 type: cross_boundary_change
                 boundaries:
@@ -55,22 +55,19 @@ def _write_review_trigger_config(tmp_path: Path) -> Path:
                 max_added_lines: 100
                 max_deleted_lines: 20
             """
-        ),
-        encoding="utf-8",
+        )
     )
-    return config
+    return parse_review_trigger_rules(raw["review_triggers"])
 
 
-def test_load_review_triggers(tmp_path: Path):
-    config = _write_review_trigger_config(tmp_path)
-
-    rules = load_review_triggers(config)
+def test_parse_review_trigger_rules_builds_domain_rules():
+    rules = _review_trigger_rules()
 
     assert len(rules) == 6
     assert rules[0].paths == ("src/core/acp/**",)
     assert rules[1].directories == ("scripts",)
     assert rules[5].max_files == 5
-    assert rules[3].evidence_paths == ("docs/fitness/**",)
+    assert rules[3].evidence_paths == ("harness.yaml",)
     assert rules[4].min_boundaries == 2
 
 
@@ -91,7 +88,7 @@ def test_parse_review_trigger_rules_accepts_inline_mappings():
 
 def test_evaluate_review_triggers_matches_changed_paths(tmp_path: Path):
     report = evaluate_review_triggers(
-        load_review_triggers(_write_review_trigger_config(tmp_path)),
+        _review_trigger_rules(),
         ["src/core/acp/agent.ts", "src/app/page.tsx"],
         DiffStats(file_count=2, added_lines=20, deleted_lines=5),
         base="HEAD~1",
@@ -104,7 +101,7 @@ def test_evaluate_review_triggers_matches_changed_paths(tmp_path: Path):
 
 def test_evaluate_review_triggers_matches_diff_size(tmp_path: Path):
     report = evaluate_review_triggers(
-        load_review_triggers(_write_review_trigger_config(tmp_path)),
+        _review_trigger_rules(),
         ["src/app/page.tsx"],
         DiffStats(file_count=20, added_lines=700, deleted_lines=10),
         base="HEAD~1",
@@ -125,7 +122,7 @@ def test_evaluate_review_triggers_directory_file_count(tmp_path: Path):
     (scripts_dir / "nested" / "ignored.sh").write_text("#!/bin/sh\n", encoding="utf-8")
 
     report = evaluate_review_triggers(
-        load_review_triggers(_write_review_trigger_config(tmp_path)),
+        _review_trigger_rules(),
         ["scripts/a.sh"],
         DiffStats(file_count=1, added_lines=5, deleted_lines=0),
         base="HEAD~1",
@@ -139,7 +136,7 @@ def test_evaluate_review_triggers_directory_file_count(tmp_path: Path):
 
 def test_evaluate_review_triggers_returns_clean_report(tmp_path: Path):
     report = evaluate_review_triggers(
-        load_review_triggers(_write_review_trigger_config(tmp_path)),
+        _review_trigger_rules(),
         ["src/app/page.tsx"],
         DiffStats(file_count=1, added_lines=10, deleted_lines=2),
         base="HEAD~1",
@@ -151,7 +148,7 @@ def test_evaluate_review_triggers_returns_clean_report(tmp_path: Path):
 
 def test_evaluate_review_triggers_sensitive_file_change(tmp_path: Path):
     report = evaluate_review_triggers(
-        load_review_triggers(_write_review_trigger_config(tmp_path)),
+        _review_trigger_rules(),
         ["api-contract.yaml", "src/app/page.tsx"],
         DiffStats(file_count=2, added_lines=20, deleted_lines=1),
         base="HEAD~1",
@@ -163,7 +160,7 @@ def test_evaluate_review_triggers_sensitive_file_change(tmp_path: Path):
 
 def test_evaluate_review_triggers_evidence_gap(tmp_path: Path):
     report = evaluate_review_triggers(
-        load_review_triggers(_write_review_trigger_config(tmp_path)),
+        _review_trigger_rules(),
         ["src/core/acp/session.ts"],
         DiffStats(file_count=1, added_lines=30, deleted_lines=5),
         base="HEAD~1",
@@ -175,7 +172,7 @@ def test_evaluate_review_triggers_evidence_gap(tmp_path: Path):
 
 def test_evaluate_review_triggers_cross_boundary_change(tmp_path: Path):
     report = evaluate_review_triggers(
-        load_review_triggers(_write_review_trigger_config(tmp_path)),
+        _review_trigger_rules(),
         ["src/core/acp/session.ts", "crates/routa-server/src/api/mod.rs"],
         DiffStats(file_count=2, added_lines=50, deleted_lines=10),
         base="HEAD~1",

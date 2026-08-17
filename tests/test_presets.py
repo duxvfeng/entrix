@@ -8,8 +8,7 @@ from entrix.presets import get_project_preset
 
 def test_get_project_preset_returns_routa_behavior():
     preset = get_project_preset()
-    assert preset.fitness_dir(Path("/repo")) == Path("/repo/docs/fitness")
-    assert preset.review_trigger_config(Path("/repo")) == Path("/repo/docs/fitness/review-triggers.yaml")
+    assert preset.release_trigger_config(Path("/repo")) == Path("/repo/docs/release-triggers.yaml")
 
 
 def test_routa_preset_domains_from_files():
