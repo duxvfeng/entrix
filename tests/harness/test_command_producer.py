@@ -1,7 +1,8 @@
 """CommandProducer execution tests."""
-import pytest
+import sys
+
 from pathlib import Path
-from entrix.harness.producers.base import Producer, ProducerContext
+from entrix.harness.producers.base import ProducerContext
 from entrix.harness.producers.command import CommandProducer
 from entrix.harness.config import EvidenceProducerConfig
 from entrix.harness.conditions import WhenContext
@@ -76,8 +77,8 @@ def test_command_producer_regex_parser():
     evidence = producer.run(context)
 
     assert evidence.status == "pass"
-    assert evidence.summary["passed"] == "10"
-    assert evidence.summary["failed"] == "2"
+    assert evidence.summary["passed"] == 10
+    assert evidence.summary["failed"] == 2
 
 
 def test_command_producer_timeout():
@@ -86,7 +87,7 @@ def test_command_producer_timeout():
         id="timeout-test",
         type="test",
         name="超时测试",
-        command="sleep 10",
+        command=f'"{sys.executable}" -c "import time; time.sleep(10)"',
         producer="test",
         timeout_seconds=1,
         parser={"type": "exit_code"}

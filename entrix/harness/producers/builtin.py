@@ -1,167 +1,125 @@
 """Builtin evidence producers for Entrix-specific functionality."""
-import subprocess
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Optional
 
-from entrix.harness.producers.base import Producer, ProducerContext
+import subprocess
+from dataclasses import asdict
+from datetime import datetime, timezone
+
 from entrix.harness.config import EvidenceProducerConfig
 from entrix.harness.evidence import Evidence
+from entrix.harness.producers.base import Producer, ProducerContext
+
+
+def _new_evidence(config: EvidenceProducerConfig, producer: str, context: ProducerContext) -> Evidence:
+    return Evidence(
+        id=config.id,
+        type=config.type,
+        name=config.name,
+        producer=producer,
+        task_id=context.task_id,
+        started_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    )
 
 
 class EntrixFitnessProducer(Producer):
-    """Producer that runs Entrix fitness report."""
+    """Produce fitness evidence through Entrix's shared fitness engine."""
 
     def __init__(self, config: EvidenceProducerConfig) -> None:
         self.config = config
 
     def run(self, context: ProducerContext) -> Evidence:
-        """Execute fitness report and return evidence.
-
-        Args:
-            context: Execution context
-
-        Returns:
-            Evidence containing fitness results
-        """
-        evidence = Evidence(
-            id=self.config.id,
-            type=self.config.type,
-            name=self.config.name,
-            producer="entrix-fitness",
-            task_id=context.task_id,
-            started_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        )
-
+        evidence = _new_evidence(self.config, "entrix-fitness", context)
         try:
-            # Try to call existing fitness report functionality
-            # This should integrate with existing entrix.fitness module
-            from entrix.fitness import run_fitness_report
+            from entrix.engine import run_fitness_report
+            from entrix.governance import GovernancePolicy
+            from entrix.presets import get_project_preset
 
-            fitness_result = run_fitness_report(context.repo_root)
-
-            evidence.status = (
-                "pass" if fitness_result.get("overall_status") == "pass" else "fail"
+            report, _dimensions = run_fitness_report(
+                context.repo_root,
+                GovernancePolicy(),
+                get_project_preset(),
+                changed_files=context.when_context.changed_files,
+                base=context.base_ref,
             )
+            evidence.status = "fail" if report.hard_gate_blocked or report.score_blocked else "pass"
             evidence.summary = {
-                "score": fitness_result.get("score", 0),
-                "hard_gate_blocked": fitness_result.get("hard_gate_blocked", False),
-                "score_blocked": fitness_result.get("score_blocked", False),
+                "score": report.final_score,
+                "hard_gate_blocked": report.hard_gate_blocked,
+                "score_blocked": report.score_blocked,
             }
-            evidence.raw = fitness_result
-
-        except ImportError:
-            # Fallback if fitness module is not available
+            evidence.raw = asdict(report)
+        except Exception as error:  # noqa: BLE001
             evidence.status = "error"
-            evidence.raw = {"error": "Fitness module not available"}
-        except Exception as e:
-            evidence.status = "error"
-            evidence.raw = {"error": str(e)}
-
+            evidence.raw = {"error": str(error)}
         return evidence
 
 
 class EntrixReviewTriggerProducer(Producer):
-    """Producer that evaluates review triggers."""
+    """Produce review-trigger evidence through the public review-trigger API."""
 
     def __init__(self, config: EvidenceProducerConfig) -> None:
         self.config = config
 
     def run(self, context: ProducerContext) -> Evidence:
-        """Evaluate review triggers and return evidence.
-
-        Args:
-            context: Execution context
-
-        Returns:
-            Evidence containing review trigger results
-        """
-        evidence = Evidence(
-            id=self.config.id,
-            type=self.config.type,
-            name=self.config.name,
-            producer="entrix-review-trigger",
-            task_id=context.task_id,
-            started_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        )
-
+        evidence = _new_evidence(self.config, "entrix-review-trigger", context)
         try:
-            # Try to call existing review trigger functionality
-            from entrix.review_triggers import evaluate_review_triggers
-
-            trigger_result = evaluate_review_triggers(context.repo_root)
-
-            evidence.status = (
-                "pass" if not trigger_result.get("human_review_required") else "fail"
+            from entrix.review_trigger import (
+                collect_changed_files,
+                collect_diff_stats,
+                evaluate_review_triggers,
+                load_review_triggers,
             )
+
+            base = context.base_ref
+            config_path = context.repo_root / "docs" / "fitness" / "review-triggers.yaml"
+            rules = load_review_triggers(config_path)
+            changed_files = collect_changed_files(context.repo_root, base)
+            diff_stats = collect_diff_stats(context.repo_root, base)
+            report = evaluate_review_triggers(
+                rules,
+                changed_files,
+                diff_stats,
+                base=base,
+                repo_root=context.repo_root,
+            )
+            evidence.status = "fail" if report.human_review_required else "pass"
             evidence.summary = {
-                "human_review_required": trigger_result.get("human_review_required", False),
-                "triggered_rules": trigger_result.get("triggered_rules", []),
+                "human_review_required": report.human_review_required,
+                "triggered_rules": [trigger.name for trigger in report.triggers],
             }
-            evidence.raw = trigger_result
-
-        except ImportError:
-            # Fallback if review triggers module is not available
+            evidence.raw = report.to_dict()
+        except Exception as error:  # noqa: BLE001
             evidence.status = "error"
-            evidence.raw = {"error": "Review triggers module not available"}
-        except Exception as e:
-            evidence.status = "error"
-            evidence.raw = {"error": str(e)}
-
+            evidence.raw = {"error": str(error)}
         return evidence
 
 
 class DiffStatsProducer(Producer):
-    """Producer that collects git diff statistics."""
+    """Collect git diff statistics for the files selected by the harness context."""
 
     def __init__(self, config: EvidenceProducerConfig) -> None:
         self.config = config
 
     def run(self, context: ProducerContext) -> Evidence:
-        """Collect diff statistics and return evidence.
-
-        Args:
-            context: Execution context
-
-        Returns:
-            Evidence containing diff statistics
-        """
-        evidence = Evidence(
-            id=self.config.id,
-            type=self.config.type,
-            name=self.config.name,
-            producer="diff-stats",
-            task_id=context.task_id,
-            started_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        )
-
+        evidence = _new_evidence(self.config, "diff-stats", context)
         try:
-            # Use changed files from context
             changed_files = context.when_context.changed_files or []
-
-            # Calculate basic diff statistics
             total_added = 0
             total_deleted = 0
-
             for file_path in changed_files:
-                try:
-                    # Get diff for each file
-                    result = subprocess.run(
-                        ["git", "diff", "--numstat", "--", file_path],
-                        capture_output=True,
-                        text=True,
-                        cwd=context.repo_root,
-                    )
-
-                    if result.stdout.strip():
-                        parts = result.stdout.strip().split()
-                        if len(parts) >= 2:
-                            added = int(parts[0])
-                            deleted = int(parts[1])
-                            total_added += added
-                            total_deleted += deleted
-                except (subprocess.SubprocessError, ValueError):
+                result = subprocess.run(
+                    ["git", "diff", "--numstat", context.base_ref, "--", file_path],
+                    capture_output=True,
+                    text=True,
+                    cwd=context.repo_root,
+                    check=False,
+                )
+                if not result.stdout.strip():
                     continue
+                parts = result.stdout.strip().split()
+                if len(parts) < 2:
+                    continue
+                total_added += int(parts[0])
+                total_deleted += int(parts[1])
 
             evidence.status = "pass"
             evidence.summary = {
@@ -170,9 +128,7 @@ class DiffStatsProducer(Producer):
                 "changed_files": len(changed_files),
                 "files": changed_files,
             }
-
-        except Exception as e:
+        except Exception as error:  # noqa: BLE001
             evidence.status = "error"
-            evidence.raw = {"error": str(e)}
-
+            evidence.raw = {"error": str(error)}
         return evidence

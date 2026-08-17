@@ -55,6 +55,18 @@ def test_in_operator():
     assert evaluate_condition('"documentation" in summary.categories', evidence) is False
 
 
+def test_in_operator_supports_list_literals():
+    evidence = Evidence(id="test-1", status="skipped")
+
+    assert evaluate_condition('status in ["pass", "skipped"]', evidence) is True
+
+
+def test_int_conversion_supports_regex_summary_values():
+    evidence = Evidence(id="test-1", summary={"failed": "2"})
+
+    assert evaluate_condition("int(summary.failed) == 2", evidence) is True
+
+
 def test_parentheses():
     """测试括号分组"""
     evidence = Evidence(id="test-1", status="pass", summary={"score": 85})
@@ -69,3 +81,18 @@ def test_nested_field_access():
 
     result = evaluate_condition("summary.nested.deep.value == 42", evidence)
     assert result is True
+
+
+@pytest.mark.parametrize(
+    "condition",
+    [
+        'status == "pass" unexpected',
+        "summary.score / 0 > 1",
+        "missing_field == 1",
+    ],
+)
+def test_invalid_conditions_raise_clear_errors(condition):
+    evidence = Evidence(id="test-1", status="pass", summary={"score": 1})
+
+    with pytest.raises((AttributeError, SyntaxError, ValueError, ZeroDivisionError)):
+        evaluate_condition(condition, evidence)

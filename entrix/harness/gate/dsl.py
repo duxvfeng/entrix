@@ -27,6 +27,9 @@ class ExpressionEvaluator:
             Exception: If expression evaluation fails
         """
         result = self._parse_expression(evidence)
+        self._skip_whitespace()
+        if self.pos != len(self.expression):
+            raise SyntaxError(f"Unexpected token at position {self.pos}")
         return bool(result)
 
     def _parse_expression(self, evidence: Evidence):
@@ -93,12 +96,13 @@ class ExpressionEvaluator:
         """Parse addition/subtraction."""
         left = self._parse_multiplication(evidence)
 
-        while self._match("+"):
-            right = self._parse_multiplication(evidence)
-            left = left + right
-        while self._match("-"):
-            right = self._parse_multiplication(evidence)
-            left = left - right
+        while True:
+            if self._match("+"):
+                left = left + self._parse_multiplication(evidence)
+            elif self._match("-"):
+                left = left - self._parse_multiplication(evidence)
+            else:
+                break
 
         return left
 
@@ -106,12 +110,13 @@ class ExpressionEvaluator:
         """Parse multiplication/division."""
         left = self._parse_primary(evidence)
 
-        while self._match("*"):
-            right = self._parse_primary(evidence)
-            left = left * right
-        while self._match("/"):
-            right = self._parse_primary(evidence)
-            left = left / right
+        while True:
+            if self._match("*"):
+                left = left * self._parse_primary(evidence)
+            elif self._match("/"):
+                left = left / self._parse_primary(evidence)
+            else:
+                break
 
         return left
 
@@ -121,6 +126,25 @@ class ExpressionEvaluator:
             expr = self._parse_expression(evidence)
             self._consume(")")
             return expr
+
+        if self._match("["):
+            values: list[object] = []
+            if self._match("]"):
+                return values
+            while True:
+                values.append(self._parse_primary(evidence))
+                if self._match("]"):
+                    return values
+                self._consume(",")
+
+        if self._match("int"):
+            self._consume("(")
+            value = self._parse_expression(evidence)
+            self._consume(")")
+            try:
+                return int(value)
+            except (TypeError, ValueError) as error:
+                raise ValueError("int() requires an integer-compatible value") from error
 
         # Parse string literals
         string_match = re.match(r'"([^"]*)"', self.expression[self.pos:])
@@ -148,7 +172,7 @@ class ExpressionEvaluator:
             self.pos += len(field_path)
             return self._get_field_value(evidence, field_path)
 
-        return None
+        raise SyntaxError(f"Expected expression at position {self.pos}")
 
     def _get_field_value(self, evidence: Evidence, field_path: str):
         """Get value from evidence by field path."""
@@ -168,32 +192,25 @@ class ExpressionEvaluator:
 
     def _match(self, token: str) -> bool:
         """Check if current position matches token."""
-        # Skip whitespace before matching
-        while self.pos < len(self.expression) and self.expression[self.pos] in " \t\n":
-            self.pos += 1
+        self._skip_whitespace()
+        if not self.expression.startswith(token, self.pos):
+            return False
 
-        if self.expression.startswith(token, self.pos):
-            # For multi-character tokens, check they're properly delimited
-            next_pos = self.pos + len(token)
-            if len(token) > 1:  # Multi-character tokens like ==, >=, etc.
-                if next_pos >= len(self.expression):
-                    self.pos = next_pos
-                    return True
-                next_char = self.expression[next_pos]
-                if next_char in " \t\n)<>!=+-*/,":
-                    self.pos = next_pos
-                    return True
-            else:  # Single-character tokens like (, ), etc.
-                self.pos = next_pos
-                return True
-        return False
+        next_pos = self.pos + len(token)
+        if token.isidentifier() and next_pos < len(self.expression):
+            if self.expression[next_pos].isalnum() or self.expression[next_pos] == "_":
+                return False
+        self.pos = next_pos
+        return True
 
     def _consume(self, char: str):
         """Consume specific character."""
-        if self.pos < len(self.expression) and self.expression[self.pos] == char:
+        if not self._match(char):
+            raise SyntaxError(f"Expected '{char}' at position {self.pos}")
+
+    def _skip_whitespace(self) -> None:
+        while self.pos < len(self.expression) and self.expression[self.pos].isspace():
             self.pos += 1
-            while self.pos < len(self.expression) and self.expression[self.pos] in " \t\n":
-                self.pos += 1
 
 
 def evaluate_condition(condition: str, evidence: Evidence) -> bool:
@@ -208,3 +225,58 @@ def evaluate_condition(condition: str, evidence: Evidence) -> bool:
     """
     evaluator = ExpressionEvaluator(condition)
     return evaluator.evaluate(evidence)
+
+
+class _SyntaxValue:
+    """Placeholder value used to parse a condition without real evidence."""
+
+    def __getattr__(self, _name: str) -> "_SyntaxValue":
+        return self
+
+    def __bool__(self) -> bool:
+        return True
+
+    def __int__(self) -> int:
+        return 0
+
+    def __float__(self) -> float:
+        return 0.0
+
+    def __eq__(self, _other: object) -> bool:
+        return True
+
+    def __ne__(self, _other: object) -> bool:
+        return False
+
+    def __lt__(self, _other: object) -> bool:
+        return True
+
+    def __le__(self, _other: object) -> bool:
+        return True
+
+    def __gt__(self, _other: object) -> bool:
+        return True
+
+    def __ge__(self, _other: object) -> bool:
+        return True
+
+    def __add__(self, _other: object) -> "_SyntaxValue":
+        return self
+
+    def __sub__(self, _other: object) -> "_SyntaxValue":
+        return self
+
+    def __mul__(self, _other: object) -> "_SyntaxValue":
+        return self
+
+    def __truediv__(self, _other: object) -> "_SyntaxValue":
+        return self
+
+
+class _SyntaxEvidence(_SyntaxValue):
+    """Evidence-shaped placeholder that accepts arbitrary field access."""
+
+
+def validate_condition_syntax(condition: str) -> None:
+    """Raise when a condition cannot be parsed, without validating its fields."""
+    ExpressionEvaluator(condition).evaluate(_SyntaxEvidence())

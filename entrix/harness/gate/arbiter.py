@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List
 
-from entrix.harness.gate.policy import GatePolicy, Severity, GateRule
+from entrix.harness.gate.policy import GatePolicy, Severity
 from entrix.harness.gate.dsl import evaluate_condition
 from entrix.harness.evidence import EvidenceBundle, Evidence
 
@@ -87,8 +87,7 @@ class GateEngine:
         Returns:
             GateResult containing evaluation results
         """
-        # Ensure policy.rule is a GateRule object
-        rule = policy.rule if isinstance(policy.rule, GateRule) else GateRule(**(policy.rule if isinstance(policy.rule, dict) else {}))
+        rule = policy.rule
 
         # Find matching evidence
         matching_evidences = self._find_matching_evidence(rule, bundle)
@@ -98,7 +97,7 @@ class GateEngine:
                 policy_name=policy.name,
                 severity=policy.severity,
                 passed=False,
-                message=f"Rule has no matching evidence: {policy.rule.evidence_id or policy.rule.evidence_type}",
+                message=f"Rule has no matching evidence: {rule.evidence_id or rule.evidence_type}",
             )
 
         # Evaluate all matching evidences
@@ -107,7 +106,7 @@ class GateEngine:
 
         for evidence in matching_evidences:
             try:
-                condition_result = evaluate_condition(policy.rule.condition, evidence)
+                condition_result = evaluate_condition(rule.condition, evidence)
                 if not condition_result:
                     all_passed = False
                     if policy.severity == Severity.SOFT:
@@ -119,7 +118,7 @@ class GateEngine:
                 error_msg = str(e).lower()
                 # Check if it's a field access error
                 if "none" in error_msg or "field" in error_msg or "attribute" in error_msg:
-                    messages.append(f"Error: condition references invalid field")
+                    messages.append("Error: condition references invalid field")
                 else:
                     messages.append(f"Error evaluating condition: {str(e)}")
 

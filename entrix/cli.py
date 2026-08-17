@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -102,8 +103,19 @@ def _runtime_marker(project_root: Path) -> str:
     return hashlib.sha256(str(project_root).encode("utf-8")).hexdigest()
 
 
+def _configure_utf8_streams() -> None:
+    """Keep CLI status output encodable when launched from Windows subprocesses."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8")
+            except OSError:
+                continue
+
+
 def _runtime_root(project_root: Path) -> Path:
-    return Path("/tmp") / "harness-monitor" / "runtime" / _runtime_marker(project_root)
+    return Path(tempfile.gettempdir()) / "harness-monitor" / "runtime" / _runtime_marker(project_root)
 
 
 def _runtime_event_path(project_root: Path) -> Path:
@@ -316,13 +328,13 @@ def cmd_harness_validate(args: argparse.Namespace) -> int:
 
     try:
         config = load_harness_config(config_path)
-        print(f"✓ Valid harness configuration: {config_path}")
+        print(f"Valid harness configuration: {config_path}")
         print(f"  Version: {config.version}")
         print(f"  Evidence producers: {len(config.evidence_producers)}")
         print(f"  Gate policies: {len(config.gate_policies)}")
         return 0
     except Exception as e:
-        print(f"✗ Invalid configuration: {e}", file=sys.stderr)
+        print(f"Invalid configuration: {e}", file=sys.stderr)
         return 1
 
 
@@ -379,11 +391,18 @@ def cmd_harness_run(args: argparse.Namespace) -> int:
             print(f"Summary: {verdict.summary}")
 
             if verdict.gate_results:
-                print(f"\nGate results:")
-                for result in verdict.gate_results:
-                    status_icon = "✓" if result.passed else "✗"
-                    severity_value = result.severity.value if hasattr(result.severity, 'value') else result.severity
-                    print(f"  {status_icon} {result.policy_name} ({severity_value}): {result.message}")
+                print("\nGate results:")
+                for gate_result in verdict.gate_results:
+                    status_icon = "✓" if gate_result.passed else "✗"
+                    severity_value = (
+                        gate_result.severity.value
+                        if hasattr(gate_result.severity, "value")
+                        else gate_result.severity
+                    )
+                    print(
+                        f"  {status_icon} {gate_result.policy_name} "
+                        f"({severity_value}): {gate_result.message}"
+                    )
 
         # 返回适当的退出码
         return 0 if (verdict.status.value if hasattr(verdict.status, 'value') else verdict.status) == "pass" else 1
@@ -1641,6 +1660,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    _configure_utf8_streams()
     parser = build_parser()
     args = parser.parse_args()
 

@@ -1,7 +1,7 @@
 """Gate policy data structures."""
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, Any, Optional
+from typing import Optional
 
 
 class Severity(Enum):

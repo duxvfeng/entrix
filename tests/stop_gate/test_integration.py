@@ -1,4 +1,5 @@
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -57,7 +58,7 @@ metrics:
         "session_id": "test-session",
         "task_id": "test-task",
         "workspace": test_repo,
-        "changed_files": ["test.py"],
+        "changed_files": [],
         "stop_reason": "agent_completed",
     }
 
@@ -79,7 +80,7 @@ def test_full_stop_gate_cycle_fail(tmp_path: Path):
     # 创建会失败的质量检查
     fitness_dir = test_repo / "docs" / "fitness"
     fitness_dir.mkdir(parents=True)
-    (fitness_dir / "code-quality.md").write_text("""\
+    (fitness_dir / "code-quality.md").write_text(f"""\
 ---
 dimension: code_quality
 weight: 100
@@ -88,7 +89,7 @@ threshold:
   warn: 80
 metrics:
   - name: failing_test
-    command: python -c "import sys; sys.exit(1)"
+    command: '{sys.executable} -c "import sys; sys.exit(1)"'
     hard_gate: true
     tier: fast
 ---
@@ -120,7 +121,7 @@ metrics:
         "session_id": "test-session",
         "task_id": "test-task",
         "workspace": test_repo,
-        "changed_files": ["test.py"],
+        "changed_files": [],
         "stop_reason": "agent_completed",
     }
 

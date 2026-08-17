@@ -1,5 +1,4 @@
 """Evidence collection engine tests."""
-import pytest
 from pathlib import Path
 from entrix.harness.engine import EvidenceEngine, HarnessRunContext
 from entrix.harness.config import HarnessConfig, EvidenceProducerConfig
@@ -39,17 +38,15 @@ def test_collect_evidence_with_command_producer():
     assert bundle.evidence[0].status == "pass"
 
 
-def test_collect_with_global_when_filter():
+def test_collect_with_global_when_filter(tmp_path):
     """测试带有全局 when 条件的证据收集"""
-    import tempfile
-
     # 创建存在的临时文件
-    temp_file = Path("/tmp/test_marker.txt")
+    temp_file = tmp_path / "test_marker.txt"
     temp_file.write_text("marker")
 
     config = HarnessConfig(
         version="harness/v1",
-        when={"files_exist": ["/tmp/test_marker.txt"]},
+        when={"files_exist": [temp_file.name]},
         evidence_producers=[
             EvidenceProducerConfig(
                 id="test-1",
@@ -65,8 +62,8 @@ def test_collect_with_global_when_filter():
 
     context = HarnessRunContext(
         task_id="task-1",
-        repo_root=Path("/tmp"),
-        when_context=WhenContext(repo_root=Path("/tmp")),
+        repo_root=tmp_path,
+        when_context=WhenContext(repo_root=tmp_path),
     )
 
     engine = EvidenceEngine(config)
@@ -76,7 +73,7 @@ def test_collect_with_global_when_filter():
     assert len(bundle.evidence) == 1
 
 
-def test_collect_with_producer_when_filter():
+def test_collect_with_producer_when_filter(tmp_path):
     """测试带有生产者特定 when 条件的证据收集"""
     config = HarnessConfig(
         version="harness/v1",
@@ -88,7 +85,7 @@ def test_collect_with_producer_when_filter():
                 command="echo 'test'",
                 producer="test",
                 parser={"type": "exit_code"},
-                when={"files_exist": ["/tmp/does_not_exist.txt"]},  # 应该跳过
+                when={"files_exist": ["does_not_exist.txt"]},  # 应该跳过
             ),
             EvidenceProducerConfig(
                 id="test-2",
@@ -104,8 +101,8 @@ def test_collect_with_producer_when_filter():
 
     context = HarnessRunContext(
         task_id="task-1",
-        repo_root=Path.cwd(),
-        when_context=WhenContext(repo_root=Path.cwd()),
+        repo_root=tmp_path,
+        when_context=WhenContext(repo_root=tmp_path),
     )
 
     engine = EvidenceEngine(config)

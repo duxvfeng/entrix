@@ -42,8 +42,11 @@ mcp = [
     "fastmcp>=0.1.0,<2",
 ]
 dev = [
+    "build>=1.2,<2",
+    "mypy>=1.10,<2",
     "pytest>=8.0,<9",
     "ruff>=0.3.0,<1",
+    "types-PyYAML>=6.0.12,<7",
 ]
 visual = [
     "rich>=13.0,<14",
@@ -58,9 +61,30 @@ packages = ["entrix"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+extend-exclude = ["docs/multi_agent_system"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
 
 [tool.pytest.ini_options]
-norecursedirs = ["tests/fixtures"]
+addopts = "--import-mode=importlib --basetemp=.pytest-sandbox"
+norecursedirs = ["tests/fixtures", ".pytest_*", ".pytest-*"]
 markers = [
     "integration: marks tests as integration tests (slow, may require external tools)",
 ]
+
+[tool.mypy]
+python_version = "3.10"
+files = [
+    "entrix/harness/config.py",
+    "entrix/harness/engine.py",
+    "entrix/harness/gate",
+    "entrix/harness/producers",
+    "entrix/stop_gate/hook.py",
+    "entrix/stop_gate/runner.py",
+    "entrix/runners/shell.py",
+]
+exclude = ["docs/multi_agent_system"]
+check_untyped_defs = true
+follow_imports = "skip"
+ignore_missing_imports = true

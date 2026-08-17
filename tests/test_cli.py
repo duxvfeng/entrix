@@ -1,7 +1,6 @@
 """Tests for entrix.cli."""
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 
@@ -621,10 +620,11 @@ def test_report_to_dict_includes_result_state():
     assert payload["dimensions"][0]["results"][0]["state"] == "waived"
 
 
-def test_cmd_run_defaults_scope_to_local(monkeypatch):
+def test_cmd_run_defaults_scope_to_local(tmp_path, monkeypatch):
     captured = {}
 
     monkeypatch.setattr("entrix.cli._find_project_root", lambda: Path("/tmp"))
+    monkeypatch.setattr("entrix.cli._runtime_root", lambda _project_root: tmp_path / "runtime")
     monkeypatch.setattr("entrix.cli._find_fitness_dir", lambda _project_root: Path("/tmp/docs/fitness"))
     monkeypatch.setattr("entrix.cli.get_project_preset", lambda: object())
     monkeypatch.setattr("entrix.cli._collect_run_files", lambda _args, _project_root: [])
@@ -688,6 +688,7 @@ def test_cmd_run_emits_runtime_fitness_event(tmp_path, monkeypatch):
     )
 
     monkeypatch.setattr("entrix.cli._find_project_root", lambda: tmp_path)
+    monkeypatch.setattr("entrix.cli._runtime_root", lambda _project_root: tmp_path / "runtime")
     monkeypatch.setattr("entrix.cli._find_fitness_dir", lambda _project_root: tmp_path / "docs" / "fitness")
     monkeypatch.setattr("entrix.cli.get_project_preset", lambda: object())
     monkeypatch.setattr("entrix.cli._collect_run_files", lambda _args, _project_root: [])
@@ -716,7 +717,7 @@ def test_cmd_run_emits_runtime_fitness_event(tmp_path, monkeypatch):
     exit_code = cmd_run(args)
 
     assert exit_code == 0
-    runtime_root = Path("/tmp") / "harness-monitor" / "runtime" / hashlib.sha256(str(tmp_path).encode("utf-8")).hexdigest()
+    runtime_root = tmp_path / "runtime"
     event_path = runtime_root / "events.jsonl"
     payload = json.loads(event_path.read_text(encoding="utf-8").strip().splitlines()[-1])
     assert payload["type"] == "fitness"

@@ -1,6 +1,5 @@
 """Gate arbiter engine tests."""
-import pytest
-from entrix.harness.gate.arbiter import GateEngine, GateResult, Verdict, VerdictStatus
+from entrix.harness.gate.arbiter import GateEngine, VerdictStatus
 from entrix.harness.gate.policy import GatePolicy, GateRule, Severity
 from entrix.harness.evidence import Evidence, EvidenceBundle
 

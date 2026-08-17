@@ -15,7 +15,8 @@ class FakeTools:
 
 
 def test_adapter_query_uses_pattern_keyword():
-    adapter = CodeReviewGraphAdapter(Path("/tmp/repo"))
+    repo_root = Path("/tmp/repo")
+    adapter = CodeReviewGraphAdapter(repo_root)
     fake_tools = FakeTools()
     adapter._tools = fake_tools
 
@@ -26,6 +27,6 @@ def test_adapter_query_uses_pattern_keyword():
         {
             "pattern": "tests_for",
             "target": "foo.Bar.run",
-            "repo_root": "/tmp/repo",
+            "repo_root": str(repo_root),
         }
     ]
