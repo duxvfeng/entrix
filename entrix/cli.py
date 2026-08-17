@@ -16,7 +16,7 @@ from entrix.analysis.long_file import analyze_long_files
 from entrix.engine import collect_changed_files, run_fitness_report
 from entrix.file_budgets import evaluate_paths, is_tracked_source_file, load_config
 from entrix.governance import GovernancePolicy, StreamOutputMode, enforce
-from entrix.loaders import load_dimensions, validate_weights
+from entrix.loaders import validate_weights
 from entrix.model import ExecutionScope, FitnessReport, Gate, Metric, MetricResult, ResultState, Tier
 from entrix.presets import get_project_preset
 from entrix.reporting import report_to_dict, write_report_output
@@ -24,7 +24,6 @@ from entrix.review_trigger import (
     collect_changed_files as collect_review_changed_files,
     collect_diff_stats,
     evaluate_review_triggers,
-    load_review_triggers,
 )
 from entrix.release_trigger import (
     evaluate_release_triggers,
@@ -37,7 +36,7 @@ from entrix.runners.graph import GraphRunner
 from entrix.test_mapping import analyze_test_mappings
 
 # Harness system imports
-from entrix.harness.config import load_harness_config
+from entrix.harness.config import HarnessConfig, load_harness_config
 from entrix.harness.engine import EvidenceEngine, HarnessRunContext
 from entrix.harness.gate.arbiter import GateEngine
 from entrix.harness.conditions import WhenContext
@@ -472,6 +471,25 @@ def _find_fitness_dir(project_root: Path) -> Path:
     return fitness_dir
 
 
+def _find_harness_config(project_root: Path) -> Path | None:
+    """查找项目根目录的 Harness 配置。"""
+    for config_path in (project_root / "harness.yaml", project_root / ".harness" / "harness.yaml"):
+        if config_path.is_file():
+            return config_path
+    return None
+
+
+def _load_project_harness(
+    project_root: Path,
+    config_path: Path | None = None,
+) -> HarnessConfig:
+    """加载项目 Harness 配置，供显式质量命令共享。"""
+    selected_path = config_path or _find_harness_config(project_root)
+    if selected_path is None:
+        raise FileNotFoundError(f"未找到 Harness 配置：{project_root / 'harness.yaml'}")
+    return load_harness_config(selected_path)
+
+
 def _find_review_trigger_config(project_root: Path) -> Path:
     """定位默认的 review-trigger config。"""
     config_path = get_project_preset().review_trigger_config(project_root)
@@ -752,7 +770,11 @@ def _collect_run_files(args: argparse.Namespace, project_root: Path) -> list[str
 def cmd_run(args: argparse.Namespace) -> int:
     """将架构 fitness 函数作为可执行的 guardrail 检查运行。"""
     project_root = _find_project_root()
-    _find_fitness_dir(project_root)
+    try:
+        harness_config = _load_project_harness(project_root)
+    except (FileNotFoundError, ValueError) as error:
+        print(f"错误：{error}", file=sys.stderr)
+        return 1
     preset = get_project_preset()
     run_started_at = time.perf_counter()
 
@@ -819,6 +841,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         project_root,
         policy,
         preset,
+        dimensions=harness_config.fitness_dimensions,
         changed_files=changed_files or None,
         base=args.base,
         progress_setup_callback=(None if live_reporter is None else live_reporter.setup),
@@ -957,9 +980,13 @@ def cmd_run(args: argparse.Namespace) -> int:
 def cmd_validate(args: argparse.Namespace) -> int:
     """验证 dimension 权重之和为 100%。"""
     project_root = _find_project_root()
-    fitness_dir = _find_fitness_dir(project_root)
+    try:
+        config = _load_project_harness(project_root)
+    except (FileNotFoundError, ValueError) as error:
+        print(f"错误：{error}", file=sys.stderr)
+        return 1
 
-    dimensions = load_dimensions(fitness_dir)
+    dimensions = config.fitness_dimensions
     valid, total = validate_weights(dimensions)
 
     for dim in dimensions:
@@ -977,9 +1004,16 @@ def cmd_validate(args: argparse.Namespace) -> int:
 def cmd_review_trigger(args: argparse.Namespace) -> int:
     """针对当前 diff 评估 review-trigger 规则。"""
     project_root = _find_project_root()
-    config_path = Path(args.config).resolve() if args.config else _find_review_trigger_config(project_root)
+    try:
+        config = _load_project_harness(
+            project_root,
+            Path(args.config).resolve() if args.config else None,
+        )
+    except (FileNotFoundError, ValueError) as error:
+        print(f"错误：{error}", file=sys.stderr)
+        return 1
 
-    rules = load_review_triggers(config_path)
+    rules = config.review_trigger_rules
     changed_files = args.files or collect_review_changed_files(project_root, args.base)
     diff_stats = collect_diff_stats(project_root, args.base)
     report = evaluate_review_triggers(

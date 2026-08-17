@@ -1,4 +1,5 @@
 """Harness CLI commands tests - integrated with existing CLI framework."""
+import json
 import subprocess
 import os
 import sys
@@ -127,3 +128,46 @@ gate_policies: []
 
         data = json.loads(result.stdout)
         assert "task_id" in data or "status" in data
+
+
+def test_run_uses_inline_harness_dimensions_without_legacy_directory(tmp_path: Path):
+    (tmp_path / "harness.yaml").write_text(
+        '''version: "harness/v1"
+fitness:
+  dimensions:
+    - dimension: quality
+      weight: 100
+      metrics:
+        - name: smoke
+          command: "echo ok"
+          hard_gate: true
+evidence_producers: []
+gate_policies: []
+''',
+        encoding="utf-8",
+    )
+
+    result = _run_cli("run", "--min-score", "0", cwd=tmp_path)
+
+    assert result.returncode == 0
+    assert "FINAL SCORE: 100.0%" in result.stdout
+
+
+def test_review_trigger_uses_inline_harness_rules(tmp_path: Path):
+    (tmp_path / "harness.yaml").write_text(
+        '''version: "harness/v1"
+review_triggers:
+  rules:
+    - name: source-change
+      type: changed_paths
+      paths: ["src/**"]
+evidence_producers: []
+gate_policies: []
+''',
+        encoding="utf-8",
+    )
+
+    result = _run_cli("review-trigger", "--json", "src/app.py", cwd=tmp_path)
+
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["triggers"][0]["name"] == "source-change"

@@ -20,7 +20,7 @@ from entrix.reporters.terminal import TerminalReporter
 from entrix.model import ExecutionScope, FitnessReport, Metric, MetricResult, ResultState, Tier
 from entrix.presets import get_project_preset
 from entrix.reporting import report_to_dict
-from entrix.harness.config import load_harness_config
+from entrix.harness.config import HarnessConfig, load_harness_config
 import entrix.cli as cli_module
 
 
@@ -670,7 +670,10 @@ def test_cmd_run_defaults_scope_to_local(tmp_path, monkeypatch):
 
     monkeypatch.setattr("entrix.cli._find_project_root", lambda: Path("/tmp"))
     monkeypatch.setattr("entrix.cli._runtime_root", lambda _project_root: tmp_path / "runtime")
-    monkeypatch.setattr("entrix.cli._find_fitness_dir", lambda _project_root: Path("/tmp/docs/fitness"))
+    monkeypatch.setattr(
+        "entrix.cli._load_project_harness",
+        lambda _project_root: HarnessConfig(version="harness/v1"),
+    )
     monkeypatch.setattr("entrix.cli.get_project_preset", lambda: object())
     monkeypatch.setattr("entrix.cli._collect_run_files", lambda _args, _project_root: [])
     monkeypatch.setattr(
@@ -734,7 +737,10 @@ def test_cmd_run_emits_runtime_fitness_event(tmp_path, monkeypatch):
 
     monkeypatch.setattr("entrix.cli._find_project_root", lambda: tmp_path)
     monkeypatch.setattr("entrix.cli._runtime_root", lambda _project_root: tmp_path / "runtime")
-    monkeypatch.setattr("entrix.cli._find_fitness_dir", lambda _project_root: tmp_path / "docs" / "fitness")
+    monkeypatch.setattr(
+        "entrix.cli._load_project_harness",
+        lambda _project_root: HarnessConfig(version="harness/v1"),
+    )
     monkeypatch.setattr("entrix.cli.get_project_preset", lambda: object())
     monkeypatch.setattr("entrix.cli._collect_run_files", lambda _args, _project_root: [])
     monkeypatch.setattr("entrix.cli.run_fitness_report", lambda *_args, **_kwargs: (report, [dimension]))

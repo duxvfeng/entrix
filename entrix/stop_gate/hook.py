@@ -13,7 +13,7 @@
 安全阀：
 
 - 环境变量 ``ENTRIX_STOP_GATE_DISABLED`` 非空时直接放行。
-- 工作区没有 ``docs/fitness/`` 规格的仓库不激活门禁，直接放行，
+- 工作区没有 ``harness.yaml`` 的仓库不激活门禁，直接放行，
   这样插件可以全局安装而不影响未配置的仓库。
 """
 
@@ -54,16 +54,6 @@ def read_hook_payload(stream: IO[str] | None = None) -> dict:
     except json.JSONDecodeError:
         return {}
     return payload if isinstance(payload, dict) else {}
-
-
-def has_fitness_specs(workspace: Path) -> bool:
-    """判断工作区是否配置了 Entrix 护栏规格。"""
-    fitness_dir = workspace / "docs" / "fitness"
-    if not fitness_dir.is_dir():
-        return False
-    if (fitness_dir / "manifest.yaml").is_file():
-        return True
-    return any(fitness_dir.glob("*.md"))
 
 
 def derive_changed_files(workspace: Path) -> list[str]:
@@ -170,26 +160,7 @@ def run_stop_gate_hook(
         _write_block_decision(output_stream, verdict.summary or "Harness 门禁未通过。")
         return 0
 
-    # 未配置 Harness 且没有 legacy 规格的仓库不激活门禁
-    if not has_fitness_specs(workspace):
-        return 0
-
-    # 延迟导入，避免 hook 入口对 stop_gate 子系统的硬依赖
-    from entrix.stop_gate.adapter import StopGateAdapter
-
-    adapter = StopGateAdapter(
-        state_dir=workspace / ".claude" / "stop-gate",
-        timeout_seconds=timeout_seconds,
-    )
-    decision = adapter.on_before_stop(
-        context
-    )
-
-    if decision.allow_stop:
-        return 0
-
-    reason = decision.feedback or "Stop Gate 阻止了本次停止，请修复反馈中的问题后重试。"
-    _write_block_decision(output_stream, reason)
+    # 未配置 Harness 的仓库不激活门禁，直接放行。
     return 0
 
 
