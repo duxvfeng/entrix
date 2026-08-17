@@ -324,6 +324,70 @@ gate_policies:
         load_harness_config(config_path)
 
 
+def test_sarif_parser_config(tmp_path: Path) -> None:
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        '''version: "harness/v1"
+evidence_producers:
+  - id: scan
+    type: security
+    name: Security scan
+    command: run-scan
+    parser:
+      type: sarif
+      path: scan.sarif
+      blocking_levels: [error, warning]
+gate_policies:
+  - name: Scan passes
+    severity: hard
+    rule: {evidence_id: scan, condition: 'status == "pass"'}
+''',
+        encoding="utf-8",
+    )
+
+    config = load_harness_config(config_path)
+
+    assert config.evidence_producers[0].parser["blocking_levels"] == [
+        "error",
+        "warning",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("parser", "error"),
+    [
+        ({"type": "sarif"}, "path"),
+        ({"type": "sarif", "path": "scan.sarif", "blocking_levels": "error"}, "blocking_levels"),
+        (
+            {"type": "sarif", "path": "scan.sarif", "blocking_levels": ["fatal"]},
+            "blocking_levels",
+        ),
+    ],
+)
+def test_invalid_sarif_parser_config_is_rejected(
+    tmp_path: Path, parser: dict[str, object], error: str
+) -> None:
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        f'''version: "harness/v1"
+evidence_producers:
+  - id: scan
+    type: security
+    name: Security scan
+    command: run-scan
+    parser: {parser!r}
+gate_policies:
+  - name: Scan passes
+    severity: hard
+    rule: {{evidence_id: scan, condition: 'status == "pass"'}}
+''',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=error):
+        load_harness_config(config_path)
+
+
 @pytest.mark.parametrize(
     ("producer", "error"),
     [

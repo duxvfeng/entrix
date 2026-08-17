@@ -6,6 +6,7 @@ from entrix.harness.parsers.evidence_json import EvidenceJsonParser
 from entrix.harness.parsers.json_report import JsonReportParser
 from entrix.harness.parsers.junit import JUnitParser
 from entrix.harness.parsers.process import ExitCodeParser, RegexParser
+from entrix.harness.parsers.sarif import SarifParser
 
 _PARSERS: dict[str, EvidenceParser] = {
     "exit_code": ExitCodeParser(),
@@ -13,6 +14,7 @@ _PARSERS: dict[str, EvidenceParser] = {
     "junit": JUnitParser(),
     "json": JsonReportParser(),
     "evidence_json": EvidenceJsonParser(),
+    "sarif": SarifParser(),
 }
 
 

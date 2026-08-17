@@ -17,7 +17,10 @@ from entrix.review_trigger import ReviewTriggerRule, parse_review_trigger_rules
 
 SUPPORTED_VERSIONS = ("harness/v1",)
 BUILTIN_PRODUCERS = frozenset({"entrix-fitness", "entrix-review-trigger", "diff-stats"})
-PARSER_TYPES = frozenset({"exit_code", "regex", "junit", "json", "evidence_json"})
+PARSER_TYPES = frozenset(
+    {"exit_code", "regex", "junit", "json", "evidence_json", "sarif"}
+)
+SARIF_LEVELS = frozenset({"error", "warning", "note", "none"})
 
 
 @dataclass
@@ -94,7 +97,7 @@ def _load_producer_configs(producers_data: Any) -> list[EvidenceProducerConfig]:
         pattern = parser_data.get("pattern")
         if parser_type == "regex" and (not isinstance(pattern, str) or not pattern):
             raise ValueError("regex parser 必须配置非空 pattern")
-        if parser_type in {"junit", "json", "evidence_json"}:
+        if parser_type in {"junit", "json", "evidence_json", "sarif"}:
             parser_data["path"] = _require_text(
                 parser_data.get("path"), f"{parser_type} parser.path"
             )
@@ -115,6 +118,15 @@ def _load_producer_configs(producers_data: Any) -> list[EvidenceProducerConfig]:
             for field_name, source_path in summary.items():
                 _require_text(field_name, "json parser.summary key")
                 _require_text(source_path, f"json parser.summary.{field_name}")
+        if parser_type == "sarif":
+            blocking_levels = parser_data.get("blocking_levels", ["error"])
+            if not isinstance(blocking_levels, list):
+                raise ValueError("sarif parser.blocking_levels 必须是列表")
+            if any(level not in SARIF_LEVELS for level in blocking_levels):
+                raise ValueError(
+                    "sarif parser.blocking_levels 只支持 error/warning/note/none"
+                )
+            parser_data["blocking_levels"] = list(blocking_levels)
 
         timeout_seconds = producer_data.get("timeout_seconds", 60)
         if not isinstance(timeout_seconds, int) or timeout_seconds <= 0:
