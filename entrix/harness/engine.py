@@ -2,7 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from entrix.harness.config import HarnessConfig, EvidenceProducerConfig
 from entrix.harness.conditions import WhenContext, evaluate_when
@@ -26,6 +26,7 @@ class HarnessRunContext:
     when_context: WhenContext
     attempt_id: str = "unknown"
     store: Optional[EvidenceStore] = None
+    base_ref: str = "HEAD"
 
 
 class EvidenceEngine:
@@ -54,7 +55,7 @@ class EvidenceEngine:
             EvidenceBundle containing collected evidence
         """
         # Check global when condition
-        if not evaluate_when(self.config.when, context.when_context):
+        if not self.is_active(context):
             return EvidenceBundle(
                 task_id=context.task_id,
                 attempt_id=context.attempt_id,
@@ -83,6 +84,7 @@ class EvidenceEngine:
                     repo_root=context.repo_root,
                     when_context=context.when_context,
                     attempt_id=context.attempt_id,
+                    base_ref=context.base_ref,
                 )
 
                 future = executor.submit(producer.run, producer_context)
@@ -111,6 +113,10 @@ class EvidenceEngine:
                 collection_errors.append({"storage_error": str(e)})
 
         return bundle
+
+    def is_active(self, context: HarnessRunContext) -> bool:
+        """Return whether the global Harness condition applies to this run."""
+        return evaluate_when(self.config.when, context.when_context)
 
     def _create_producer(self, config: EvidenceProducerConfig):
         """Create producer instance from configuration.

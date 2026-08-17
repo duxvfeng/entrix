@@ -11,6 +11,7 @@ class ProducerContext:
     repo_root: Path
     when_context: WhenContext
     attempt_id: str = "unknown"
+    base_ref: str = "HEAD"
 
 class Producer:
     """Evidence producer protocol.

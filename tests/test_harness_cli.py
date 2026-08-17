@@ -1,7 +1,22 @@
 """Harness CLI commands tests - integrated with existing CLI framework."""
 import subprocess
+import os
+import sys
 import tempfile
 from pathlib import Path
+
+
+def _run_cli(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    repo_root = Path(__file__).resolve().parents[1]
+    env = {**os.environ, "PYTHONPATH": str(repo_root)}
+    return subprocess.run(
+        [sys.executable, "-m", "entrix.cli", *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        cwd=cwd or repo_root,
+        env=env,
+    )
 
 
 def test_harness_validate_command():
@@ -29,11 +44,7 @@ gate_policies:
         config_path = Path(tmpdir) / "harness.yaml"
         config_path.write_text(harness_yaml)
 
-        result = subprocess.run(
-            ["python", "-m", "entrix.cli", "harness", "validate", str(config_path)],
-            capture_output=True,
-            text=True,
-        )
+        result = _run_cli("harness", "validate", str(config_path))
 
         assert result.returncode == 0
         assert "valid" in result.stdout.lower() or "有效" in result.stdout.lower()
@@ -51,15 +62,11 @@ gate_policies: []
         config_path = Path(tmpdir) / "harness.yaml"
         config_path.write_text(invalid_yaml)
 
-        result = subprocess.run(
-            ["python", "-m", "entrix.cli", "harness", "validate", str(config_path)],
-            capture_output=True,
-            text=True,
-        )
+        result = _run_cli("harness", "validate", str(config_path))
 
         assert result.returncode != 0
         output = result.stdout + result.stderr
-        assert "unsupported" in output.lower() or "不支持" in output.lower() or "error" in output.lower()
+        assert "invalid configuration" in output.lower() or "不支持" in output.lower()
 
 
 def test_harness_run_command():
@@ -87,12 +94,7 @@ gate_policies:
         config_path = Path(tmpdir) / "harness.yaml"
         config_path.write_text(harness_yaml)
 
-        result = subprocess.run(
-            ["python", "-m", "entrix.cli", "harness", "run", "--config", str(config_path)],
-            capture_output=True,
-            text=True,
-            cwd=tmpdir,
-        )
+        result = _run_cli("harness", "run", "--config", str(config_path), cwd=Path(tmpdir))
 
         assert result.returncode == 0
         # 应该显示 PASS 状态
@@ -117,12 +119,7 @@ gate_policies: []
         config_path = Path(tmpdir) / "harness.yaml"
         config_path.write_text(harness_yaml)
 
-        result = subprocess.run(
-            ["python", "-m", "entrix.cli", "harness", "run", "--config", str(config_path), "--json"],
-            capture_output=True,
-            text=True,
-            cwd=tmpdir,
-        )
+        result = _run_cli("harness", "run", "--config", str(config_path), "--json", cwd=Path(tmpdir))
 
         assert result.returncode == 0
         # 应该是有效的 JSON

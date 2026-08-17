@@ -3,8 +3,6 @@ import re
 import subprocess
 import time
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Optional
 
 from entrix.harness.producers.base import Producer, ProducerContext
 from entrix.harness.config import EvidenceProducerConfig
@@ -44,6 +42,7 @@ class CommandProducer(Producer):
 
         try:
             # Execute command
+            assert self.config.command is not None
             start_time = time.time()
             result = subprocess.run(
                 self.config.command,
@@ -104,10 +103,23 @@ class CommandProducer(Producer):
             match = re.search(self.regex_pattern, result.stdout)
             if match:
                 evidence.status = "pass"
-                evidence.summary = match.groupdict()
+                evidence.summary = {
+                    key: _coerce_capture(value) for key, value in match.groupdict().items()
+                }
             else:
                 evidence.status = "error"
                 evidence.raw = {"error": "Regex pattern did not match output"}
         except re.error as e:
             evidence.status = "error"
             evidence.raw = {"error": f"Regex error: {e}"}
+
+
+def _coerce_capture(value: str | None) -> object:
+    """Preserve numeric regex captures as numeric evidence values."""
+    if value is None:
+        return None
+    if re.fullmatch(r"-?\d+", value):
+        return int(value)
+    if re.fullmatch(r"-?\d+\.\d+", value):
+        return float(value)
+    return value

@@ -31,6 +31,14 @@ DEFAULT_TIMEOUT_SECONDS = 240
 BLOCK_DECISION = "block"
 
 
+def find_harness_config(workspace: Path) -> Path | None:
+    """Return the preferred Harness configuration file, if the workspace has one."""
+    for config_path in (workspace / "harness.yaml", workspace / ".harness" / "harness.yaml"):
+        if config_path.is_file():
+            return config_path
+    return None
+
+
 def read_hook_payload(stream: IO[str] | None = None) -> dict:
     """读取并解析 stdin 的 hook 载荷，损坏或缺失时返回空 dict。"""
     if stream is None:
@@ -91,6 +99,23 @@ def derive_changed_files(workspace: Path) -> list[str]:
     return changed
 
 
+def derive_current_branch(workspace: Path) -> str:
+    """Return the checked-out branch name, or ``unknown`` outside a repository."""
+    try:
+        result = subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "unknown"
+    branch = result.stdout.strip()
+    return branch if result.returncode == 0 and branch else "unknown"
+
+
 def run_stop_gate_hook(
     *,
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
@@ -118,35 +143,57 @@ def run_stop_gate_hook(
 
     workspace = Path(payload.get("cwd") or os.getcwd()).resolve()
 
-    # 未配置护栏的仓库不激活门禁
+    session_id = str(payload.get("session_id") or "unknown-session")
+    stop_reason = str(payload.get("reason") or "agent_completed")
+    context = {
+        "session_id": session_id,
+        "task_id": session_id,
+        "workspace": workspace,
+        "changed_files": derive_changed_files(workspace),
+        "branch": str(payload.get("branch") or derive_current_branch(workspace)),
+        "stop_reason": stop_reason,
+        "base_ref": base_ref,
+    }
+
+    harness_config = find_harness_config(workspace)
+    if harness_config is not None:
+        from entrix.stop_gate.runner import HarnessRunner
+
+        try:
+            verdict = HarnessRunner(harness_config).run(context)
+        except Exception as error:  # noqa: BLE001
+            _write_block_decision(output_stream, f"Harness 执行失败：{error}")
+            return 0
+
+        if getattr(verdict.status, "value", verdict.status) == "pass":
+            return 0
+        _write_block_decision(output_stream, verdict.summary or "Harness 门禁未通过。")
+        return 0
+
+    # 未配置 Harness 且没有 legacy 规格的仓库不激活门禁
     if not has_fitness_specs(workspace):
         return 0
 
     # 延迟导入，避免 hook 入口对 stop_gate 子系统的硬依赖
     from entrix.stop_gate.adapter import StopGateAdapter
 
-    session_id = str(payload.get("session_id") or "unknown-session")
-    stop_reason = str(payload.get("reason") or "agent_completed")
-
     adapter = StopGateAdapter(
         state_dir=workspace / ".claude" / "stop-gate",
         timeout_seconds=timeout_seconds,
     )
     decision = adapter.on_before_stop(
-        {
-            "session_id": session_id,
-            "task_id": session_id,
-            "workspace": workspace,
-            "changed_files": derive_changed_files(workspace),
-            "stop_reason": stop_reason,
-            "base_ref": base_ref,
-        }
+        context
     )
 
     if decision.allow_stop:
         return 0
 
     reason = decision.feedback or "Stop Gate 阻止了本次停止，请修复反馈中的问题后重试。"
+    _write_block_decision(output_stream, reason)
+    return 0
+
+
+def _write_block_decision(output_stream: IO[str], reason: str) -> None:
     json.dump(
         {"decision": BLOCK_DECISION, "reason": reason},
         output_stream,
@@ -154,7 +201,6 @@ def run_stop_gate_hook(
     )
     output_stream.write("\n")
     output_stream.flush()
-    return 0
 
 
 def main(argv: list[str] | None = None) -> int:

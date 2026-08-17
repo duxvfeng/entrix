@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -15,12 +16,15 @@ ENTRIX_CMD = [sys.executable, "-m", "entrix"]
 
 
 def run_entrix(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    project_root = Path(__file__).resolve().parents[1]
     return subprocess.run(
         [*ENTRIX_CMD, *args],
         cwd=repo_root,
         check=False,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        env={**os.environ, "PYTHONPATH": str(project_root)},
     )
 
 

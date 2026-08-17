@@ -6,6 +6,7 @@ import re
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
 from os import environ
 from pathlib import Path
 from queue import Empty, Queue
@@ -142,8 +143,10 @@ class ShellRunner:
             )
 
     def _run_captured(self, metric: Metric, *, timeout: int) -> tuple[str, int]:
+        command, use_shell = self._shell_command(metric.command)
         result = subprocess.run(
-            ["/bin/bash", "-lc", metric.command],
+            command,
+            shell=use_shell,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -153,8 +156,10 @@ class ShellRunner:
         return result.stdout + result.stderr, result.returncode
 
     def _run_streaming(self, metric: Metric, *, timeout: int) -> tuple[str, int]:
+        command, use_shell = self._shell_command(metric.command)
         process = subprocess.Popen(
-            ["/bin/bash", "-lc", metric.command],
+            command,
+            shell=use_shell,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -210,6 +215,12 @@ class ShellRunner:
             thread.join(timeout=0.1)
         return "".join(chunks), returncode
 
+    @staticmethod
+    def _shell_command(command: str) -> tuple[str | list[str], bool]:
+        if os.name == "nt":
+            return command, True
+        return ["/bin/bash", "-lc", command], False
+
     def _emit_output(self, metric: Metric, source: str, line: str) -> None:
         if self.output_callback is not None:
             self.output_callback(metric, source, line)
@@ -228,13 +239,13 @@ class ShellRunner:
         返回结果与输入 metric 的顺序一致。
         """
         if not parallel or dry_run:
-            results = []
+            sequential_results: list[MetricResult] = []
             for metric in metrics:
                 self._emit_progress(progress_callback, "start", metric)
                 result = self.run(metric, dry_run=dry_run)
                 self._emit_progress(progress_callback, "end", metric, result)
-                results.append(result)
-            return results
+                sequential_results.append(result)
+            return sequential_results
 
         results: dict[int, MetricResult] = {}
         with ThreadPoolExecutor(max_workers=max_workers) as executor:

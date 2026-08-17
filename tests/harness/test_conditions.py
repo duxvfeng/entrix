@@ -1,5 +1,3 @@
-import pytest
-import os
 from pathlib import Path
 from entrix.harness.conditions import evaluate_when, WhenContext, _changed_any
 
@@ -103,18 +101,18 @@ def test_multiple_predicates_one_false(tmp_path, monkeypatch):
     assert result is False
 
 
-def test_empty_when():
+def test_empty_when(tmp_path):
     """测试空的 when 块始终为 true"""
     when = {}
-    context = WhenContext(repo_root=Path("/tmp"))
+    context = WhenContext(repo_root=tmp_path)
 
     result = evaluate_when(when, context)
     assert result is True
 
 
-def test_none_when():
+def test_none_when(tmp_path):
     """测试 None when 始终为 true"""
-    result = evaluate_when(None, WhenContext(repo_root=Path("/tmp")))
+    result = evaluate_when(None, WhenContext(repo_root=tmp_path))
     assert result is True
 
 

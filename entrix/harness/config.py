@@ -1,39 +1,23 @@
-"""Harness 配置加载和验证。"""
-import yaml
+"""Harness configuration loading, validation, and domain conversion."""
+
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Any, Optional
 
-SUPPORTED_VERSIONS = ["harness/v1"]
+import yaml
 
+from entrix.harness.gate.policy import GatePolicy, GateRule, Severity
+from entrix.harness.gate.dsl import validate_condition_syntax
 
-@dataclass
-class GateRuleConfig:
-    """单个门禁规则的配置。"""
-    evidence_id: Optional[str] = None
-    evidence_type: Optional[str] = None
-    condition: str = ""
-    action: Optional[str] = None
-
-
-@dataclass
-class GatePolicyConfig:
-    """门禁策略的配置。"""
-    name: str = ""
-    severity: str = ""  # hard、soft、advisory、blocked
-    rule: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class ParserConfig:
-    """解析命令输出的配置。"""
-    type: str = ""  # exit_code、regex
-    pattern: Optional[str] = None
+SUPPORTED_VERSIONS = ("harness/v1",)
+BUILTIN_PRODUCERS = frozenset({"entrix-fitness", "entrix-review-trigger", "diff-stats"})
+PARSER_TYPES = frozenset({"exit_code", "regex"})
 
 
 @dataclass
 class EvidenceProducerConfig:
-    """证据生产者的配置。"""
+    """Validated evidence producer configuration."""
+
     id: str = ""
     type: str = ""
     name: str = ""
@@ -41,82 +25,147 @@ class EvidenceProducerConfig:
     producer: str = ""
     builtin: Optional[str] = None
     timeout_seconds: int = 60
-    when: Optional[Dict[str, Any]] = None
-    parser: Dict[str, Any] = field(default_factory=dict)
-    artifacts: List[Dict[str, str]] = field(default_factory=list)
+    when: Optional[dict[str, Any]] = None
+    parser: dict[str, Any] = field(default_factory=dict)
+    artifacts: list[dict[str, str]] = field(default_factory=list)
 
 
 @dataclass
 class HarnessConfig:
-    """顶层 harness 配置。"""
+    """Top-level configuration consumed by the evidence and gate engines."""
+
     version: str = ""
-    when: Optional[Dict[str, Any]] = None
-    evidence_producers: List[EvidenceProducerConfig] = field(default_factory=list)
-    gate_policies: List[GatePolicyConfig] = field(default_factory=list)
+    when: Optional[dict[str, Any]] = None
+    evidence_producers: list[EvidenceProducerConfig] = field(default_factory=list)
+    gate_policies: list[GatePolicy] = field(default_factory=list)
 
 
-def _load_producer_configs(producers_data: List[Dict]) -> List[EvidenceProducerConfig]:
-    """从 YAML 数据加载证据生产者配置。"""
-    producers = []
-    for prod_data in producers_data:
-        parser_data = prod_data.get("parser", {})
-        parser_config = ParserConfig(
-            type=parser_data.get("type", ""),
-            pattern=parser_data.get("pattern")
+def _require_mapping(value: Any, field_name: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{field_name} 必须是对象")
+    return value
+
+
+def _require_text(value: Any, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} 必须是非空字符串")
+    return value.strip()
+
+
+def _load_producer_configs(producers_data: Any) -> list[EvidenceProducerConfig]:
+    if not isinstance(producers_data, list):
+        raise ValueError("evidence_producers 必须是列表")
+
+    producers: list[EvidenceProducerConfig] = []
+    producer_ids: set[str] = set()
+    for index, raw_producer in enumerate(producers_data):
+        producer_data = _require_mapping(raw_producer, f"evidence_producers[{index}]")
+        producer_id = _require_text(producer_data.get("id"), f"evidence_producers[{index}].id")
+        if producer_id in producer_ids:
+            raise ValueError(f"evidence_producers 中存在重复 id：{producer_id}")
+        producer_ids.add(producer_id)
+
+        builtin = producer_data.get("builtin")
+        command = producer_data.get("command")
+        if builtin is not None:
+            builtin = _require_text(builtin, f"evidence_producers[{index}].builtin")
+            if builtin not in BUILTIN_PRODUCERS:
+                raise ValueError(f"未知 builtin producer：{builtin}")
+            if command is not None:
+                raise ValueError("builtin producer 不能同时配置 command")
+        else:
+            command = _require_text(command, f"evidence_producers[{index}].command")
+
+        parser_data = producer_data.get("parser", {"type": "exit_code"})
+        parser_data = _require_mapping(parser_data, f"evidence_producers[{index}].parser")
+        parser_type = parser_data.get("type", "exit_code")
+        if parser_type not in PARSER_TYPES:
+            raise ValueError(f"不支持的 parser type：{parser_type}")
+        pattern = parser_data.get("pattern")
+        if parser_type == "regex" and (not isinstance(pattern, str) or not pattern):
+            raise ValueError("regex parser 必须配置非空 pattern")
+
+        timeout_seconds = producer_data.get("timeout_seconds", 60)
+        if not isinstance(timeout_seconds, int) or timeout_seconds <= 0:
+            raise ValueError("timeout_seconds 必须是正整数")
+
+        producers.append(
+            EvidenceProducerConfig(
+                id=producer_id,
+                type=_require_text(producer_data.get("type"), f"evidence_producers[{index}].type"),
+                name=_require_text(producer_data.get("name"), f"evidence_producers[{index}].name"),
+                command=command,
+                producer=str(producer_data.get("producer", "")),
+                builtin=builtin,
+                timeout_seconds=timeout_seconds,
+                when=producer_data.get("when"),
+                parser={"type": parser_type, "pattern": pattern},
+                artifacts=producer_data.get("artifacts", []),
+            )
         )
-
-        producers.append(EvidenceProducerConfig(
-            id=prod_data.get("id", ""),
-            type=prod_data.get("type", ""),
-            name=prod_data.get("name", ""),
-            command=prod_data.get("command"),
-            producer=prod_data.get("producer", ""),
-            builtin=prod_data.get("builtin"),
-            timeout_seconds=prod_data.get("timeout_seconds", 60),
-            when=prod_data.get("when"),
-            parser=parser_config.__dict__,
-            artifacts=prod_data.get("artifacts", [])
-        ))
     return producers
 
 
-def _load_gate_policy_configs(gates_data: List[Dict]) -> List[GatePolicyConfig]:
-    """从 YAML 数据加载门禁策略配置。"""
-    policies = []
-    for gate_data in gates_data:
-        policies.append(GatePolicyConfig(
-            name=gate_data.get("name", ""),
-            severity=gate_data.get("severity", ""),
-            rule=gate_data.get("rule", {})
-        ))
+def _load_gate_policies(gates_data: Any) -> list[GatePolicy]:
+    if not isinstance(gates_data, list):
+        raise ValueError("gate_policies 必须是列表")
+
+    policies: list[GatePolicy] = []
+    for index, raw_gate in enumerate(gates_data):
+        gate_data = _require_mapping(raw_gate, f"gate_policies[{index}]")
+        try:
+            severity = Severity(
+                _require_text(gate_data.get("severity"), f"gate_policies[{index}].severity")
+            )
+        except ValueError as error:
+            raise ValueError(f"不支持的 severity：{gate_data.get('severity')}") from error
+
+        rule_data = _require_mapping(gate_data.get("rule"), f"gate_policies[{index}].rule")
+        evidence_id = rule_data.get("evidence_id")
+        evidence_type = rule_data.get("evidence_type")
+        if bool(evidence_id) == bool(evidence_type):
+            if evidence_id:
+                raise ValueError("gate rule 只能指定一个 evidence_id 或 evidence_type")
+            raise ValueError("gate rule 必须指定 evidence_id 或 evidence_type")
+
+        condition = _require_text(rule_data.get("condition"), "rule.condition")
+        try:
+            validate_condition_syntax(condition)
+        except (SyntaxError, ValueError) as error:
+            raise ValueError(f"无效的 gate condition：{condition}") from error
+
+        policies.append(
+            GatePolicy(
+                name=_require_text(gate_data.get("name"), f"gate_policies[{index}].name"),
+                severity=severity,
+                rule=GateRule(
+                    name=str(rule_data.get("name", "")),
+                    evidence_id=_require_text(evidence_id, "rule.evidence_id") if evidence_id else None,
+                    evidence_type=_require_text(evidence_type, "rule.evidence_type") if evidence_type else None,
+                    condition=condition,
+                    action=rule_data.get("action"),
+                ),
+            )
+        )
     return policies
 
 
 def load_harness_config(config_path: Path) -> HarnessConfig:
-    """加载并验证 harness.yaml 配置。
-
-    Args:
-        config_path: harness.yaml 文件路径
-
-    Returns:
-        验证后的 HarnessConfig 对象
-
-    Raises:
-        ValueError: 如果配置无效
-    """
+    """Load YAML and return a validated configuration with domain gate policies."""
     if not config_path.exists():
         raise FileNotFoundError(f"未找到 Harness 配置：{config_path}")
 
-    with open(config_path, 'r') as f:
-        data = yaml.safe_load(f)
-
+    data = yaml.safe_load(config_path.read_text()) or {}
+    data = _require_mapping(data, "harness 配置")
     version = data.get("version", "")
     if version not in SUPPORTED_VERSIONS:
-        raise ValueError(f"不支持的 harness 版本：{version}。必须是以下之一：{SUPPORTED_VERSIONS}")
+        raise ValueError(
+            f"不支持的 harness 版本：{version}。必须是以下之一：{list(SUPPORTED_VERSIONS)}"
+        )
 
     return HarnessConfig(
         version=version,
         when=data.get("when"),
         evidence_producers=_load_producer_configs(data.get("evidence_producers", [])),
-        gate_policies=_load_gate_policy_configs(data.get("gate_policies", []))
+        gate_policies=_load_gate_policies(data.get("gate_policies", [])),
     )

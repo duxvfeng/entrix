@@ -1,48 +1,43 @@
-"""Harness runner for stop-gate integration."""
-from pathlib import Path
-from typing import Dict, Any
+"""Harness runner for Stop hook integration."""
 
+from pathlib import Path
+from typing import Any
+
+from entrix.harness.conditions import WhenContext
 from entrix.harness.config import load_harness_config
 from entrix.harness.engine import EvidenceEngine, HarnessRunContext
-from entrix.harness.gate.arbiter import GateEngine
+from entrix.harness.gate.arbiter import GateEngine, Verdict, VerdictStatus
 from entrix.harness.store import EvidenceStore
-from entrix.stop_gate.adapter import StopGateAdapter
 
 
 class HarnessRunner:
-    """Runner that executes the harness flow in stop-gate context."""
+    """Run the configured Harness flow without initializing the legacy Stop Gate."""
 
     def __init__(self, config_path: Path) -> None:
-        """Initialize the harness runner.
-
-        Args:
-            config_path: Path to harness.yaml configuration
-        """
         self.config_path = config_path
-        self.config = None
-        self.adapter = StopGateAdapter()
 
-    def run(self, context: Dict[str, Any]) -> Any:
-        """Execute the complete harness flow.
-
-        Args:
-            context: Hook payload dictionary
-
-        Returns:
-            Verdict from gate arbitration
-        """
-        # Load configuration
-        self.config = load_harness_config(self.config_path)
-
-        # Adapt payload to harness context
-        harness_context = self.adapter.adapt_payload(context)
-
-        # Collect evidence
-        evidence_engine = EvidenceEngine(self.config)
+    def run(self, context: dict[str, Any]) -> Verdict:
+        """Collect evidence and arbitrate the configured Harness policies."""
+        config = load_harness_config(self.config_path)
+        workspace = Path(context.get("workspace") or context["repo_path"])
+        task_id = str(context.get("task_id") or context.get("session_id") or "unknown-session")
+        harness_context = HarnessRunContext(
+            task_id=task_id,
+            attempt_id=str(context.get("attempt_id") or task_id),
+            repo_root=workspace,
+            when_context=WhenContext(
+                repo_root=workspace,
+                changed_files=list(context.get("changed_files") or []),
+                current_branch=str(context.get("branch") or "unknown"),
+            ),
+            store=EvidenceStore(workspace),
+            base_ref=str(context.get("base_ref") or "HEAD"),
+        )
+        evidence_engine = EvidenceEngine(config)
+        if not evidence_engine.is_active(harness_context):
+            return Verdict(
+                status=VerdictStatus.PASS,
+                summary="Harness inactive for current context",
+            )
         bundle = evidence_engine.collect(harness_context)
-
-        # Arbitrate gates
-        gate_engine = GateEngine(self.config.gate_policies)
-        verdict = gate_engine.arbitrate(bundle)
-
-        return verdict
+        return GateEngine(config.gate_policies).arbitrate(bundle)
