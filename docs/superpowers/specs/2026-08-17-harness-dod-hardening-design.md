@@ -229,6 +229,46 @@ FAIL/BLOCKED 可以在以下输入全部不变时复用：
 
 任何输入变化都会触发重新取证。Git 指纹只有在 `git rev-parse --show-toplevel` 与受检工作区相同时使用；若工作区只是父仓库的子目录、被忽略目录或非 Git 目录，则对受检目录使用文件系统指纹。Evidence runtime 目录继续位于工作区外，避免证据写入使缓存失效。
 
+## Entrix 子命令提示
+
+CLI 增加独立的 `entrix/cli_hints.py`，集中维护子命令纠错、命令组帮助和成功后的下一步建议。命令 handler 继续只返回退出码，不自行拼接通用提示。
+
+### 拼写纠错
+
+根命令和嵌套命令组都使用统一的 ArgumentParser 子类。仅当 argparse 正在校验 subparser choice 时，使用标准库 `difflib.get_close_matches()` 从该层已注册子命令中选择一个高置信度候选：
+
+```text
+$ entrix harnes validate
+entrix: error: invalid choice: 'harnes'
+你是否想输入：entrix harness validate
+```
+
+纠错只针对子命令，不处理文件路径、自由文本或普通参数 choice。没有达到相似度阈值时保留原生错误，不输出猜测。非法命令保持 argparse 退出码 2。
+
+### 缺少子命令
+
+每个命令组在构建 parser 时记录自己的命令路径和帮助 parser。解析成功但没有 leaf handler 时，统一显示当前命令组帮助并返回 0：
+
+- `entrix` 显示根命令帮助和常用入口；
+- `entrix harness` 显示 `validate`、`run`；
+- `entrix graph`、`entrix hook`、`entrix analyze` 显示各自子命令。
+
+这取代 `main()` 中针对 graph/hook/analyze 的硬编码分支，并修复当前 `entrix harness` 因缺少 `func` 而抛出 AttributeError 的行为。
+
+### 下一步建议
+
+提示模块维护声明式 `tuple[str, ...] -> tuple[str, ...]` 映射。leaf handler 返回 0 后，CLI 根据命令路径打印明确的下一条或数条命令。现有 `cmd_init()` 内硬编码提示迁移到该映射，避免重复。
+
+下一步提示写入 stderr，保护 stdout 的机器可读契约。以下情况自动静默：
+
+- handler 返回非 0；
+- `--json`；
+- `--output -`；
+- `stop-gate`、`serve` 等 Hook、机器协议或长驻命令；
+- 映射中没有明确后续动作的命令。
+
+首批映射覆盖 `init -> harness validate -> run -> harness run` 主流程，并让 `review-trigger` 成功后提示执行完整 Harness。提示不自动执行命令，也不改变原命令退出码。
+
 ## 测试策略
 
 所有行为按 TDD 实现，每个生产变更之前先看到对应测试以预期原因失败。
@@ -238,6 +278,7 @@ FAIL/BLOCKED 可以在以下输入全部不变时复用：
 - store 测试：完整字段、原子替换、冲突文件名、写入失败；
 - arbiter 测试：hard 全匹配、blocked 任一触发、missing evidence、zero active gates；
 - hook 测试：运行器缺失、内部异常、紧急旁路、FAIL 缓存、PASS 重跑、嵌套工作区指纹；
+- CLI 提示测试：根/嵌套拼写纠错、相似度阈值、命令组帮助、退出码、stderr/stdout 隔离、JSON 静默和下一步映射；
 - 集成测试：真实执行 `FAIL -> 修改 -> PASS`，并检查标准 Evidence Bundle 与 Claude block JSON；
 - 验证命令：全量 pytest、Ruff、Mypy、Harness 配置校验和 package build。
 
@@ -263,4 +304,5 @@ FAIL/BLOCKED 可以在以下输入全部不变时复用：
 4. 六种 parser 均生成可序列化的 `evidence/v1`，artifact 路径可审计且不能逃逸工作区。
 5. Gate Engine 不依赖具体测试、构建或扫描工具。
 6. FAIL/BLOCKED 在输入未变化时可复用，任一相关输入变化后重新执行；PASS 始终重新执行。
-7. 默认测试套件无失败，Ruff、Mypy、配置校验和构建命令成功。
+7. Entrix 对根命令和嵌套子命令提供高置信度纠错、缺失子命令帮助和不污染机器输出的下一步建议。
+8. 默认测试套件无失败，Ruff、Mypy、配置校验和构建命令成功。

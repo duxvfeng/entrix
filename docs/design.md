@@ -157,6 +157,6 @@ entrix run / review-trigger / harness run / stop-gate
 
 # Harness DoD 强门禁设计（2026-08-17）
 
-当前强化阶段采用渐进增强现有 Harness 的方案，覆盖 fail-closed、Gate 级条件、标准报告解析、artifact 接线、PASS 强制重验和工作区指纹修复。完整设计与验收标准见：
+当前强化阶段采用渐进增强现有 Harness 的方案，覆盖 fail-closed、Gate 级条件、标准报告解析、artifact 接线、PASS 强制重验、工作区指纹修复，以及 Entrix 子命令纠错、命令组帮助和下一步提示。完整设计与验收标准见：
 
 - [`superpowers/specs/2026-08-17-harness-dod-hardening-design.md`](superpowers/specs/2026-08-17-harness-dod-hardening-design.md)
