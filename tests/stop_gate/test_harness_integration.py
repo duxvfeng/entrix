@@ -1,5 +1,9 @@
 """Harness integration with stop-gate tests."""
+import json
 from pathlib import Path
+
+import pytest
+
 from entrix.stop_gate.adapter import StopGateAdapter
 from entrix.stop_gate.runner import HarnessRunner
 from entrix.harness.gate.arbiter import VerdictStatus
@@ -102,7 +106,9 @@ gate_policies:
     assert not (tmp_path / ".harness" / "evidence").exists()
 
 
-def test_harness_runner_skips_hard_gates_when_global_when_is_inactive(tmp_path):
+def test_harness_runner_skips_hard_gates_when_global_when_is_inactive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     config_path = tmp_path / "harness.yaml"
     config_path.write_text(
         '''version: "harness/v1"
@@ -124,7 +130,13 @@ gate_policies:
 '''
     )
 
-    verdict = HarnessRunner(config_path).run(
+    monkeypatch.setattr(
+        "entrix.harness.producers.command.CommandProducer.run",
+        lambda *_args: pytest.fail("inactive Harness must not run producers"),
+    )
+    evidence_root = tmp_path / "runtime"
+
+    verdict = HarnessRunner(config_path, evidence_root=evidence_root).run(
         {
             "task_id": "task-1",
             "workspace": tmp_path,
@@ -135,3 +147,47 @@ gate_policies:
     assert verdict.status == VerdictStatus.PASS
     assert verdict.gate_results == []
     assert "inactive" in verdict.summary
+    bundle_paths = list(
+        (evidence_root / ".harness" / "evidence" / "task-1").glob("*-bundle.json")
+    )
+    assert len(bundle_paths) == 1
+    assert json.loads(bundle_paths[0].read_text(encoding="utf-8"))["active"] is False
+
+
+def test_harness_runner_does_not_arbitrate_when_storage_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        '''version: "harness/v1"
+evidence_producers:
+  - id: tests
+    type: test
+    name: Tests
+    command: echo passed
+gate_policies:
+  - name: Tests pass
+    severity: hard
+    rule: {evidence_id: tests, condition: 'status == "pass"'}
+''',
+        encoding="utf-8",
+    )
+    gate_called = False
+
+    def fail_save(*_args: object) -> None:
+        raise OSError("disk unavailable")
+
+    def record_arbitration(*_args: object):
+        nonlocal gate_called
+        gate_called = True
+        pytest.fail("GateEngine must not run without persisted evidence")
+
+    monkeypatch.setattr("entrix.stop_gate.runner.EvidenceStore.save", fail_save)
+    monkeypatch.setattr("entrix.stop_gate.runner.GateEngine.arbitrate", record_arbitration)
+
+    with pytest.raises(OSError, match="disk unavailable"):
+        HarnessRunner(config_path).run(
+            {"task_id": "task-1", "workspace": tmp_path, "branch": "main"}
+        )
+
+    assert gate_called is False

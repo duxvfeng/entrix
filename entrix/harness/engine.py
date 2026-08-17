@@ -1,13 +1,14 @@
 """Evidence collection engine."""
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from entrix.harness.config import HarnessConfig, EvidenceProducerConfig
 from entrix.harness.conditions import WhenContext, evaluate_when
 from entrix.harness.store import EvidenceStore
-from entrix.harness.evidence import EvidenceBundle
+from entrix.harness.evidence import Evidence, EvidenceBundle
 from entrix.harness.producers.base import ProducerContext
 from entrix.harness.producers.command import CommandProducer
 from entrix.harness.producers.builtin import (
@@ -57,14 +58,16 @@ class EvidenceEngine:
         """
         # Check global when condition
         if not self.is_active(context):
-            return EvidenceBundle(
+            bundle = EvidenceBundle(
                 task_id=context.task_id,
                 attempt_id=context.attempt_id,
+                active=False,
                 evidence=[],
-                collection_errors=[{"message": "Global when condition not met"}],
             )
+            self._save_bundle(context, bundle)
+            return bundle
 
-        evidence_list = []
+        evidence_list: list[Evidence] = []
         collection_errors = []
 
         # Filter and execute producers
@@ -73,6 +76,8 @@ class EvidenceEngine:
             # Check producer-specific when condition
             if evaluate_when(producer_config.when, context.when_context):
                 active_producers.append(producer_config)
+            else:
+                evidence_list.append(self._skipped_evidence(producer_config, context))
 
         if context.parallel_producers:
             with ThreadPoolExecutor(max_workers=4) as executor:
@@ -100,14 +105,29 @@ class EvidenceEngine:
             collection_errors=collection_errors,
         )
 
-        # Save bundle if store is provided
-        if context.store:
-            try:
-                context.store.save(bundle)
-            except Exception as e:
-                collection_errors.append({"storage_error": str(e)})
+        self._save_bundle(context, bundle)
 
         return bundle
+
+    @staticmethod
+    def _skipped_evidence(
+        producer_config: EvidenceProducerConfig, context: HarnessRunContext
+    ) -> Evidence:
+        return Evidence(
+            id=producer_config.id,
+            type=producer_config.type,
+            name=producer_config.name,
+            status="skipped",
+            producer=producer_config.producer or producer_config.builtin or "harness",
+            task_id=context.task_id,
+            started_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            raw={"reason": "when condition not met"},
+        )
+
+    @staticmethod
+    def _save_bundle(context: HarnessRunContext, bundle: EvidenceBundle) -> None:
+        if context.store is not None:
+            context.store.save(bundle)
 
     def _run_producer(self, producer_config: EvidenceProducerConfig, context: HarnessRunContext):
         producer = self._create_producer(producer_config)
