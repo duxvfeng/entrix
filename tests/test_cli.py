@@ -60,7 +60,7 @@ def test_init_creates_mcp_config_and_harness_template(tmp_path, capsys):
         "observability",
         "performance",
     }
-    assert "entrix harness validate harness.yaml" in capsys.readouterr().out
+    assert "已创建" in capsys.readouterr().out
 
 
 def test_init_preserves_existing_harness_unless_forced(tmp_path, capsys):

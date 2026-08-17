@@ -42,6 +42,11 @@ from entrix.harness.gate.arbiter import GateEngine
 from entrix.harness.conditions import WhenContext
 from entrix.harness.store import EvidenceStore
 from entrix.harness.template import render_default_harness
+from entrix.cli_hints import (
+    HintingArgumentParser,
+    print_next_steps,
+    should_show_next_steps,
+)
 
 
 class _ShellOutputController:
@@ -344,11 +349,6 @@ def cmd_init(args: argparse.Namespace) -> int:
     mcp_path.write_text(mcp_text, encoding="utf-8")
     harness_path.write_text(harness_text, encoding="utf-8")
     print(f"已创建 {mcp_path.name} 和 {harness_path.name}")
-    print("下一步：")
-    print("  entrix harness validate harness.yaml  检查 Harness 配置结构")
-    print("  entrix run                            执行 Fitness 指标")
-    print("  entrix harness run --json             收集 evidence 并输出门禁裁决")
-    print("  entrix stop-gate                      供 Claude Code Stop Hook 调用")
     return 0
 
 
@@ -1306,8 +1306,29 @@ def cmd_analyze_long_file(args: argparse.Namespace) -> int:
     return 0
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+def _set_command_group_help(
+    parser: HintingArgumentParser, command_path: tuple[str, ...]
+) -> None:
+    parser.command_path = ("entrix", *command_path)
+    parser.set_defaults(_help_parser=parser)
+
+
+def _command_path(args: argparse.Namespace) -> tuple[str, ...]:
+    command = getattr(args, "command", None)
+    if not command:
+        return ()
+    nested_commands = {
+        "harness": "harness_command",
+        "hook": "hook_command",
+        "analyze": "analyze_command",
+        "graph": "graph_command",
+    }
+    nested = getattr(args, nested_commands.get(command, ""), None)
+    return (command, nested) if nested else (command,)
+
+
+def build_parser() -> HintingArgumentParser:
+    parser = HintingArgumentParser(
         prog="entrix",
         description="Entrix 可执行质量门禁",
         epilog=(
@@ -1322,6 +1343,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    _set_command_group_help(parser, ())
     subparsers = parser.add_subparsers(dest="command")
 
     run_parser = subparsers.add_parser("run", help="Run guardrail checks")
@@ -1486,6 +1508,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # Harness system commands
     harness_parser = subparsers.add_parser("harness", help="Harness evidence collection and gate arbitration")
+    _set_command_group_help(harness_parser, ("harness",))
     harness_subparsers = harness_parser.add_subparsers(dest="harness_command")
 
     harness_validate = harness_subparsers.add_parser("validate", help="Validate harness.yaml configuration")
@@ -1498,6 +1521,7 @@ def build_parser() -> argparse.ArgumentParser:
     harness_run.set_defaults(func=cmd_harness_run)
 
     hook_parser = subparsers.add_parser("hook", help="Reusable local hook helpers")
+    _set_command_group_help(hook_parser, ("hook",))
     hook_subparsers = hook_parser.add_subparsers(dest="hook_command")
 
     hook_file_length = hook_subparsers.add_parser(
@@ -1528,6 +1552,7 @@ def build_parser() -> argparse.ArgumentParser:
     hook_file_length.set_defaults(func=cmd_hook_file_length)
 
     analyze_parser = subparsers.add_parser("analyze", help="Structured source analysis helpers")
+    _set_command_group_help(analyze_parser, ("analyze",))
     analyze_subparsers = analyze_parser.add_subparsers(dest="analyze_command")
 
     analyze_long_file = analyze_subparsers.add_parser(
@@ -1566,6 +1591,7 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_long_file.set_defaults(func=cmd_analyze_long_file)
 
     graph_parser = subparsers.add_parser("graph", help="Graph-backed impact and test-radius analysis")
+    _set_command_group_help(graph_parser, ("graph",))
     graph_subparsers = graph_parser.add_subparsers(dest="graph_command")
 
     graph_build = graph_subparsers.add_parser("build", help="Build or update the code graph")
@@ -1716,27 +1742,25 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
+def run_cli(argv: list[str] | None = None) -> int:
+    """Run Entrix CLI with consistent help and post-success guidance."""
     _configure_utf8_streams()
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    if not args.command:
-        parser.print_help()
-        sys.exit(0)
+    if not getattr(args, "func", None):
+        getattr(args, "_help_parser", parser).print_help()
+        return 0
 
-    if args.command == "graph" and not getattr(args, "graph_command", None):
-        parser.parse_args(["graph", "--help"])
-        return
-    if args.command == "hook" and not getattr(args, "hook_command", None):
-        parser.parse_args(["hook", "--help"])
-        return
-    if args.command == "analyze" and not getattr(args, "analyze_command", None):
-        parser.parse_args(["analyze", "--help"])
-        return
-
+    args.command_path = _command_path(args)
     exit_code = args.func(args)
-    sys.exit(exit_code)
+    if should_show_next_steps(args, exit_code):
+        print_next_steps(args.command_path, sys.stderr)
+    return exit_code
+
+
+def main() -> None:
+    sys.exit(run_cli())
 
 
 if __name__ == "__main__":
