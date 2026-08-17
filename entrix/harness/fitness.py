@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
+from enum import Enum
 from typing import Any, TypeVar
 
 from entrix.model import (
@@ -19,7 +21,7 @@ from entrix.model import (
     Waiver,
 )
 
-_EnumT = TypeVar("_EnumT")
+_EnumT = TypeVar("_EnumT", bound=Enum)
 
 
 def _mapping(value: object, field_name: str) -> dict[str, Any]:
@@ -43,9 +45,14 @@ def _string_list(value: object, field_name: str) -> list[str]:
 
 
 def _enum(
-    raw: dict[str, Any], field_name: str, enum_type: type[_EnumT], default: _EnumT
+    raw: dict[str, Any],
+    field_name: str,
+    enum_type: Callable[[str], _EnumT],
+    default: _EnumT,
 ) -> _EnumT:
     value = raw.get(field_name, default.value)
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} 不支持值：{value}")
     try:
         return enum_type(value)
     except ValueError as error:

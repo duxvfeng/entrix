@@ -7,30 +7,44 @@ import pytest
 from entrix.stop_gate.adapter import StopGateAdapter
 
 
+def write_harness(test_repo: Path, metric_name: str, command: str, hard_gate: bool) -> None:
+    """Write a minimal Harness configuration for an integration test repository."""
+    test_repo.joinpath("harness.yaml").write_text(
+        f'''version: "harness/v1"
+fitness:
+  dimensions:
+    - dimension: code_quality
+      weight: 100
+      threshold: {{pass: 100, warn: 80}}
+      metrics:
+        - name: {metric_name}
+          command: {command!r}
+          hard_gate: {str(hard_gate).lower()}
+          tier: fast
+review_triggers: {{rules: []}}
+evidence_producers:
+  - id: fitness
+    type: fitness
+    name: Entrix Fitness
+    builtin: entrix-fitness
+gate_policies:
+  - name: Fitness must pass
+    severity: hard
+    rule:
+      evidence_id: fitness
+      condition: status == "pass"
+''',
+        encoding="utf-8",
+    )
+
+
 @pytest.mark.integration
 def test_full_stop_gate_cycle_pass(tmp_path: Path):
     """测试完整的 Stop Gate 通过循环"""
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
 
-    # 创建基本的项目结构
-    fitness_dir = test_repo / "docs" / "fitness"
-    fitness_dir.mkdir(parents=True)
-    (fitness_dir / "code-quality.md").write_text("""\
----
-dimension: code_quality
-weight: 100
-threshold:
-  pass: 100
-  warn: 80
-metrics:
-  - name: test_metric
-    command: python -c "print('test passed')"
-    hard_gate: false
-    tier: fast
----
-# Code Quality
-""")
+    write_harness(test_repo, "test_metric", "python -c \"print('test passed')\"", False)
 
     # 初始化 git 仓库
     subprocess.run(["git", "init"], cwd=test_repo, check=True, capture_output=True)
@@ -77,24 +91,12 @@ def test_full_stop_gate_cycle_fail(tmp_path: Path):
     test_repo = tmp_path / "test-repo"
     test_repo.mkdir()
 
-    # 创建会失败的质量检查
-    fitness_dir = test_repo / "docs" / "fitness"
-    fitness_dir.mkdir(parents=True)
-    (fitness_dir / "code-quality.md").write_text(f"""\
----
-dimension: code_quality
-weight: 100
-threshold:
-  pass: 100
-  warn: 80
-metrics:
-  - name: failing_test
-    command: '{sys.executable} -c "import sys; sys.exit(1)"'
-    hard_gate: true
-    tier: fast
----
-# Code Quality
-""")
+    write_harness(
+        test_repo,
+        "failing_test",
+        f'"{sys.executable}" -c "import sys; sys.exit(1)"',
+        True,
+    )
 
     # 初始化 git 仓库
     subprocess.run(["git", "init"], cwd=test_repo, check=True, capture_output=True)
