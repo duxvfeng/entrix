@@ -42,6 +42,7 @@ from entrix.harness.engine import EvidenceEngine, HarnessRunContext
 from entrix.harness.gate.arbiter import GateEngine
 from entrix.harness.conditions import WhenContext
 from entrix.harness.store import EvidenceStore
+from entrix.harness.template import render_default_harness
 
 
 class _ShellOutputController:
@@ -319,6 +320,36 @@ def cmd_install(args: argparse.Namespace) -> int:
     print(f"Wrote Claude MCP config to {mcp_path}")
     print("Run `entrix --help` to verify the command is available.")
     print("Restart Claude Code after changing MCP settings.")
+    return 0
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    """Initialize a repository with MCP and single-file Harness configuration."""
+    target = Path(args.repo).resolve() if args.repo else Path.cwd().resolve()
+    harness_path = target / "harness.yaml"
+    mcp_path = target / ".mcp.json"
+    harness_text = render_default_harness()
+    mcp_text = json.dumps(_default_mcp_config(), indent=2) + "\n"
+
+    if harness_path.exists() and not args.force:
+        print(f"Harness 配置已存在：{harness_path}；如需重建请使用 --force", file=sys.stderr)
+        return 1
+
+    if args.dry_run:
+        print(f"Would write {mcp_path.name}:")
+        print(mcp_text, end="")
+        print(f"Would write {harness_path.name}:")
+        print(harness_text, end="")
+        return 0
+
+    mcp_path.write_text(mcp_text, encoding="utf-8")
+    harness_path.write_text(harness_text, encoding="utf-8")
+    print(f"已创建 {mcp_path.name} 和 {harness_path.name}")
+    print("下一步：")
+    print("  entrix harness validate harness.yaml  检查 Harness 配置结构")
+    print("  entrix run                            执行 Fitness 指标")
+    print("  entrix harness run --json             收集 evidence 并输出门禁裁决")
+    print("  entrix stop-gate                      供 Claude Code Stop Hook 调用")
     return 0
 
 
@@ -1261,10 +1292,18 @@ def cmd_analyze_long_file(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="entrix",
-        description=(
-            "Executable quality guardrails powered by evolutionary architecture "
-            "fitness functions"
+        description="Entrix 可执行质量门禁",
+        epilog=(
+            "常用命令：\n"
+            "  entrix init                 初始化 .mcp.json 与 harness.yaml\n"
+            "  entrix harness validate     检查 Harness 配置\n"
+            "  entrix run                  执行 Fitness 指标\n"
+            "  entrix harness run --json   收集 evidence 并执行门禁裁决\n"
+            "  entrix review-trigger       识别需要人工审查的改动\n"
+            "  entrix stop-gate            作为 Claude Code Stop Hook 执行\n"
+            "  entrix serve                启动 MCP 服务"
         ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest="command")
 
@@ -1356,7 +1395,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     install_parser.set_defaults(func=cmd_install)
 
-    init_parser = subparsers.add_parser("init", help="Alias for `install`.")
+    init_parser = subparsers.add_parser("init", help="初始化 .mcp.json 与 harness.yaml")
     init_parser.add_argument(
         "--repo",
         default=None,
@@ -1365,9 +1404,10 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Print `.mcp.json` content without writing it.",
+        help="预览 .mcp.json 与 harness.yaml，不写入文件。",
     )
-    init_parser.set_defaults(func=cmd_install)
+    init_parser.add_argument("--force", action="store_true", help="覆盖已有 harness.yaml 并重建默认配置。")
+    init_parser.set_defaults(func=cmd_init)
 
     serve_parser = subparsers.add_parser(
         "serve",

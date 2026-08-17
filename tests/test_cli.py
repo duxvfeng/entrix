@@ -20,6 +20,8 @@ from entrix.reporters.terminal import TerminalReporter
 from entrix.model import ExecutionScope, FitnessReport, Metric, MetricResult, ResultState, Tier
 from entrix.presets import get_project_preset
 from entrix.reporting import report_to_dict
+from entrix.harness.config import load_harness_config
+import entrix.cli as cli_module
 
 
 def test_parser_run_defaults():
@@ -41,6 +43,49 @@ def test_parser_run_defaults():
     assert args.base == "HEAD"
     assert args.dimension == []
     assert args.metric == []
+
+
+def test_init_creates_mcp_config_and_harness_template(tmp_path, capsys):
+    args = argparse.Namespace(repo=str(tmp_path), dry_run=False, force=False)
+
+    exit_code = cli_module.cmd_init(args)
+
+    assert exit_code == 0
+    assert json.loads((tmp_path / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]
+    config = load_harness_config(tmp_path / "harness.yaml")
+    assert {dimension.name for dimension in config.fitness_dimensions} == {
+        "code_quality",
+        "testability",
+        "release_readiness",
+        "observability",
+        "performance",
+    }
+    assert "entrix harness validate harness.yaml" in capsys.readouterr().out
+
+
+def test_init_preserves_existing_harness_unless_forced(tmp_path, capsys):
+    harness_path = tmp_path / "harness.yaml"
+    harness_path.write_text("preserve: this", encoding="utf-8")
+    args = argparse.Namespace(repo=str(tmp_path), dry_run=False, force=False)
+
+    exit_code = cli_module.cmd_init(args)
+
+    assert exit_code == 1
+    assert harness_path.read_text(encoding="utf-8") == "preserve: this"
+    assert "--force" in capsys.readouterr().err
+
+    forced_args = argparse.Namespace(repo=str(tmp_path), dry_run=False, force=True)
+    assert cli_module.cmd_init(forced_args) == 0
+    assert load_harness_config(harness_path).version == "harness/v1"
+
+
+def test_root_help_includes_harness_command_guide():
+    help_text = build_parser().format_help()
+
+    assert "常用命令" in help_text
+    assert "harness validate" in help_text
+    assert "harness run" in help_text
+    assert "stop-gate" in help_text
 
 
 def test_parser_run_all_flags():
