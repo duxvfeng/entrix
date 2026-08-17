@@ -8,6 +8,9 @@ import yaml
 
 from entrix.harness.gate.policy import GatePolicy, GateRule, Severity
 from entrix.harness.gate.dsl import validate_condition_syntax
+from entrix.harness.fitness import parse_dimensions
+from entrix.model import Dimension
+from entrix.review_trigger import ReviewTriggerRule, parse_review_trigger_rules
 
 SUPPORTED_VERSIONS = ("harness/v1",)
 BUILTIN_PRODUCERS = frozenset({"entrix-fitness", "entrix-review-trigger", "diff-stats"})
@@ -38,6 +41,8 @@ class HarnessConfig:
     when: Optional[dict[str, Any]] = None
     evidence_producers: list[EvidenceProducerConfig] = field(default_factory=list)
     gate_policies: list[GatePolicy] = field(default_factory=list)
+    fitness_dimensions: list[Dimension] = field(default_factory=list)
+    review_trigger_rules: list[ReviewTriggerRule] = field(default_factory=list)
 
 
 def _require_mapping(value: Any, field_name: str) -> dict[str, Any]:
@@ -168,4 +173,8 @@ def load_harness_config(config_path: Path) -> HarnessConfig:
         when=data.get("when"),
         evidence_producers=_load_producer_configs(data.get("evidence_producers", [])),
         gate_policies=_load_gate_policies(data.get("gate_policies", [])),
+        fitness_dimensions=parse_dimensions(_require_mapping(data.get("fitness", {}), "fitness").get("dimensions")),
+        review_trigger_rules=parse_review_trigger_rules(
+            _require_mapping(data.get("review_triggers", {}), "review_triggers").get("rules", [])
+        ),
     )

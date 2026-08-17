@@ -73,12 +73,27 @@ class ReviewTriggerReport:
         return data
 
 
-def load_review_triggers(config_path: Path) -> list[ReviewTriggerRule]:
-    """从 YAML 加载 review-trigger 规则。"""
-    raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+def parse_review_trigger_rules(raw_rules: object) -> list[ReviewTriggerRule]:
+    """Parse inline review-trigger mappings into domain rules."""
+    if not isinstance(raw_rules, list):
+        raise ValueError("review_triggers.rules 必须是列表")
     rules: list[ReviewTriggerRule] = []
-    for entry in raw.get("review_triggers", []):
+    names: set[str] = set()
+    for index, entry in enumerate(raw_rules):
+        if not isinstance(entry, dict):
+            raise ValueError(f"review_triggers.rules[{index}] 必须是对象")
+        name = entry.get("name")
+        rule_type = entry.get("type")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"review_triggers.rules[{index}].name 必须是非空字符串")
+        if not isinstance(rule_type, str) or not rule_type.strip():
+            raise ValueError(f"review_triggers.rules[{index}].type 必须是非空字符串")
+        if name in names:
+            raise ValueError(f"review_triggers.rules 存在重复 name：{name}")
+        names.add(name)
         raw_boundaries = entry.get("boundaries", {}) or {}
+        if not isinstance(raw_boundaries, dict):
+            raise ValueError(f"review_triggers.rules[{index}].boundaries 必须是对象")
         boundaries: tuple[tuple[str, tuple[str, ...]], ...] = tuple(
             (name, tuple(patterns or ()))
             for name, patterns in raw_boundaries.items()
@@ -86,8 +101,8 @@ def load_review_triggers(config_path: Path) -> list[ReviewTriggerRule]:
         )
         rules.append(
             ReviewTriggerRule(
-                name=entry.get("name", "unknown"),
-                type=entry.get("type", "unknown"),
+                name=name,
+                type=rule_type,
                 severity=entry.get("severity", "medium"),
                 action=entry.get("action", "require_human_review"),
                 paths=tuple(entry.get("paths", [])),
@@ -101,6 +116,14 @@ def load_review_triggers(config_path: Path) -> list[ReviewTriggerRule]:
             )
         )
     return rules
+
+
+def load_review_triggers(config_path: Path) -> list[ReviewTriggerRule]:
+    """Load legacy review-trigger rules from YAML."""
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(raw, dict):
+        raise ValueError("review-trigger 配置必须是对象")
+    return parse_review_trigger_rules(raw.get("review_triggers", []))
 
 
 def collect_changed_files(repo_root: Path, base: str) -> list[str]:

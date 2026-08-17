@@ -237,3 +237,53 @@ gate_policies:
 
     with pytest.raises(ValueError, match="无效的 gate condition"):
         load_harness_config(config_path)
+
+
+def test_load_harness_config_builds_inline_fitness_and_review_rules(tmp_path):
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        '''version: "harness/v1"
+fitness:
+  dimensions:
+    - dimension: quality
+      weight: 100
+      metrics:
+        - name: lint
+          command: ruff check .
+          hard_gate: true
+review_triggers:
+  rules:
+    - name: sensitive
+      type: sensitive_file_change
+      paths: ["entrix/security/**"]
+evidence_producers: []
+gate_policies: []
+'''
+    )
+
+    config = load_harness_config(config_path)
+
+    assert config.fitness_dimensions[0].name == "quality"
+    assert config.fitness_dimensions[0].metrics[0].name == "lint"
+    assert config.review_trigger_rules[0].name == "sensitive"
+
+
+def test_inline_fitness_rejects_invalid_tier(tmp_path):
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        '''version: "harness/v1"
+fitness:
+  dimensions:
+    - dimension: quality
+      weight: 100
+      metrics:
+        - name: lint
+          command: ruff check .
+          tier: instant
+evidence_producers: []
+gate_policies: []
+'''
+    )
+
+    with pytest.raises(ValueError, match="tier"):
+        load_harness_config(config_path)

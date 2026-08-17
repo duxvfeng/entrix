@@ -9,6 +9,7 @@ from entrix.review_trigger import (
     DiffStats,
     evaluate_review_triggers,
     load_review_triggers,
+    parse_review_trigger_rules,
 )
 
 def _write_review_trigger_config(tmp_path: Path) -> Path:
@@ -71,6 +72,21 @@ def test_load_review_triggers(tmp_path: Path):
     assert rules[5].max_files == 5
     assert rules[3].evidence_paths == ("docs/fitness/**",)
     assert rules[4].min_boundaries == 2
+
+
+def test_parse_review_trigger_rules_accepts_inline_mappings():
+    rules = parse_review_trigger_rules(
+        [
+            {
+                "name": "inline-sensitive",
+                "type": "sensitive_file_change",
+                "paths": ["entrix/security/**"],
+            }
+        ]
+    )
+
+    assert rules[0].name == "inline-sensitive"
+    assert rules[0].paths == ("entrix/security/**",)
 
 
 def test_evaluate_review_triggers_matches_changed_paths(tmp_path: Path):
