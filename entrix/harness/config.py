@@ -1,14 +1,16 @@
 """Harness configuration loading, validation, and domain conversion."""
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import yaml
 
 from entrix.harness.gate.policy import GatePolicy, GateRule, Severity
 from entrix.harness.gate.dsl import validate_condition_syntax
 from entrix.harness.fitness import parse_dimensions
+from entrix.harness.conditions import validate_when_config
 from entrix.model import Dimension
 from entrix.review_trigger import ReviewTriggerRule, parse_review_trigger_rules
 
@@ -24,11 +26,11 @@ class EvidenceProducerConfig:
     id: str = ""
     type: str = ""
     name: str = ""
-    command: Optional[str] = None
+    command: str | None = None
     producer: str = ""
-    builtin: Optional[str] = None
+    builtin: str | None = None
     timeout_seconds: int = 60
-    when: Optional[dict[str, Any]] = None
+    when: dict[str, Any] | None = None
     parser: dict[str, Any] = field(default_factory=dict)
     artifacts: list[dict[str, str]] = field(default_factory=list)
 
@@ -38,7 +40,8 @@ class HarnessConfig:
     """Top-level configuration consumed by the evidence and gate engines."""
 
     version: str = ""
-    when: Optional[dict[str, Any]] = None
+    failure_mode: str = "closed"
+    when: dict[str, Any] | None = None
     evidence_producers: list[EvidenceProducerConfig] = field(default_factory=list)
     gate_policies: list[GatePolicy] = field(default_factory=list)
     fitness_dimensions: list[Dimension] = field(default_factory=list)
@@ -103,8 +106,10 @@ def _load_producer_configs(producers_data: Any) -> list[EvidenceProducerConfig]:
                 producer=str(producer_data.get("producer", "")),
                 builtin=builtin,
                 timeout_seconds=timeout_seconds,
-                when=producer_data.get("when"),
-                parser={"type": parser_type, "pattern": pattern},
+                when=validate_when_config(
+                    producer_data.get("when"), f"evidence_producers[{index}].when"
+                ),
+                parser={**parser_data, "type": parser_type},
                 artifacts=producer_data.get("artifacts", []),
             )
         )
@@ -143,6 +148,7 @@ def _load_gate_policies(gates_data: Any) -> list[GatePolicy]:
             GatePolicy(
                 name=_require_text(gate_data.get("name"), f"gate_policies[{index}].name"),
                 severity=severity,
+                when=validate_when_config(gate_data.get("when"), f"gate_policies[{index}].when"),
                 rule=GateRule(
                     name=str(rule_data.get("name", "")),
                     evidence_id=_require_text(evidence_id, "rule.evidence_id") if evidence_id else None,
@@ -168,13 +174,30 @@ def load_harness_config(config_path: Path) -> HarnessConfig:
             f"不支持的 harness 版本：{version}。必须是以下之一：{list(SUPPORTED_VERSIONS)}"
         )
 
+    settings = _require_mapping(data.get("settings", {}), "settings")
+    failure_mode = settings.get("failure_mode", "closed")
+    if failure_mode != "closed":
+        raise ValueError("settings.failure_mode 仅支持 closed")
+
+    producers = _load_producer_configs(data.get("evidence_producers", []))
+    policies = _load_gate_policies(data.get("gate_policies", []))
+    dimensions = parse_dimensions(
+        _require_mapping(data.get("fitness", {}), "fitness").get("dimensions")
+    )
+    review_rules = parse_review_trigger_rules(
+        _require_mapping(data.get("review_triggers", {}), "review_triggers").get("rules", [])
+    )
+    if not producers:
+        raise ValueError("evidence_producers 至少需要一个 producer")
+    if not policies:
+        raise ValueError("gate_policies 至少需要一个 gate")
+
     return HarnessConfig(
         version=version,
-        when=data.get("when"),
-        evidence_producers=_load_producer_configs(data.get("evidence_producers", [])),
-        gate_policies=_load_gate_policies(data.get("gate_policies", [])),
-        fitness_dimensions=parse_dimensions(_require_mapping(data.get("fitness", {}), "fitness").get("dimensions")),
-        review_trigger_rules=parse_review_trigger_rules(
-            _require_mapping(data.get("review_triggers", {}), "review_triggers").get("rules", [])
-        ),
+        failure_mode=failure_mode,
+        when=validate_when_config(data.get("when"), "when"),
+        evidence_producers=producers,
+        gate_policies=policies,
+        fitness_dimensions=dimensions,
+        review_trigger_rules=review_rules,
     )

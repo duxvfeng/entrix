@@ -1,6 +1,75 @@
+from pathlib import Path
+
 import pytest
 from entrix.harness.config import load_harness_config
 from entrix.harness.gate.policy import GatePolicy, GateRule, Severity
+
+
+def test_loads_closed_settings_and_gate_when(tmp_path: Path) -> None:
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        '''version: "harness/v1"
+settings: {failure_mode: closed}
+evidence_producers:
+  - id: tests
+    type: test
+    name: Tests
+    command: pytest
+gate_policies:
+  - name: Tests pass
+    severity: hard
+    when: {changed_any: ["src/**"]}
+    rule: {evidence_id: tests, condition: 'status == "pass"'}
+''',
+        encoding="utf-8",
+    )
+
+    config = load_harness_config(config_path)
+
+    assert config.failure_mode == "closed"
+    assert config.gate_policies[0].when == {"changed_any": ["src/**"]}
+
+
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        (
+            '''evidence_producers: []
+gate_policies:
+  - name: Gate
+    severity: hard
+    rule: {evidence_id: tests, condition: 'status == "pass"'}
+''',
+            "evidence_producers",
+        ),
+        (
+            '''evidence_producers:
+  - {id: tests, type: test, name: Tests, command: pytest}
+gate_policies: []
+''',
+            "gate_policies",
+        ),
+        (
+            '''settings: {failure_mode: open}
+evidence_producers:
+  - {id: tests, type: test, name: Tests, command: pytest}
+gate_policies:
+  - name: Gate
+    severity: hard
+    rule: {evidence_id: tests, condition: 'status == "pass"'}
+''',
+            "failure_mode",
+        ),
+    ],
+)
+def test_rejects_non_strict_or_vacuous_harness(
+    tmp_path: Path, body: str, message: str
+) -> None:
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(f'version: "harness/v1"\n{body}', encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        load_harness_config(config_path)
 
 
 def test_load_minimal_config(tmp_path):
@@ -63,7 +132,10 @@ evidence_producers:
       changed_any:
         - src/**
 
-gate_policies: []
+gate_policies:
+  - name: Tests pass
+    severity: hard
+    rule: {evidence_id: test, condition: 'status == "pass"'}
 """
     config_path = tmp_path / "test_harness_with_when.yaml"
     config_path.write_text(yaml_content)
@@ -103,7 +175,10 @@ evidence_producers:
     name: Git 差异统计
     builtin: diff-stats
 
-gate_policies: []
+gate_policies:
+  - name: Diff stats available
+    severity: hard
+    rule: {evidence_id: diff-stats, condition: 'status == "pass"'}
 """
     config_path = tmp_path / "test_builtin.yaml"
     config_path.write_text(yaml_content)
@@ -129,7 +204,10 @@ evidence_producers:
       type: regex
       pattern: 'passed=(?P<passed>\\d+), failed=(?P<failed>\\d+)'
 
-gate_policies: []
+gate_policies:
+  - name: Unit tests pass
+    severity: hard
+    rule: {evidence_id: unit-test, condition: 'status == "pass"'}
 """
     config_path = tmp_path / "test_regex_parser.yaml"
     config_path.write_text(yaml_content)
@@ -256,8 +334,15 @@ review_triggers:
     - name: sensitive
       type: sensitive_file_change
       paths: ["entrix/security/**"]
-evidence_producers: []
-gate_policies: []
+evidence_producers:
+  - id: fitness
+    type: fitness
+    name: Fitness
+    builtin: entrix-fitness
+gate_policies:
+  - name: Fitness passes
+    severity: hard
+    rule: {evidence_id: fitness, condition: 'status == "pass"'}
 '''
     )
 

@@ -1,4 +1,7 @@
 from pathlib import Path
+
+import pytest
+
 from entrix.harness.conditions import evaluate_when, WhenContext, _changed_any
 
 
@@ -21,6 +24,31 @@ def test_files_exist_missing(tmp_path):
 
     result = evaluate_when(when, context)
     assert result is False
+
+
+def test_files_exist_supports_glob_with_any_semantics(tmp_path: Path) -> None:
+    frontend = tmp_path / "frontend"
+    frontend.mkdir()
+    (frontend / "package.json").write_text("{}", encoding="utf-8")
+    context = WhenContext(repo_root=tmp_path)
+
+    result = evaluate_when(
+        {"files_exist": ["missing.lock", "frontend/*.json"]},
+        context,
+    )
+
+    assert result is True
+
+
+@pytest.mark.parametrize("pattern", ["../outside.txt", "C:/outside.txt"])
+def test_files_exist_rejects_paths_outside_workspace(tmp_path: Path, pattern: str) -> None:
+    with pytest.raises(ValueError, match="工作区"):
+        evaluate_when({"files_exist": [pattern]}, WhenContext(repo_root=tmp_path))
+
+
+def test_unknown_when_predicate_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="未知 when 谓词"):
+        evaluate_when({"sometimes": True}, WhenContext(repo_root=tmp_path))
 
 
 def test_branch_predicate():

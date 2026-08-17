@@ -1,35 +1,53 @@
 """when 谓词的条件表达式求值。"""
-import os
+from __future__ import annotations
+
 import fnmatch
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any
+
+_PREDICATES = frozenset({"files_exist", "changed_any", "branch", "env"})
 
 
 @dataclass
 class WhenContext:
     """评估 when 条件的上下文。"""
-    repo_root: Path = field(default_factory=Path.cwd)
-    changed_files: Optional[List[str]] = None
-    current_branch: Optional[str] = None
 
-    def __post_init__(self):
+    repo_root: Path = field(default_factory=Path.cwd)
+    changed_files: list[str] | None = None
+    current_branch: str | None = None
+
+    def __post_init__(self) -> None:
         if self.changed_files is None:
             self.changed_files = []
         if self.current_branch is None:
             self.current_branch = "unknown"
 
 
-def _files_exist(patterns: List[str], context: WhenContext) -> bool:
+def _validated_pattern(pattern: object, context: WhenContext) -> str:
+    if not isinstance(pattern, str) or not pattern:
+        raise ValueError("when 路径模式必须是非空字符串")
+    relative_path = Path(pattern)
+    root = context.repo_root.resolve()
+    if relative_path.is_absolute():
+        raise ValueError(f"when 路径必须位于工作区内：{pattern}")
+    candidate = (root / relative_path).resolve()
+    if not candidate.is_relative_to(root):
+        raise ValueError(f"when 路径必须位于工作区内：{pattern}")
+    return pattern
+
+
+def _files_exist(patterns: list[str], context: WhenContext) -> bool:
     """检查匹配模式的文件是否存在。"""
     for pattern in patterns:
-        full_path = context.repo_root / pattern
-        if full_path.exists():
+        normalized = _validated_pattern(pattern, context)
+        if any(context.repo_root.glob(normalized)):
             return True
     return False
 
 
-def _changed_any(patterns: List[str], context: WhenContext) -> bool:
+def _changed_any(patterns: list[str], context: WhenContext) -> bool:
     """检查是否有变更文件匹配模式。"""
     if not context.changed_files:
         return False
@@ -41,7 +59,7 @@ def _changed_any(patterns: List[str], context: WhenContext) -> bool:
     return False
 
 
-def _branch(config: Dict[str, List[str]], context: WhenContext) -> bool:
+def _branch(config: dict[str, list[str]], context: WhenContext) -> bool:
     """检查分支 include/exclude 条件。"""
     include_patterns = config.get("include", [])
     exclude_patterns = config.get("exclude", [])
@@ -61,7 +79,7 @@ def _branch(config: Dict[str, List[str]], context: WhenContext) -> bool:
     return True
 
 
-def _env(required_vars: Dict[str, str], context: WhenContext) -> bool:
+def _env(required_vars: dict[str, str], context: WhenContext) -> bool:
     """检查环境变量条件。"""
     for var_name, expected_value in required_vars.items():
         actual_value = os.environ.get(var_name)
@@ -70,7 +88,41 @@ def _env(required_vars: Dict[str, str], context: WhenContext) -> bool:
     return True
 
 
-def evaluate_when(when: Optional[Dict[str, Any]], context: WhenContext) -> bool:
+def validate_when_config(when: object, field_name: str) -> dict[str, Any] | None:
+    """Validate one declarative activation block."""
+    if when is None:
+        return None
+    if not isinstance(when, dict):
+        raise ValueError(f"{field_name} 必须是对象")
+    for predicate, value in when.items():
+        if predicate not in _PREDICATES:
+            raise ValueError(f"未知 when 谓词：{predicate}")
+        if predicate in {"files_exist", "changed_any"}:
+            if not isinstance(value, list) or not value or not all(
+                isinstance(item, str) and item for item in value
+            ):
+                raise ValueError(f"{field_name}.{predicate} 必须是非空字符串列表")
+        elif predicate == "branch":
+            if not isinstance(value, dict):
+                raise ValueError(f"{field_name}.branch 必须是对象")
+            unknown = set(value) - {"include", "exclude"}
+            if unknown:
+                raise ValueError(f"未知 branch 条件：{sorted(unknown)[0]}")
+            for key, patterns in value.items():
+                if not isinstance(patterns, list) or not all(
+                    isinstance(item, str) and item for item in patterns
+                ):
+                    raise ValueError(f"{field_name}.branch.{key} 必须是字符串列表")
+        elif predicate == "env":
+            if not isinstance(value, dict) or not all(
+                isinstance(key, str) and isinstance(expected, str)
+                for key, expected in value.items()
+            ):
+                raise ValueError(f"{field_name}.env 必须是字符串映射")
+    return dict(when)
+
+
+def evaluate_when(when: dict[str, Any] | None, context: WhenContext) -> bool:
     """评估 when 条件。
 
     Args:
@@ -98,7 +150,6 @@ def evaluate_when(when: Optional[Dict[str, Any]], context: WhenContext) -> bool:
             if not _env(predicate_value, context):
                 return False
         else:
-            # 未知谓词 - 保守地返回 False
-            return False
+            raise ValueError(f"未知 when 谓词：{predicate_name}")
 
     return True
