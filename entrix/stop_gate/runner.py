@@ -43,10 +43,12 @@ class HarnessRunner:
             parallel_producers=self.parallel_producers,
         )
         evidence_engine = EvidenceEngine(config)
-        if not evidence_engine.is_active(harness_context):
+        bundle = evidence_engine.collect(harness_context)
+        if not bundle.active:
             return Verdict(
                 status=VerdictStatus.PASS,
                 summary="Harness inactive for current context",
             )
-        bundle = evidence_engine.collect(harness_context)
-        return GateEngine(config.gate_policies).arbitrate(bundle)
+        return GateEngine(config.gate_policies).arbitrate(
+            bundle, harness_context.when_context
+        )

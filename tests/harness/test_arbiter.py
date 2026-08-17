@@ -1,4 +1,9 @@
 """Gate arbiter engine tests."""
+from pathlib import Path
+
+import pytest
+
+from entrix.harness.conditions import WhenContext
 from entrix.harness.gate.arbiter import GateEngine, VerdictStatus
 from entrix.harness.gate.policy import GatePolicy, GateRule, Severity
 from entrix.harness.evidence import Evidence, EvidenceBundle
@@ -165,3 +170,123 @@ def test_gate_evaluation_error():
 
     assert verdict.status == VerdictStatus.FAIL  # 有错误的硬门禁失败
     assert "error" in verdict.gate_results[0].message.lower()
+
+
+def test_hard_gate_requires_all_matching_evidence_to_pass() -> None:
+    bundle = EvidenceBundle(
+        evidence=[
+            Evidence(id="unit", type="test", status="pass"),
+            Evidence(id="integration", type="test", status="fail"),
+        ]
+    )
+    policy = GatePolicy(
+        name="All tests pass",
+        severity=Severity.HARD,
+        rule=GateRule(evidence_type="test", condition='status == "pass"'),
+    )
+
+    verdict = GateEngine([policy]).arbitrate(bundle, WhenContext())
+
+    assert verdict.status == VerdictStatus.FAIL
+    assert verdict.gate_results[0].passed is False
+
+
+def test_blocked_gate_triggers_when_any_matching_evidence_matches() -> None:
+    bundle = EvidenceBundle(
+        evidence=[
+            Evidence(id="clean", type="scan", status="pass"),
+            Evidence(id="finding", type="scan", status="fail"),
+        ]
+    )
+    policy = GatePolicy(
+        name="No failed scan",
+        severity=Severity.BLOCKED,
+        rule=GateRule(evidence_type="scan", condition='status == "fail"'),
+    )
+
+    verdict = GateEngine([policy]).arbitrate(bundle, WhenContext())
+
+    assert verdict.status == VerdictStatus.BLOCKED
+    assert verdict.gate_results[0].passed is False
+    assert verdict.gate_results[0].matched_evidence_id == "finding"
+
+
+@pytest.mark.parametrize("severity", [Severity.HARD, Severity.BLOCKED])
+def test_required_gate_without_matching_evidence_is_blocked(severity: Severity) -> None:
+    policy = GatePolicy(
+        name="Required evidence",
+        severity=severity,
+        rule=GateRule(evidence_id="missing", condition='status == "pass"'),
+    )
+
+    verdict = GateEngine([policy]).arbitrate(EvidenceBundle(), WhenContext())
+
+    assert verdict.status == VerdictStatus.BLOCKED
+    assert verdict.gate_results[0].passed is False
+    assert "no matching evidence" in verdict.gate_results[0].message.lower()
+
+
+def test_gate_when_marks_inactive_policy_without_affecting_verdict(
+    tmp_path: Path,
+) -> None:
+    bundle = EvidenceBundle(evidence=[Evidence(id="tests", status="pass")])
+    policies = [
+        GatePolicy(
+            name="Frontend tests",
+            severity=Severity.HARD,
+            when={"changed_any": ["frontend/**"]},
+            rule=GateRule(evidence_id="missing", condition='status == "pass"'),
+        ),
+        GatePolicy(
+            name="Tests pass",
+            severity=Severity.HARD,
+            rule=GateRule(evidence_id="tests", condition='status == "pass"'),
+        ),
+    ]
+    context = WhenContext(repo_root=tmp_path, changed_files=["docs/readme.md"])
+
+    verdict = GateEngine(policies).arbitrate(bundle, context)
+
+    assert verdict.status == VerdictStatus.PASS
+    assert verdict.gate_results[0].active is False
+    assert verdict.gate_results[1].active is True
+
+
+def test_zero_active_gates_is_blocked(tmp_path: Path) -> None:
+    policy = GatePolicy(
+        name="Frontend tests",
+        severity=Severity.HARD,
+        when={"changed_any": ["frontend/**"]},
+        rule=GateRule(evidence_id="tests", condition='status == "pass"'),
+    )
+    context = WhenContext(repo_root=tmp_path, changed_files=["docs/readme.md"])
+
+    verdict = GateEngine([policy]).arbitrate(EvidenceBundle(), context)
+
+    assert verdict.status == VerdictStatus.BLOCKED
+    assert "no active gates" in verdict.summary.lower()
+
+
+def test_blocked_status_takes_priority_over_hard_failure() -> None:
+    bundle = EvidenceBundle(
+        evidence=[
+            Evidence(id="tests", status="fail"),
+            Evidence(id="scan", status="fail"),
+        ]
+    )
+    policies = [
+        GatePolicy(
+            name="Tests pass",
+            severity=Severity.HARD,
+            rule=GateRule(evidence_id="tests", condition='status == "pass"'),
+        ),
+        GatePolicy(
+            name="No scan finding",
+            severity=Severity.BLOCKED,
+            rule=GateRule(evidence_id="scan", condition='status == "fail"'),
+        ),
+    ]
+
+    verdict = GateEngine(policies).arbitrate(bundle, WhenContext())
+
+    assert verdict.status == VerdictStatus.BLOCKED

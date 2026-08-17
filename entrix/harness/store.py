@@ -1,13 +1,32 @@
 """Evidence bundle persistence layer."""
+from __future__ import annotations
+
 import json
+import os
 from dataclasses import asdict, fields, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, TypeVar, get_args, get_origin, get_type_hints
+from typing import Any, TypeVar, cast, get_args, get_origin, get_type_hints
+from uuid import uuid4
 
 from entrix.harness.evidence import EvidenceBundle
 
 T = TypeVar("T")
+
+
+def _validated_task_id(task_id: object) -> str:
+    """Accept only one non-empty path segment for an Evidence task directory."""
+    if not isinstance(task_id, str) or not task_id:
+        raise ValueError("task_id 必须是非空安全路径段")
+    task_path = Path(task_id)
+    if (
+        task_path.is_absolute()
+        or len(task_path.parts) != 1
+        or task_path.name != task_id
+        or task_id in {".", ".."}
+    ):
+        raise ValueError("task_id 必须是非空安全路径段")
+    return task_id
 
 
 class EvidenceStore:
@@ -34,7 +53,7 @@ class EvidenceStore:
         Returns:
             The path of the written bundle file.
         """
-        target_task_id = task_id if task_id is not None else bundle.task_id
+        target_task_id = _validated_task_id(task_id if task_id is not None else bundle.task_id)
         task_dir = self.evidence_dir / target_task_id
         task_dir.mkdir(parents=True, exist_ok=True)
 
@@ -52,8 +71,16 @@ class EvidenceStore:
             else:
                 raise OSError("Unable to generate a unique evidence bundle filename")
 
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(asdict(bundle), f, indent=2, ensure_ascii=False)
+        temporary_path = task_dir / f".{filepath.name}.{uuid4().hex}.tmp"
+        try:
+            with temporary_path.open("x", encoding="utf-8") as file:
+                json.dump(asdict(bundle), file, indent=2, ensure_ascii=False)
+                file.flush()
+                os.fsync(file.fileno())
+            temporary_path.replace(filepath)
+        except Exception:
+            temporary_path.unlink(missing_ok=True)
+            raise
 
         return filepath
 
@@ -85,7 +112,8 @@ def _dict_to_dataclass(cls: type[T], data: dict[str, Any]) -> T:
     """Reconstruct a dataclass instance from a plain dictionary."""
     type_hints = get_type_hints(cls)
     converted: dict[str, Any] = {}
-    for field in fields(cls):
+    # Dataclass reflection is dynamic; JSON values are normalized below.
+    for field in fields(cast(Any, cls)):
         name = field.name
         if name not in data:
             continue
@@ -97,7 +125,7 @@ def _dict_to_dataclass(cls: type[T], data: dict[str, Any]) -> T:
 def _convert_value(value: Any, field_type: Any) -> Any:
     """Convert a deserialized value to the expected dataclass field type."""
     if is_dataclass(field_type) and isinstance(value, dict):
-        return _dict_to_dataclass(field_type, value)
+        return _dict_to_dataclass(cast(type[Any], field_type), value)
 
     origin = get_origin(field_type)
     args = get_args(field_type)

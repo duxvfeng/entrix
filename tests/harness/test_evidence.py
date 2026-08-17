@@ -1,5 +1,8 @@
 import dataclasses
 import json
+
+import pytest
+
 from entrix.harness.evidence import Evidence, EvidenceBundle, Artifact
 
 
@@ -34,6 +37,20 @@ def test_evidence_defaults():
     assert evidence.id == ""
     assert evidence.type == ""
     assert evidence.status == ""
+
+
+def test_evidence_rejects_unknown_status() -> None:
+    with pytest.raises(ValueError, match="status"):
+        Evidence(id="tests", status="unknown")
+
+
+def test_bundle_defaults_include_audit_metadata() -> None:
+    bundle = EvidenceBundle(task_id="task", attempt_id="attempt")
+
+    assert bundle.collected_at.endswith("Z")
+    assert bundle.active is True
+    assert bundle.revision == ""
+    assert bundle.workspace_fingerprint == ""
 
 
 def test_evidence_bundle_creation():

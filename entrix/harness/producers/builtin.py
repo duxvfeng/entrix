@@ -3,6 +3,7 @@
 import subprocess
 from dataclasses import asdict
 from datetime import datetime, timezone
+from time import monotonic
 
 from entrix.harness.config import EvidenceProducerConfig
 from entrix.harness.evidence import Evidence
@@ -22,6 +23,11 @@ def _new_evidence(config: EvidenceProducerConfig, producer: str, context: Produc
     )
 
 
+def _finish_evidence(evidence: Evidence, started: float) -> Evidence:
+    evidence.duration_ms = max(0, int((monotonic() - started) * 1000))
+    return evidence
+
+
 class EntrixFitnessProducer(Producer):
     """Produce fitness evidence through Entrix's shared fitness engine."""
 
@@ -30,6 +36,7 @@ class EntrixFitnessProducer(Producer):
         self.dimensions = dimensions
 
     def run(self, context: ProducerContext) -> Evidence:
+        started = monotonic()
         evidence = _new_evidence(self.config, "entrix-fitness", context)
         try:
             from entrix.engine import run_fitness_report
@@ -54,7 +61,7 @@ class EntrixFitnessProducer(Producer):
         except Exception as error:  # noqa: BLE001
             evidence.status = "error"
             evidence.raw = {"error": str(error)}
-        return evidence
+        return _finish_evidence(evidence, started)
 
 
 class EntrixReviewTriggerProducer(Producer):
@@ -65,6 +72,7 @@ class EntrixReviewTriggerProducer(Producer):
         self.rules = rules
 
     def run(self, context: ProducerContext) -> Evidence:
+        started = monotonic()
         evidence = _new_evidence(self.config, "entrix-review-trigger", context)
         try:
             from entrix.review_trigger import (
@@ -92,7 +100,7 @@ class EntrixReviewTriggerProducer(Producer):
         except Exception as error:  # noqa: BLE001
             evidence.status = "error"
             evidence.raw = {"error": str(error)}
-        return evidence
+        return _finish_evidence(evidence, started)
 
 
 class DiffStatsProducer(Producer):
@@ -102,6 +110,7 @@ class DiffStatsProducer(Producer):
         self.config = config
 
     def run(self, context: ProducerContext) -> Evidence:
+        started = monotonic()
         evidence = _new_evidence(self.config, "diff-stats", context)
         try:
             changed_files = context.when_context.changed_files or []
@@ -133,4 +142,4 @@ class DiffStatsProducer(Producer):
         except Exception as error:  # noqa: BLE001
             evidence.status = "error"
             evidence.raw = {"error": str(error)}
-        return evidence
+        return _finish_evidence(evidence, started)

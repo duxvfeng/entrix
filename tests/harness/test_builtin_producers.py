@@ -1,4 +1,6 @@
 """Builtin producer tests."""
+import entrix.harness.producers.builtin as builtin_module
+
 from entrix.harness.producers.builtin import (
     EntrixFitnessProducer,
     EntrixReviewTriggerProducer,
@@ -186,6 +188,8 @@ def test_diff_stats_producer_uses_context_base_ref(monkeypatch, tmp_path):
 
     producer = DiffStatsProducer(config)
     commands = []
+    ticks = iter([10.0, 10.125])
+    monkeypatch.setattr(builtin_module, "monotonic", lambda: next(ticks), raising=False)
 
     class Result:
         stdout = "3\t1\tREADME.md\n"
@@ -206,6 +210,7 @@ def test_diff_stats_producer_uses_context_base_ref(monkeypatch, tmp_path):
 
     assert evidence.id == "diff-stats"
     assert evidence.type == "diff"
+    assert evidence.duration_ms == 125
     # Should contain diff stats
     assert any(
         key in evidence.summary for key in ["added_lines", "deleted_lines", "changed_files"]

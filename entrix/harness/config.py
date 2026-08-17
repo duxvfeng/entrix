@@ -1,20 +1,26 @@
 """Harness configuration loading, validation, and domain conversion."""
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import yaml
 
 from entrix.harness.gate.policy import GatePolicy, GateRule, Severity
 from entrix.harness.gate.dsl import validate_condition_syntax
 from entrix.harness.fitness import parse_dimensions
+from entrix.harness.conditions import validate_when_config
+from entrix.harness.evidence import EVIDENCE_STATUSES
 from entrix.model import Dimension
 from entrix.review_trigger import ReviewTriggerRule, parse_review_trigger_rules
 
 SUPPORTED_VERSIONS = ("harness/v1",)
 BUILTIN_PRODUCERS = frozenset({"entrix-fitness", "entrix-review-trigger", "diff-stats"})
-PARSER_TYPES = frozenset({"exit_code", "regex"})
+PARSER_TYPES = frozenset(
+    {"exit_code", "regex", "junit", "json", "evidence_json", "sarif"}
+)
+SARIF_LEVELS = frozenset({"error", "warning", "note", "none"})
 
 
 @dataclass
@@ -24,11 +30,11 @@ class EvidenceProducerConfig:
     id: str = ""
     type: str = ""
     name: str = ""
-    command: Optional[str] = None
+    command: str | None = None
     producer: str = ""
-    builtin: Optional[str] = None
+    builtin: str | None = None
     timeout_seconds: int = 60
-    when: Optional[dict[str, Any]] = None
+    when: dict[str, Any] | None = None
     parser: dict[str, Any] = field(default_factory=dict)
     artifacts: list[dict[str, str]] = field(default_factory=list)
 
@@ -38,7 +44,8 @@ class HarnessConfig:
     """Top-level configuration consumed by the evidence and gate engines."""
 
     version: str = ""
-    when: Optional[dict[str, Any]] = None
+    failure_mode: str = "closed"
+    when: dict[str, Any] | None = None
     evidence_producers: list[EvidenceProducerConfig] = field(default_factory=list)
     gate_policies: list[GatePolicy] = field(default_factory=list)
     fitness_dimensions: list[Dimension] = field(default_factory=list)
@@ -83,12 +90,43 @@ def _load_producer_configs(producers_data: Any) -> list[EvidenceProducerConfig]:
 
         parser_data = producer_data.get("parser", {"type": "exit_code"})
         parser_data = _require_mapping(parser_data, f"evidence_producers[{index}].parser")
-        parser_type = parser_data.get("type", "exit_code")
+        parser_type = _require_text(parser_data.get("type", "exit_code"), "parser.type")
         if parser_type not in PARSER_TYPES:
             raise ValueError(f"不支持的 parser type：{parser_type}")
+        parser_data = {**parser_data, "type": parser_type}
         pattern = parser_data.get("pattern")
         if parser_type == "regex" and (not isinstance(pattern, str) or not pattern):
             raise ValueError("regex parser 必须配置非空 pattern")
+        if parser_type in {"junit", "json", "evidence_json", "sarif"}:
+            parser_data["path"] = _require_text(
+                parser_data.get("path"), f"{parser_type} parser.path"
+            )
+        if parser_type == "json":
+            parser_data["status_path"] = _require_text(
+                parser_data.get("status_path"), "json parser.status_path"
+            )
+            status_map = _require_mapping(
+                parser_data.get("status_map"), "json parser.status_map"
+            )
+            for source_status, evidence_status in status_map.items():
+                _require_text(source_status, "json parser.status_map key")
+                if evidence_status not in EVIDENCE_STATUSES:
+                    raise ValueError(
+                        "json parser.status_map values must be valid Evidence statuses"
+                    )
+            summary = _require_mapping(parser_data.get("summary", {}), "json parser.summary")
+            for field_name, source_path in summary.items():
+                _require_text(field_name, "json parser.summary key")
+                _require_text(source_path, f"json parser.summary.{field_name}")
+        if parser_type == "sarif":
+            blocking_levels = parser_data.get("blocking_levels", ["error"])
+            if not isinstance(blocking_levels, list):
+                raise ValueError("sarif parser.blocking_levels 必须是列表")
+            if any(level not in SARIF_LEVELS for level in blocking_levels):
+                raise ValueError(
+                    "sarif parser.blocking_levels 只支持 error/warning/note/none"
+                )
+            parser_data["blocking_levels"] = list(blocking_levels)
 
         timeout_seconds = producer_data.get("timeout_seconds", 60)
         if not isinstance(timeout_seconds, int) or timeout_seconds <= 0:
@@ -103,8 +141,10 @@ def _load_producer_configs(producers_data: Any) -> list[EvidenceProducerConfig]:
                 producer=str(producer_data.get("producer", "")),
                 builtin=builtin,
                 timeout_seconds=timeout_seconds,
-                when=producer_data.get("when"),
-                parser={"type": parser_type, "pattern": pattern},
+                when=validate_when_config(
+                    producer_data.get("when"), f"evidence_producers[{index}].when"
+                ),
+                parser={**parser_data, "type": parser_type},
                 artifacts=producer_data.get("artifacts", []),
             )
         )
@@ -143,6 +183,7 @@ def _load_gate_policies(gates_data: Any) -> list[GatePolicy]:
             GatePolicy(
                 name=_require_text(gate_data.get("name"), f"gate_policies[{index}].name"),
                 severity=severity,
+                when=validate_when_config(gate_data.get("when"), f"gate_policies[{index}].when"),
                 rule=GateRule(
                     name=str(rule_data.get("name", "")),
                     evidence_id=_require_text(evidence_id, "rule.evidence_id") if evidence_id else None,
@@ -168,13 +209,30 @@ def load_harness_config(config_path: Path) -> HarnessConfig:
             f"不支持的 harness 版本：{version}。必须是以下之一：{list(SUPPORTED_VERSIONS)}"
         )
 
+    settings = _require_mapping(data.get("settings", {}), "settings")
+    failure_mode = settings.get("failure_mode", "closed")
+    if failure_mode != "closed":
+        raise ValueError("settings.failure_mode 仅支持 closed")
+
+    producers = _load_producer_configs(data.get("evidence_producers", []))
+    policies = _load_gate_policies(data.get("gate_policies", []))
+    dimensions = parse_dimensions(
+        _require_mapping(data.get("fitness", {}), "fitness").get("dimensions")
+    )
+    review_rules = parse_review_trigger_rules(
+        _require_mapping(data.get("review_triggers", {}), "review_triggers").get("rules", [])
+    )
+    if not producers:
+        raise ValueError("evidence_producers 至少需要一个 producer")
+    if not policies:
+        raise ValueError("gate_policies 至少需要一个 gate")
+
     return HarnessConfig(
         version=version,
-        when=data.get("when"),
-        evidence_producers=_load_producer_configs(data.get("evidence_producers", [])),
-        gate_policies=_load_gate_policies(data.get("gate_policies", [])),
-        fitness_dimensions=parse_dimensions(_require_mapping(data.get("fitness", {}), "fitness").get("dimensions")),
-        review_trigger_rules=parse_review_trigger_rules(
-            _require_mapping(data.get("review_triggers", {}), "review_triggers").get("rules", [])
-        ),
+        failure_mode=failure_mode,
+        when=validate_when_config(data.get("when"), "when"),
+        evidence_producers=producers,
+        gate_policies=policies,
+        fitness_dimensions=dimensions,
+        review_trigger_rules=review_rules,
     )

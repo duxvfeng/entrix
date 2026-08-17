@@ -114,7 +114,12 @@ evidence_producers:
     producer: test
     parser:
       type: exit_code
-gate_policies: []
+gate_policies:
+  - name: 测试通过
+    severity: hard
+    rule:
+      evidence_id: test-1
+      condition: status == "pass"
 """
     with tempfile.TemporaryDirectory() as tmpdir:
         config_path = Path(tmpdir) / "harness.yaml"
@@ -141,8 +146,17 @@ fitness:
         - name: smoke
           command: "echo ok"
           hard_gate: true
-evidence_producers: []
-gate_policies: []
+evidence_producers:
+  - id: smoke-evidence
+    type: test
+    name: Smoke evidence
+    command: "echo ok"
+gate_policies:
+  - name: Smoke evidence passes
+    severity: hard
+    rule:
+      evidence_id: smoke-evidence
+      condition: status == "pass"
 ''',
         encoding="utf-8",
     )
@@ -161,8 +175,17 @@ review_triggers:
     - name: source-change
       type: changed_paths
       paths: ["src/**"]
-evidence_producers: []
-gate_policies: []
+evidence_producers:
+  - id: review-evidence
+    type: test
+    name: Review evidence
+    command: "echo ok"
+gate_policies:
+  - name: Review evidence passes
+    severity: hard
+    rule:
+      evidence_id: review-evidence
+      condition: status == "pass"
 ''',
         encoding="utf-8",
     )

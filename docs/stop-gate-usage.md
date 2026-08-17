@@ -1,184 +1,131 @@
 # Claude Stop Gate 使用指南
 
-## 快速开始
+Entrix Harness 将 Stop Hook、物证收集和门禁裁决分开：Hook 负责生命周期，
+Evidence Engine 只产生标准化 Evidence，Gate Engine 只根据 Evidence 仲裁。
+因此，同一套运行时可用不同的 `harness.yaml` 适配不同项目的 DoD。
 
-### 1. 基本使用
+## Stop 行为
 
-```python
-from entrix.stop_gate import StopGateAdapter
-from pathlib import Path
+安装 Claude Code 插件后，`hooks/stop-gate.sh` 调用 `entrix stop-gate`。没有
+`harness.yaml` 或 `.harness/harness.yaml` 的工作区不会启用 Harness；一旦找到配置，
+以下路径均为 fail-closed：配置无效、收集器异常、Evidence 保存失败、Gate 无法裁决或
+运行器不可用时，Hook 都输出 `{"decision":"block","reason":"..."}`。
 
-# 创建适配器
-adapter = StopGateAdapter()
+`PASS` 不会缓存，下一次 Stop 必定再次运行 producer。未变化工作区上的 `FAIL`、
+`BLOCKED` 与 `error` 会缓存，避免代理重复执行已知失败的慢检查。工作区内容、分支、
+base ref、Harness 配置或 `when.env` 依赖发生变化时，缓存失效并重新收集。
 
-# 在 Claude Code 插件中调用
-session_context = {
-    "session_id": "current-session",
-    "task_id": "current-task",
-    "workspace": Path.cwd(),
-    "changed_files": ["src/main.py", "tests/test_main.py"],
-    "stop_reason": "agent_completed"
-}
+唯一的紧急旁路是：
 
-decision = adapter.on_before_stop(session_context)
-
-if decision.allow_stop:
-    print("✅ 质量检查通过，可以结束任务")
-else:
-    print(f"❌ {decision.feedback}")
-    # 继续修复问题...
+```bash
+ENTRIX_STOP_GATE_DISABLED=1 entrix stop-gate
 ```
 
-### 2. 配置质量门禁
+该旁路会在 stderr 写入审计警告，不能作为常规配置项替代门禁。
 
-在项目根目录执行 `entrix init`，生成唯一的 `harness.yaml`。随后在其中配置质量维度：
+## 最小严格配置
+
+`settings.failure_mode` 只能是 `closed`。每个配置至少包含一个 producer 和一个 Gate：
 
 ```yaml
 version: "harness/v1"
-fitness:
-  dimensions:
-    - dimension: code_quality
-      weight: 100
-      threshold: {pass: 90, warn: 80}
-      metrics:
-        - name: ruff_pass
-          command: ruff check . 2>&1
-          hard_gate: true
-          tier: fast
-          description: Ruff must pass with no lint errors.
-review_triggers: {rules: []}
-evidence_producers: []
-gate_policies: []
+settings: {failure_mode: closed}
+evidence_producers:
+  - id: api-test
+    type: test
+    name: API tests
+    command: pytest -q --junitxml=artifacts/api.xml
+    producer: pytest
+    parser: {type: junit, path: artifacts/api.xml}
+gate_policies:
+  - name: API tests pass
+    severity: hard
+    rule: {evidence_id: api-test, condition: 'status == "pass"'}
 ```
 
-### 3. 运行和测试
+每个成功或失败的收集都会写入标准 Evidence Bundle，保存位置由 Stop Hook 的外部状态目录
+控制。Gate 不识别 `pytest`、Playwright 或 Maven 等工具名，只识别如 `status`、`summary`
+和 artifact 构成的 Evidence。
+
+## 条件激活
+
+`when` 可出现在 Harness、producer、Gate 三个层级。块内谓词为 AND，模式列表为 ANY：
+
+```yaml
+when:
+  changed_any: [frontend/**]
+  files_exist: [package.json]
+  branch:
+    exclude: [docs/**]
+
+evidence_producers:
+  - id: ui-tests
+    type: test
+    name: UI tests
+    when: {changed_any: [frontend/**]}
+    command: npm test -- --reporter=junit
+    parser: {type: junit, path: reports/junit.xml}
+```
+
+未激活的 Harness 保存 `active: false` Bundle 并跳过裁决；未激活的 producer 会产生
+`skipped` Evidence；未激活的 Gate 仅记录为非活动。活动 Harness 中缺失必要 Evidence，
+或没有任何活动 Gate，都会得到 `BLOCKED`。
+
+## 报告 Parser
+
+所有报告路径都必须相对工作区，不能逃逸工作区。命令 producer 支持：
+
+- `exit_code`：进程退出码。
+- `regex`：从 stdout / stderr 捕获字段。
+- `junit`：聚合 JUnit XML 的测试数、失败数与 artifact。
+- `json`：用只读点路径映射项目自有 JSON 报告。
+- `evidence_json`：导入已经符合 `evidence/v1` 的标准 Evidence。
+- `sarif`：聚合 SARIF 2.x 结果，默认 `error` 会失败。
+
+自有 JSON 报告映射示例：
+
+```yaml
+parser:
+  type: json
+  path: reports/api.json
+  status_path: result.status
+  status_map: {success: pass, failed: fail}
+  summary: {total: stats.total, failed: stats.failed}
+```
+
+SARIF 示例：
+
+```yaml
+parser:
+  type: sarif
+  path: reports/scan.sarif
+  blocking_levels: [error, warning]
+```
+
+标准 Evidence 输入示例。Harness 保留自己的 `id`、`type`、`producer`、任务和时间身份，
+不会信任输入文件对这些字段的覆盖：
+
+```json
+{
+  "schema_version": "evidence/v1",
+  "status": "pass",
+  "summary": {"total": 18, "passed": 18, "failed": 0},
+  "artifacts": [{"type": "junit", "path": "artifacts/api.xml"}]
+}
+```
+
+```yaml
+parser: {type: evidence_json, path: reports/api-evidence.json}
+```
+
+## 本地检查
 
 ```bash
-# 直接测试 Stop Gate
-python -m pytest tests/stop_gate/ -v
-
-# 运行集成测试
-python -m pytest tests/stop_gate/test_integration.py -v -m integration
-
-# 在实际项目中使用
-entrix run --tier normal
+entrix harness validate harness.yaml
+entrix harness run --config harness.yaml --json
+echo "{\"session_id\": \"manual-check\", \"cwd\": \"$PWD\"}" | entrix stop-gate
 ```
 
-### 4. Claude Code 插件 Hook（推荐）
-
-安装 Claude Code 插件（`/plugin install entrix@entrix`）后，Stop hook 自动生效，无需手动调用 Python API：
-
->  marketplace 源地址：`https://gitee.com/duxvfeng/entrix.git`
-
-```text
-Claude 请求 Stop
-  -> hooks/stop-gate.sh 调用 entrix stop-gate
-  -> 读取 stdin 的 hook 载荷（session_id / cwd / stop_hook_active）
-  -> 工作区无 harness.yaml 或 .harness/harness.yaml？直接放行
-  -> 有 Harness 配置？收集证据并裁决
-       -> PASS: 退出码 0，无输出，允许停止
-       -> FAIL/BLOCKED: 输出 {"decision": "block", "reason": "..."}，Claude 继续修复
-```
-
-要点：
-
-- **激活条件**：仓库根目录存在 `harness.yaml`，或存在 `.harness/harness.yaml`
-- **重验**：`stop_hook_active` 不绕过门禁；相同工作区快照复用上次裁决，代码变更后重新收集证据
-- **禁用**：`export ENTRIX_STOP_GATE_DISABLED=1`
-- **超时**：hook 层 295 秒；`ENTRIX_STOP_GATE_TIMEOUT` 或 `--timeout` 控制证据收集
-- **查找链**：PATH 上的 `entrix` → `uvx entrix` → 插件内源码副本 → 全部失败时放行
-
-手动验证（模拟 Claude Code 输入）：
-
-```bash
-echo "{\"session_id\": \"t\", \"cwd\": \"$PWD\"}" | entrix stop-gate
-# 阻断时输出：{"decision": "block", "reason": "..."}
-```
-
-## 架构概述
-
-Stop Gate 系统包含以下核心组件：
-
-1. **Stop Gate Adapter** - Claude Code 插件接口
-2. **Session State Manager** - 混合状态管理
-3. **Evidence Collector** - 独立证据收集
-4. **Gate Arbiter** - 智能裁决器
-5. **Feedback Formatter** - 用户友好反馈
-
-## 故障排除
-
-### 常见问题
-
-**Q: Stop Gate 不工作？**
-- 确认 Entrix 正确安装：`pip install entrix`
-- 检查 `harness.yaml` 存在且可通过 `entrix harness validate harness.yaml`
-- 查看 `.claude/stop-gate/` 中的日志
-
-**Q: 总是 BLOCKED？**
-- 检查 Git 仓库是否正确初始化
-- 确认质量检查配置文件格式正确
-- 查看详细错误日志
-
-**Q: 性能慢？**
-- 使用 `--tier fast` 只运行快速检查
-- 调整 `timeout_seconds` 参数
-- 检查是否有超时的检查项
-
-## 组件详情
-
-### StopGateAdapter
-
-`StopGateAdapter` 是 Claude Code 插件的入口点。它接收会话上下文，创建 `GateAttempt`，并调用引擎处理 stop 请求。
-
-```python
-adapter = StopGateAdapter(
-    state_dir=Path.cwd() / ".claude" / "stop-gate",
-    timeout_seconds=300
-)
-```
-
-### StopGateEngine
-
-`StopGateEngine` 是核心编排引擎，负责：
-1. 创建和管理尝试状态
-2. 收集证据
-3. 执行裁决
-4. 格式化反馈
-5. 更新最终状态
-
-```python
-from entrix.stop_gate import StopGateEngine
-from entrix.stop_gate.model import GateAttempt
-
-engine = StopGateEngine()
-attempt = GateAttempt.create(
-    session_id="session-1",
-    task_id="task-1",
-    workspace=Path.cwd(),
-    changed_files=["src/main.py"],
-    stop_reason="agent_completed"
-)
-decision = engine.process_stop_request(attempt)
-```
-
-## 裁决规则
-
-GateArbiter 根据以下规则做出裁决：
-
-- **PASS**: 所有检查通过，无硬门禁失败，无人工审查要求
-- **FAIL**: 硬门禁失败或分数不足
-- **BLOCKED**: 证据缺失或需要人工审查（严格模式下）
-
-## 开发
-
-### 测试
-
-```bash
-python -m pytest tests/stop_gate/ -v
-```
-
-### 代码风格
-
-```bash
-ruff check entrix/stop_gate tests/stop_gate
-```
+第二条命令输出裁决和 Evidence；第三条命令在失败时只输出 Claude Hook 契约所需的 block
+JSON。生产接入前至少手工验证一次：失败被阻断、修复后通过、设置紧急旁路时 stderr 出现
+审计警告。

@@ -1,4 +1,6 @@
 version: "harness/v1"
+settings:
+  failure_mode: closed
 
 fitness:
   dimensions:

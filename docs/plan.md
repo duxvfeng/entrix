@@ -95,6 +95,18 @@ python -m entrix.cli harness validate harness.yaml
 
 ---
 
+# Harness DoD 强门禁实施计划（2026-08-17）
+
+**目标：** 在现有 Harness 主链路上实现 fail-closed、三级条件、六种标准解析器、严格 Evidence Store、Gate 仲裁和 PASS 强制重验。
+
+**里程碑与预估：** 配置与证据基础 2.5 小时；标准报告解析 4 小时；收集与仲裁 2.5 小时；Stop Hook 强化 2 小时；CLI 子命令提示 1.5 小时；集成、文档与验证 1.5 小时，合计 14 小时。
+
+**详细计划：** `docs/superpowers/plans/2026-08-17-harness-dod-hardening.md`。
+
+**测试策略：** 11 个任务均先写失败测试并确认 RED，再写最小实现并确认 GREEN；最终执行全量 pytest、Ruff、Mypy、Harness 配置校验、package build 和真实 Claude Code 手动验收。
+
+---
+
 # Entrix 单文件 Harness 配置实施计划
 
 **目标：** 用 `harness.yaml` 取代 Fitness Markdown、manifest 与 review trigger 文件，并由 `entrix init` 生成默认配置。

@@ -5,7 +5,7 @@
 #   1. PATH 上的 entrix（pip install entrix / uv tool install entrix）
 #   2. uvx entrix（隔离环境，自动解析依赖）
 #   3. 插件根目录的源码检出（开发模式，要求依赖可用）
-# 全部不可用时放行本次停止（fail-open），避免把会话锁死在 hook 里。
+# 全部不可用时按 fail-closed 输出阻断决策。
 #
 # 手动禁用：export ENTRIX_STOP_GATE_DISABLED=1
 
@@ -13,6 +13,7 @@ set -uo pipefail
 
 # 安全阀：显式禁用时直接放行
 if [ -n "${ENTRIX_STOP_GATE_DISABLED:-}" ]; then
+  echo "ENTRIX_STOP_GATE_DISABLED is set; Harness Stop Gate is bypassed." >&2
   exit 0
 fi
 
@@ -31,6 +32,7 @@ if [ -n "$PLUGIN_ROOT" ] && [ -f "$PLUGIN_ROOT/entrix/__init__.py" ] && command 
   fi
 fi
 
-echo "entrix stop-gate: 未找到可用的 entrix（entrix/uvx/python3），放行本次停止。" >&2
+printf '%s\n' '{"decision":"block","reason":"Entrix Stop Gate 不可用，已按 fail-closed 阻断。"}'
+echo "entrix stop-gate: 未找到可用的 entrix（entrix/uvx/python3）。" >&2
 echo "安装方式：pip install entrix 或安装 uv 后使用 uvx entrix" >&2
 exit 0

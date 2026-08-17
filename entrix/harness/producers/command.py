@@ -1,5 +1,6 @@
 """Command-based evidence producers."""
-import re
+from __future__ import annotations
+
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -7,6 +8,8 @@ from datetime import datetime, timezone
 from entrix.harness.producers.base import Producer, ProducerContext
 from entrix.harness.config import EvidenceProducerConfig
 from entrix.harness.evidence import Evidence
+from entrix.harness.parsers import get_parser
+from entrix.harness.parsers.base import ParserContext, collect_artifacts
 from entrix.runners.process import process_group_kwargs, terminate_process_tree
 
 
@@ -21,7 +24,6 @@ class CommandProducer(Producer):
         """
         self.config = config
         self.parser_type = config.parser.get("type", "exit_code")
-        self.regex_pattern = config.parser.get("pattern")
 
     def run(self, context: ProducerContext) -> Evidence:
         """Execute command and parse result.
@@ -73,14 +75,20 @@ class CommandProducer(Producer):
                 stderr,
             )
 
-            # Parse based on parser type
-            if self.parser_type == "exit_code":
-                self._parse_exit_code(result, evidence)
-            elif self.parser_type == "regex":
-                self._parse_regex(result, evidence)
-            else:
-                evidence.status = "error"
-                evidence.raw = {"error": f"Unknown parser type: {self.parser_type}"}
+            parser = get_parser(str(self.parser_type))
+            parsed = parser.parse(
+                ParserContext(
+                    repo_root=context.repo_root,
+                    config=self.config.parser,
+                    completed_process=result,
+                )
+            )
+            evidence.status = parsed.status
+            evidence.summary = parsed.summary
+            evidence.raw = parsed.raw
+            evidence.artifacts = parsed.artifacts + collect_artifacts(
+                context.repo_root, self.config.artifacts
+            )
 
         except subprocess.TimeoutExpired:
             evidence.status = "timeout"
@@ -90,54 +98,3 @@ class CommandProducer(Producer):
             evidence.raw = {"error": str(e)}
 
         return evidence
-
-    def _parse_exit_code(self, result: subprocess.CompletedProcess, evidence: Evidence) -> None:
-        """Parse command result using exit code."""
-        evidence.raw = {
-            "exit_code": result.returncode,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-        }
-
-        if result.returncode == 0:
-            evidence.status = "pass"
-        else:
-            evidence.status = "fail"
-
-    def _parse_regex(self, result: subprocess.CompletedProcess, evidence: Evidence) -> None:
-        """Parse command result using regex pattern."""
-        evidence.raw = {
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "exit_code": result.returncode,
-        }
-
-        if not self.regex_pattern:
-            evidence.status = "error"
-            evidence.raw = {"error": "Regex parser requires pattern"}
-            return
-
-        try:
-            match = re.search(self.regex_pattern, result.stdout)
-            if match:
-                evidence.status = "pass"
-                evidence.summary = {
-                    key: _coerce_capture(value) for key, value in match.groupdict().items()
-                }
-            else:
-                evidence.status = "error"
-                evidence.raw = {"error": "Regex pattern did not match output"}
-        except re.error as e:
-            evidence.status = "error"
-            evidence.raw = {"error": f"Regex error: {e}"}
-
-
-def _coerce_capture(value: str | None) -> object:
-    """Preserve numeric regex captures as numeric evidence values."""
-    if value is None:
-        return None
-    if re.fullmatch(r"-?\d+", value):
-        return int(value)
-    if re.fullmatch(r"-?\d+\.\d+", value):
-        return float(value)
-    return value

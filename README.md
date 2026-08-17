@@ -145,6 +145,8 @@ Gate 都从该文件读取质量规则。
 
 ```yaml
 version: "harness/v1"
+settings:
+  failure_mode: closed
 fitness:
   dimensions:
     - dimension: code_quality
@@ -163,8 +165,15 @@ fitness:
           tier: normal
           description: 单元测试必须通过。
 review_triggers: {rules: []}
-evidence_producers: []
-gate_policies: []
+evidence_producers:
+  - id: fitness
+    type: fitness
+    name: Entrix Fitness
+    builtin: entrix-fitness
+gate_policies:
+  - name: Fitness must pass
+    severity: hard
+    rule: {evidence_id: fitness, condition: 'status == "pass"'}
 ```
 
 ### 高级指标字段
@@ -300,10 +309,10 @@ Entrix 现在包含 **Claude Stop Gate** —— 一个自动化质量门禁系�
 
 AI 代理在完成任务后请求停止时，传统上依赖代理自身判断质量。Stop Gate 引入了一个独立的审查层：
 
-- **独立证据收集**：在 Claude 进程之外运行 Entrix fitness 检查和 review-trigger
-- **无偏裁决**：基于收集到的证据自动判定 PASS / FAIL / BLOCKED
-- **可操作反馈**：生成用户可读的 Markdown 反馈和机器可解析的 JSON 指令
-- **状态持久化**：使用内存+文件系统的混合状态管理，支持中断恢复
+- **独立证据收集**：Harness 按 YAML 运行物证收集器，并保存标准化 Evidence Bundle
+- **声明式裁决**：Gate Engine 只消费 Evidence，按策略判定 `PASS` / `FAIL` / `BLOCKED`
+- **默认拒绝**：配置已启用时，收集、存储或裁决异常都会阻止 Stop
+- **可复核状态**：失败裁决按工作区指纹缓存，Evidence Bundle 留在 Hook 状态目录
 
 ### 核心组件
 
@@ -326,14 +335,43 @@ entrix/stop_gate/
 
 - **仅对存在 `harness.yaml` 或 `.harness/harness.yaml` 的仓库激活**——未配置的仓库直接放行，插件可以放心全局安装
 - Claude 请求结束任务时，hook 独立收集证据并裁决：PASS 放行，FAIL/BLOCKED 以 `{"decision": "block", "reason": ...}` 阻止停止并把失败原因回传给 Claude 继续修复
-- 内置防循环保护（`stop_hook_active`）与禁用开关（`export ENTRIX_STOP_GATE_DISABLED=1`）
-- 优先使用 PATH 上的 `entrix`，其次 `uvx entrix`，最后回退到插件内的源码副本；全部不可用时放行
+- 每次 `PASS` 都重新收集证据；未变更的 `FAIL`、`BLOCKED` 与 `error` 会复用失败结论，直到工作区、分支、base ref、Harness 配置或条件环境发生变化
+- 唯一的紧急旁路是 `ENTRIX_STOP_GATE_DISABLED=1`，其使用会写入 stderr 审计警告
+- 优先使用 PATH 上的 `entrix`，其次 `uvx entrix`，最后回退到插件内的源码副本；配置存在而所有运行器均不可用时输出阻断决策
 
 手动测试 hook 行为：
 
 ```bash
 echo "{\"session_id\": \"t\", \"cwd\": \"$PWD\"}" | entrix stop-gate
 ```
+
+### Harness Evidence 与 Gate
+
+`harness.yaml` 将“产生什么事实”与“什么事实允许 Stop”分离。`when` 可出现在
+Harness、producer 和 Gate 三个层级；同一块中的谓词是 AND，列表中的模式是 ANY：
+
+```yaml
+version: "harness/v1"
+settings: {failure_mode: closed}
+when:
+  files_exist: [package.json]
+evidence_producers:
+  - id: frontend-tests
+    type: test
+    name: Frontend tests
+    when: {changed_any: [frontend/**]}
+    command: npm test -- --reporter=junit
+    parser: {type: junit, path: reports/junit.xml}
+gate_policies:
+  - name: Frontend tests must pass
+    severity: hard
+    when: {branch: {exclude: [docs/**]}}
+    rule: {evidence_id: frontend-tests, condition: 'status == "pass"'}
+```
+
+命令 producer 支持 `exit_code`、`regex`、`junit`、`json`、`evidence_json` 和
+`sarif` parser。完整 parser 配置、标准 Evidence 格式与旁路审计说明见
+[Stop Gate 使用指南](docs/stop-gate-usage.md)。
 
 ### 快速使用
 

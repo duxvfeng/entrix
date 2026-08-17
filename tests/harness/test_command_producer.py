@@ -167,3 +167,27 @@ def test_command_producer_regex_parse_error():
 
     assert evidence.status == "error"
     assert "regex" in str(evidence.raw.get("error", "")).lower()
+
+
+def test_command_producer_attaches_declared_artifacts(tmp_path: Path) -> None:
+    report = tmp_path / "report.xml"
+    report.write_text("<testsuite />", encoding="utf-8")
+    config = EvidenceProducerConfig(
+        id="artifact-test",
+        type="test",
+        name="Artifact test",
+        command="echo passed",
+        parser={"type": "exit_code"},
+        artifacts=[{"type": "junit", "path": "report.xml"}],
+    )
+    context = ProducerContext(
+        task_id="task-1",
+        repo_root=tmp_path,
+        when_context=WhenContext(repo_root=tmp_path),
+    )
+
+    evidence = CommandProducer(config).run(context)
+
+    assert [(artifact.type, artifact.path) for artifact in evidence.artifacts] == [
+        ("junit", "report.xml")
+    ]

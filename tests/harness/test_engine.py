@@ -1,6 +1,9 @@
 """Evidence collection engine tests."""
 from pathlib import Path
 from threading import Event, Lock
+
+import pytest
+
 from entrix.harness.engine import EvidenceEngine, HarnessRunContext
 from entrix.harness.config import HarnessConfig, EvidenceProducerConfig
 from entrix.harness.conditions import WhenContext
@@ -111,9 +114,79 @@ def test_collect_with_producer_when_filter(tmp_path):
     engine = EvidenceEngine(config)
     bundle = engine.collect(context)
 
-    # 应该只执行 test-2
-    assert len(bundle.evidence) == 1
-    assert bundle.evidence[0].id == "test-2"
+    evidence_by_id = {item.id: item for item in bundle.evidence}
+    assert set(evidence_by_id) == {"test-1", "test-2"}
+    assert evidence_by_id["test-1"].status == "skipped"
+    assert evidence_by_id["test-1"].raw == {"reason": "when condition not met"}
+    assert evidence_by_id["test-2"].status == "pass"
+
+
+def test_inactive_harness_saves_inactive_bundle_without_running_producer(
+    tmp_path: Path,
+) -> None:
+    config = HarnessConfig(
+        version="harness/v1",
+        when={"changed_any": ["frontend/**"]},
+        evidence_producers=[
+            EvidenceProducerConfig(
+                id="tests",
+                type="test",
+                name="Tests",
+                command="pytest",
+            )
+        ],
+        gate_policies=[],
+    )
+    store = EvidenceStore(tmp_path / "runtime")
+    engine = EvidenceEngine(config)
+    engine._create_producer = lambda _config: pytest.fail("producer must not run")
+    context = HarnessRunContext(
+        task_id="task-1",
+        attempt_id="attempt-1",
+        repo_root=tmp_path,
+        when_context=WhenContext(
+            repo_root=tmp_path,
+            changed_files=["docs/readme.md"],
+        ),
+        store=store,
+    )
+
+    bundle = engine.collect(context)
+
+    assert bundle.active is False
+    assert bundle.evidence == []
+    assert bundle.collection_errors == []
+    assert list((store.evidence_dir / "task-1").glob("*-bundle.json"))
+
+
+def test_collect_propagates_storage_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = HarnessConfig(
+        version="harness/v1",
+        evidence_producers=[
+            EvidenceProducerConfig(
+                id="tests", type="test", name="Tests", command="echo passed"
+            )
+        ],
+        gate_policies=[],
+    )
+    store = EvidenceStore(tmp_path / "runtime")
+    monkeypatch.setattr(
+        store,
+        "save",
+        lambda _bundle: (_ for _ in ()).throw(OSError("disk unavailable")),
+    )
+    context = HarnessRunContext(
+        task_id="task-1",
+        repo_root=tmp_path,
+        when_context=WhenContext(repo_root=tmp_path),
+        store=store,
+        parallel_producers=False,
+    )
+
+    with pytest.raises(OSError, match="disk unavailable"):
+        EvidenceEngine(config).collect(context)
 
 
 def test_collect_with_builtin_producer():

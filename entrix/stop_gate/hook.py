@@ -114,6 +114,20 @@ def derive_changed_files(workspace: Path) -> list[str]:
 def workspace_fingerprint(workspace: Path) -> str | None:
     """Return a content-aware snapshot of the Git worktree."""
     try:
+        git_root = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if git_root.returncode != 0:
+            return _filesystem_fingerprint(workspace)
+        discovered_root = Path(git_root.stdout.strip()).resolve()
+        if discovered_root != workspace.resolve():
+            return _filesystem_fingerprint(workspace)
+
         head = subprocess.run(
             ["git", "rev-parse", "HEAD"],
             cwd=workspace,
@@ -244,6 +258,9 @@ def _when_environment_fingerprint(config_path: Path) -> str:
         conditions.extend(
             producer.get("when") for producer in producers if isinstance(producer, dict)
         )
+    gates = config.get("gate_policies")
+    if isinstance(gates, list):
+        conditions.extend(gate.get("when") for gate in gates if isinstance(gate, dict))
 
     names: set[str] = set()
     for condition in conditions:
@@ -292,18 +309,49 @@ def run_stop_gate_hook(
 
     # 安全阀：显式禁用时放行
     if os.environ.get("ENTRIX_STOP_GATE_DISABLED"):
+        print(
+            "ENTRIX_STOP_GATE_DISABLED is set; Harness Stop Gate is bypassed.",
+            file=sys.stderr,
+        )
         return 0
 
     payload = read_hook_payload(input_stream)
     workspace = Path(payload.get("cwd") or os.getcwd()).resolve()
-
-    session_id = str(payload.get("session_id") or "unknown-session")
-    stop_reason = str(payload.get("reason") or "agent_completed")
-    branch = str(payload.get("branch") or derive_current_branch(workspace))
-    effective_base_ref = str(base_ref or "HEAD")
     harness_config = find_harness_config(workspace)
     if harness_config is None:
         return 0
+    try:
+        session_id = str(payload.get("session_id") or "unknown-session")
+        stop_reason = str(payload.get("reason") or "agent_completed")
+        branch = str(payload.get("branch") or derive_current_branch(workspace))
+        return _run_configured_stop_gate(
+            workspace=workspace,
+            session_id=session_id,
+            stop_reason=stop_reason,
+            branch=branch,
+            base_ref=base_ref,
+            harness_config=harness_config,
+            output_stream=output_stream,
+            state_dir=state_dir,
+        )
+    except Exception as error:  # noqa: BLE001
+        _write_block_decision(output_stream, f"Harness 执行失败：{error}")
+        return 0
+
+
+def _run_configured_stop_gate(
+    *,
+    workspace: Path,
+    session_id: str,
+    stop_reason: str,
+    branch: str,
+    base_ref: str | None,
+    harness_config: Path,
+    output_stream: IO[str],
+    state_dir: Path | None,
+) -> int:
+    """Run the configured fail-closed path after Harness discovery."""
+    effective_base_ref = str(base_ref or "HEAD")
     snapshot = _gate_fingerprint(
         workspace_fingerprint(workspace),
         branch,
@@ -313,14 +361,14 @@ def run_stop_gate_hook(
     state_store = StopGateStateStore(state_dir)
     cached = state_store.load(workspace, session_id) if snapshot is not None else None
     if cached is not None and cached.fingerprint == snapshot:
-        if cached.status == "pass":
+        if cached.status in {"fail", "blocked", "error"}:
+            _write_block_decision(
+                output_stream,
+                "上次 Harness 验证未通过，且未检测到代码变更；未重新运行测试。"
+                f"原始原因：{cached.summary}",
+            )
             return 0
-        _write_block_decision(
-            output_stream,
-            "上次 Harness 验证未通过，且未检测到代码变更；未重新运行测试。"
-            f"原始原因：{cached.summary}",
-        )
-        return 0
+        state_store.delete(workspace, session_id)
 
     context = {
         "session_id": session_id,
@@ -362,6 +410,12 @@ def _save_cached_verdict(
     status: str,
     summary: str,
 ) -> None:
+    if status == "pass":
+        try:
+            state_store.delete(workspace, session_id)
+        except OSError:
+            pass
+        return
     if fingerprint is None:
         return
     try:
@@ -409,6 +463,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return run_stop_gate_hook(timeout_seconds=args.timeout, base_ref=args.base)
     except Exception as e:  # noqa: BLE001
-        # 基础设施级故障时放行，避免把用户会话锁死在 hook 里
-        print(f"entrix stop-gate: 内部错误，放行本次停止：{e}", file=sys.stderr)
+        summary = f"Harness Stop Gate 内部错误：{e}"
+        try:
+            configured = find_harness_config(Path.cwd().resolve()) is not None
+        except OSError:
+            configured = False
+        if configured:
+            _write_block_decision(sys.stdout, summary)
+        else:
+            print(f"entrix stop-gate: {summary}", file=sys.stderr)
         return 0
