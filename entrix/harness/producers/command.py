@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from entrix.harness.producers.base import Producer, ProducerContext
 from entrix.harness.config import EvidenceProducerConfig
 from entrix.harness.evidence import Evidence
+from entrix.runners.process import process_group_kwargs, terminate_process_tree
 
 
 class CommandProducer(Producer):
@@ -44,16 +45,33 @@ class CommandProducer(Producer):
             # Execute command
             assert self.config.command is not None
             start_time = time.time()
-            result = subprocess.run(
+            process = subprocess.Popen(
                 self.config.command,
                 shell=True,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=self.config.timeout_seconds,
                 cwd=context.repo_root,
+                **process_group_kwargs(),
             )
+            try:
+                stdout, stderr = process.communicate(timeout=self.config.timeout_seconds)
+            except subprocess.TimeoutExpired:
+                terminate_process_tree(process)
+                try:
+                    process.communicate(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.communicate()
+                raise
             duration_ms = int((time.time() - start_time) * 1000)
             evidence.duration_ms = duration_ms
+            result = subprocess.CompletedProcess(
+                self.config.command,
+                process.returncode,
+                stdout,
+                stderr,
+            )
 
             # Parse based on parser type
             if self.parser_type == "exit_code":

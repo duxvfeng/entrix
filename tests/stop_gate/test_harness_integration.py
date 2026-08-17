@@ -73,6 +73,35 @@ gate_policies:
     assert len(verdict.gate_results) == 1
 
 
+def test_harness_runner_writes_evidence_outside_checked_workspace(tmp_path):
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        '''version: "harness/v1"
+evidence_producers:
+  - id: test-1
+    type: test
+    name: Test
+    command: echo passed
+    parser: {type: exit_code}
+gate_policies:
+  - name: Test passes
+    severity: hard
+    rule:
+      evidence_id: test-1
+      condition: status == "pass"
+'''
+    )
+    evidence_root = tmp_path.parent / "stop-gate-runtime"
+
+    verdict = HarnessRunner(config_path, evidence_root=evidence_root).run(
+        {"task_id": "task-1", "workspace": tmp_path, "branch": "main"}
+    )
+
+    assert verdict.status == VerdictStatus.PASS
+    assert list((evidence_root / ".harness" / "evidence" / "task-1").glob("*.json"))
+    assert not (tmp_path / ".harness" / "evidence").exists()
+
+
 def test_harness_runner_skips_hard_gates_when_global_when_is_inactive(tmp_path):
     config_path = tmp_path / "harness.yaml"
     config_path.write_text(

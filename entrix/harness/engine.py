@@ -27,6 +27,7 @@ class HarnessRunContext:
     attempt_id: str = "unknown"
     store: Optional[EvidenceStore] = None
     base_ref: str = "HEAD"
+    parallel_producers: bool = True
 
 
 class EvidenceEngine:
@@ -73,30 +74,24 @@ class EvidenceEngine:
             if evaluate_when(producer_config.when, context.when_context):
                 active_producers.append(producer_config)
 
-        # Execute producers in parallel
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            future_to_producer = {}
-
+        if context.parallel_producers:
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                futures = {
+                    executor.submit(self._run_producer, producer_config, context): producer_config
+                    for producer_config in active_producers
+                }
+                for future in as_completed(futures):
+                    producer_config = futures[future]
+                    try:
+                        evidence_list.append(future.result())
+                    except Exception as error:  # noqa: BLE001
+                        collection_errors.append({"producer_id": producer_config.id, "error": str(error)})
+        else:
             for producer_config in active_producers:
-                producer = self._create_producer(producer_config)
-                producer_context = ProducerContext(
-                    task_id=context.task_id,
-                    repo_root=context.repo_root,
-                    when_context=context.when_context,
-                    attempt_id=context.attempt_id,
-                    base_ref=context.base_ref,
-                )
-
-                future = executor.submit(producer.run, producer_context)
-                future_to_producer[future] = producer_config
-
-            for future in as_completed(future_to_producer):
-                producer_config = future_to_producer[future]
                 try:
-                    evidence = future.result()
-                    evidence_list.append(evidence)
-                except Exception as e:
-                    collection_errors.append({"producer_id": producer_config.id, "error": str(e)})
+                    evidence_list.append(self._run_producer(producer_config, context))
+                except Exception as error:  # noqa: BLE001
+                    collection_errors.append({"producer_id": producer_config.id, "error": str(error)})
 
         bundle = EvidenceBundle(
             task_id=context.task_id,
@@ -113,6 +108,17 @@ class EvidenceEngine:
                 collection_errors.append({"storage_error": str(e)})
 
         return bundle
+
+    def _run_producer(self, producer_config: EvidenceProducerConfig, context: HarnessRunContext):
+        producer = self._create_producer(producer_config)
+        producer_context = ProducerContext(
+            task_id=context.task_id,
+            repo_root=context.repo_root,
+            when_context=context.when_context,
+            attempt_id=context.attempt_id,
+            base_ref=context.base_ref,
+        )
+        return producer.run(producer_context)
 
     def is_active(self, context: HarnessRunContext) -> bool:
         """Return whether the global Harness condition applies to this run."""

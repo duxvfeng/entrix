@@ -7,8 +7,8 @@
 - 放行：退出码 0 且不产生 stdout。
 - 阻断：退出码 0，stdout 输出 ``{"decision": "block", "reason": "..."}``，
   ``reason`` 会回传给 Claude 使其继续修复。
-- ``stop_hook_active`` 为真表示 Claude 已因 Stop hook 继续工作，
-  必须立即放行以避免无限循环。
+- ``stop_hook_active`` 为真时也必须保留门禁：相同工作区快照重用上次
+  裁决，工作区变更后重新收集证据。
 
 安全阀：
 
@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -26,9 +27,30 @@ import sys
 from pathlib import Path
 from typing import IO
 
+import yaml
+
+from entrix.stop_gate.revalidation import CachedVerdict, StopGateStateStore
+
 DEFAULT_TIMEOUT_SECONDS = 240
 
 BLOCK_DECISION = "block"
+
+_FINGERPRINT_IGNORED_DIRECTORIES = frozenset(
+    {
+        ".claude",
+        ".git",
+        ".gradle",
+        ".harness",
+        ".pytest_cache",
+        ".venv",
+        "__pycache__",
+        "build",
+        "node_modules",
+        "out",
+        "target",
+        "venv",
+    }
+)
 
 
 def find_harness_config(workspace: Path) -> Path | None:
@@ -89,6 +111,152 @@ def derive_changed_files(workspace: Path) -> list[str]:
     return changed
 
 
+def workspace_fingerprint(workspace: Path) -> str | None:
+    """Return a content-aware snapshot of the Git worktree."""
+    try:
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=all"],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        changed = subprocess.run(
+            ["git", "diff", "--name-only", "-z", "HEAD"],
+            cwd=workspace,
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+        untracked = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+            cwd=workspace,
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return _filesystem_fingerprint(workspace)
+    if any(result.returncode != 0 for result in (head, status, changed, untracked)):
+        return _filesystem_fingerprint(workspace)
+
+    changed_paths = {
+        path.decode("utf-8", errors="surrogateescape")
+        for path in changed.stdout.split(b"\0")
+        if path
+    }
+    changed_paths.update(
+        path.decode("utf-8", errors="surrogateescape")
+        for path in untracked.stdout.split(b"\0")
+        if path
+    )
+    digest = hashlib.sha256()
+    digest.update(head.stdout.strip().encode("utf-8", errors="surrogateescape"))
+    digest.update(status.stdout.encode("utf-8", errors="surrogateescape"))
+    for relative_path in sorted(changed_paths):
+        digest.update(relative_path.encode("utf-8", errors="surrogateescape"))
+        candidate = workspace / relative_path
+        try:
+            with candidate.open("rb") as file:
+                while chunk := file.read(1024 * 1024):
+                    digest.update(chunk)
+        except FileNotFoundError:
+            digest.update(b"<missing>")
+        except OSError:
+            return None
+    for config_path in (workspace / "harness.yaml", workspace / ".harness" / "harness.yaml"):
+        digest.update(str(config_path.relative_to(workspace)).encode("utf-8"))
+        try:
+            with config_path.open("rb") as file:
+                while chunk := file.read(1024 * 1024):
+                    digest.update(chunk)
+        except FileNotFoundError:
+            digest.update(b"<missing>")
+        except OSError:
+            return None
+    return digest.hexdigest()
+
+
+def _filesystem_fingerprint(workspace: Path) -> str | None:
+    """Return a cheap fallback snapshot for configured non-Git workspaces."""
+    digest = hashlib.sha256(b"filesystem-fingerprint/v1\0")
+    try:
+        for root, directories, filenames in os.walk(workspace):
+            directories[:] = sorted(
+                directory
+                for directory in directories
+                if directory not in _FINGERPRINT_IGNORED_DIRECTORIES
+            )
+            for filename in sorted(filenames):
+                candidate = Path(root) / filename
+                relative_path = candidate.relative_to(workspace)
+                stat = candidate.stat()
+                digest.update(str(relative_path).encode("utf-8", errors="surrogateescape"))
+                digest.update(str(stat.st_size).encode("ascii"))
+                digest.update(str(stat.st_mtime_ns).encode("ascii"))
+        for config_path in (workspace / "harness.yaml", workspace / ".harness" / "harness.yaml"):
+            try:
+                stat = config_path.stat()
+            except FileNotFoundError:
+                continue
+            digest.update(str(config_path.relative_to(workspace)).encode("utf-8"))
+            digest.update(str(stat.st_size).encode("ascii"))
+            digest.update(str(stat.st_mtime_ns).encode("ascii"))
+    except OSError:
+        return None
+    return digest.hexdigest()
+
+
+def _gate_fingerprint(
+    workspace_snapshot: str | None,
+    branch: str,
+    base_ref: str,
+    environment_snapshot: str,
+) -> str | None:
+    """Bind a workspace snapshot to every input that can alter Harness evidence."""
+    if workspace_snapshot is None:
+        return None
+    payload = "\0".join((workspace_snapshot, branch, base_ref, environment_snapshot))
+    return hashlib.sha256(payload.encode("utf-8", errors="surrogateescape")).hexdigest()
+
+
+def _when_environment_fingerprint(config_path: Path) -> str:
+    """Return the configured environment inputs that can activate Harness checks."""
+    try:
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return ""
+    if not isinstance(config, dict):
+        return ""
+
+    conditions = [config.get("when")]
+    producers = config.get("evidence_producers")
+    if isinstance(producers, list):
+        conditions.extend(
+            producer.get("when") for producer in producers if isinstance(producer, dict)
+        )
+
+    names: set[str] = set()
+    for condition in conditions:
+        if not isinstance(condition, dict):
+            continue
+        required_variables = condition.get("env")
+        if isinstance(required_variables, dict):
+            names.update(name for name in required_variables if isinstance(name, str))
+
+    payload = "\0".join(f"{name}={os.environ.get(name)!r}" for name in sorted(names))
+    return hashlib.sha256(payload.encode("utf-8", errors="surrogateescape")).hexdigest()
+
+
 def derive_current_branch(workspace: Path) -> str:
     """Return the checked-out branch name, or ``unknown`` outside a repository."""
     try:
@@ -112,6 +280,7 @@ def run_stop_gate_hook(
     base_ref: str | None = None,
     input_stream: IO[str] | None = None,
     output_stream: IO[str] | None = None,
+    state_dir: Path | None = None,
 ) -> int:
     """执行 Stop hook 主流程，返回进程退出码。
 
@@ -126,42 +295,83 @@ def run_stop_gate_hook(
         return 0
 
     payload = read_hook_payload(input_stream)
-
-    # 防循环：Claude 已因 Stop hook 继续工作，必须放行
-    if payload.get("stop_hook_active"):
-        return 0
-
     workspace = Path(payload.get("cwd") or os.getcwd()).resolve()
 
     session_id = str(payload.get("session_id") or "unknown-session")
     stop_reason = str(payload.get("reason") or "agent_completed")
+    branch = str(payload.get("branch") or derive_current_branch(workspace))
+    effective_base_ref = str(base_ref or "HEAD")
+    harness_config = find_harness_config(workspace)
+    if harness_config is None:
+        return 0
+    snapshot = _gate_fingerprint(
+        workspace_fingerprint(workspace),
+        branch,
+        effective_base_ref,
+        _when_environment_fingerprint(harness_config),
+    )
+    state_store = StopGateStateStore(state_dir)
+    cached = state_store.load(workspace, session_id) if snapshot is not None else None
+    if cached is not None and cached.fingerprint == snapshot:
+        if cached.status == "pass":
+            return 0
+        _write_block_decision(
+            output_stream,
+            "上次 Harness 验证未通过，且未检测到代码变更；未重新运行测试。"
+            f"原始原因：{cached.summary}",
+        )
+        return 0
+
     context = {
         "session_id": session_id,
         "task_id": session_id,
         "workspace": workspace,
         "changed_files": derive_changed_files(workspace),
-        "branch": str(payload.get("branch") or derive_current_branch(workspace)),
+        "branch": branch,
         "stop_reason": stop_reason,
         "base_ref": base_ref,
     }
 
-    harness_config = find_harness_config(workspace)
-    if harness_config is not None:
-        from entrix.stop_gate.runner import HarnessRunner
+    from entrix.stop_gate.runner import HarnessRunner
 
-        try:
-            verdict = HarnessRunner(harness_config).run(context)
-        except Exception as error:  # noqa: BLE001
-            _write_block_decision(output_stream, f"Harness 执行失败：{error}")
-            return 0
-
-        if getattr(verdict.status, "value", verdict.status) == "pass":
-            return 0
-        _write_block_decision(output_stream, verdict.summary or "Harness 门禁未通过。")
+    try:
+        verdict = HarnessRunner(
+            harness_config,
+            evidence_root=state_store.evidence_root(workspace),
+        ).run(context)
+    except Exception as error:  # noqa: BLE001
+        summary = f"Harness 执行失败：{error}"
+        _save_cached_verdict(state_store, workspace, session_id, snapshot, "error", summary)
+        _write_block_decision(output_stream, summary)
         return 0
 
-    # 未配置 Harness 的仓库不激活门禁，直接放行。
+    status = str(getattr(verdict.status, "value", verdict.status))
+    summary = verdict.summary or "Harness 门禁未通过。"
+    _save_cached_verdict(state_store, workspace, session_id, snapshot, status, summary)
+    if status == "pass":
+        return 0
+    _write_block_decision(output_stream, summary)
     return 0
+
+
+def _save_cached_verdict(
+    state_store: StopGateStateStore,
+    workspace: Path,
+    session_id: str,
+    fingerprint: str | None,
+    status: str,
+    summary: str,
+) -> None:
+    if fingerprint is None:
+        return
+    try:
+        state_store.save(
+            workspace,
+            session_id,
+            CachedVerdict(fingerprint=fingerprint, status=status, summary=summary),
+        )
+    except OSError:
+        return
 
 
 def _write_block_decision(output_stream: IO[str], reason: str) -> None:

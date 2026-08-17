@@ -13,8 +13,16 @@ from entrix.harness.store import EvidenceStore
 class HarnessRunner:
     """Run the configured Harness flow without initializing the legacy Stop Gate."""
 
-    def __init__(self, config_path: Path) -> None:
+    def __init__(
+        self,
+        config_path: Path,
+        *,
+        evidence_root: Path | None = None,
+        parallel_producers: bool = False,
+    ) -> None:
         self.config_path = config_path
+        self.evidence_root = evidence_root
+        self.parallel_producers = parallel_producers
 
     def run(self, context: dict[str, Any]) -> Verdict:
         """Collect evidence and arbitrate the configured Harness policies."""
@@ -30,8 +38,9 @@ class HarnessRunner:
                 changed_files=list(context.get("changed_files") or []),
                 current_branch=str(context.get("branch") or "unknown"),
             ),
-            store=EvidenceStore(workspace),
+            store=EvidenceStore(self.evidence_root or workspace),
             base_ref=str(context.get("base_ref") or "HEAD"),
+            parallel_producers=self.parallel_producers,
         )
         evidence_engine = EvidenceEngine(config)
         if not evidence_engine.is_active(harness_context):

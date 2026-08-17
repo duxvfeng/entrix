@@ -2,6 +2,7 @@
 
 import io
 import json
+import subprocess
 from pathlib import Path
 
 from entrix.stop_gate.hook import (
@@ -9,18 +10,86 @@ from entrix.stop_gate.hook import (
     find_harness_config,
     read_hook_payload,
     run_stop_gate_hook,
+    workspace_fingerprint,
 )
 
 
-def _run(payload: dict | str, cwd: Path, monkeypatch) -> tuple[int, str]:
+def _run(
+    payload: dict | str,
+    cwd: Path,
+    monkeypatch,
+    *,
+    state_dir: Path | None = None,
+) -> tuple[int, str]:
     monkeypatch.chdir(cwd)
     stream = io.StringIO()
     raw = payload if isinstance(payload, str) else json.dumps(payload)
-    rc = run_stop_gate_hook(
-        input_stream=io.StringIO(raw),
-        output_stream=stream,
-    )
+    kwargs = {
+        "input_stream": io.StringIO(raw),
+        "output_stream": stream,
+    }
+    if state_dir is not None:
+        kwargs["state_dir"] = state_dir
+    rc = run_stop_gate_hook(**kwargs)
     return rc, stream.getvalue()
+
+
+def test_workspace_fingerprint_changes_when_file_content_changes(tmp_path: Path):
+    """A same-status edit must invalidate the cached Stop Gate verdict."""
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "entrix@example.invalid"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Entrix Tests"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    source = tmp_path / "source.txt"
+    source.write_text("before", encoding="utf-8")
+    subprocess.run(["git", "add", "source.txt"], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "initial"], cwd=tmp_path, check=True, capture_output=True)
+
+    before = workspace_fingerprint(tmp_path)
+    source.write_text("after", encoding="utf-8")
+    after = workspace_fingerprint(tmp_path)
+
+    assert before is not None
+    assert after is not None
+    assert before != after
+
+
+def test_workspace_fingerprint_changes_in_non_git_workspace(tmp_path: Path):
+    """Configured non-Git workspaces need the same revalidation protection."""
+    source = tmp_path / "source.txt"
+    source.write_text("before", encoding="utf-8")
+
+    before = workspace_fingerprint(tmp_path)
+    source.write_text("after-and-longer", encoding="utf-8")
+    after = workspace_fingerprint(tmp_path)
+
+    assert before is not None
+    assert after is not None
+    assert before != after
+
+
+def test_workspace_fingerprint_includes_nested_harness_config(tmp_path: Path):
+    """An active nested Harness config must invalidate non-Git cached evidence."""
+    config_path = tmp_path / ".harness" / "harness.yaml"
+    config_path.parent.mkdir()
+    config_path.write_text("version: harness/v1\n", encoding="utf-8")
+
+    before = workspace_fingerprint(tmp_path)
+    config_path.write_text("version: harness/v1\nwhen: {}\n", encoding="utf-8")
+    after = workspace_fingerprint(tmp_path)
+
+    assert before is not None
+    assert after is not None
+    assert before != after
 
 
 class TestReadHookPayload:
@@ -115,7 +184,7 @@ class TestRunStopGateHook:
         calls = {}
 
         class Runner:
-            def __init__(self, path):
+            def __init__(self, path, **_kwargs):
                 calls["config_path"] = path
 
             def run(self, context):
@@ -136,7 +205,7 @@ class TestRunStopGateHook:
         calls = {}
 
         class Runner:
-            def __init__(self, path):
+            def __init__(self, path, **_kwargs):
                 pass
 
             def run(self, context):
@@ -164,7 +233,7 @@ class TestRunStopGateHook:
         config_path.write_text("version: harness/v1\n")
 
         class Runner:
-            def __init__(self, path):
+            def __init__(self, path, **_kwargs):
                 assert path == config_path
 
             def run(self, context):
@@ -200,18 +269,157 @@ class TestRunStopGateHook:
         assert rc == 0
         assert out == ""
 
-    def test_allow_when_stop_hook_active(self, tmp_path: Path, monkeypatch):
-        """stop_hook_active 为真时必须放行，且不应触发门禁。"""
+    def test_stop_hook_active_reuses_failure_until_workspace_changes(self, tmp_path: Path, monkeypatch):
+        """失败后不变更工作区时必须重用裁决，不能重新启动 Harness。"""
         (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
-        payload = {
-            "session_id": "s1",
-            "cwd": str(tmp_path),
-            "hook_event_name": "Stop",
-            "stop_hook_active": True,
-        }
-        rc, out = _run(payload, tmp_path, monkeypatch)
-        assert rc == 0
-        assert out == ""
+        calls = []
+
+        class Runner:
+            def __init__(self, _path, **_kwargs):
+                pass
+
+            def run(self, _context):
+                calls.append("run")
+                return type("Verdict", (), {"status": "fail", "summary": "Tests failed"})()
+
+        monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
+        monkeypatch.setattr(
+            "entrix.stop_gate.hook.workspace_fingerprint",
+            lambda _workspace: "unchanged",
+            raising=False,
+        )
+        state_dir = tmp_path / "stop-gate-state"
+        payload = {"session_id": "s1", "cwd": str(tmp_path), "hook_event_name": "Stop"}
+
+        first_rc, first_out = _run(payload, tmp_path, monkeypatch, state_dir=state_dir)
+        payload["stop_hook_active"] = True
+        second_rc, second_out = _run(payload, tmp_path, monkeypatch, state_dir=state_dir)
+
+        assert first_rc == 0
+        assert json.loads(first_out)["decision"] == "block"
+        assert second_rc == 0
+        assert json.loads(second_out)["decision"] == "block"
+        assert "未检测到代码变更" in json.loads(second_out)["reason"]
+        assert calls == ["run"]
+
+    def test_stop_hook_reruns_after_workspace_changes(self, tmp_path: Path, monkeypatch):
+        """Claude 修复代码后，下一次 Stop 必须重新收集 Harness 证据。"""
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
+        calls = []
+
+        class Runner:
+            def __init__(self, _path, **_kwargs):
+                pass
+
+            def run(self, _context):
+                calls.append("run")
+                return type("Verdict", (), {"status": "fail", "summary": "Tests failed"})()
+
+        fingerprints = iter(["before", "before", "after"])
+        monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
+        monkeypatch.setattr(
+            "entrix.stop_gate.hook.workspace_fingerprint",
+            lambda _workspace: next(fingerprints),
+            raising=False,
+        )
+        state_dir = tmp_path / "stop-gate-state"
+        payload = {"session_id": "s1", "cwd": str(tmp_path), "hook_event_name": "Stop"}
+
+        _run(payload, tmp_path, monkeypatch, state_dir=state_dir)
+        _run(payload, tmp_path, monkeypatch, state_dir=state_dir)
+        _run(payload, tmp_path, monkeypatch, state_dir=state_dir)
+
+        assert calls == ["run", "run"]
+
+    def test_stop_hook_allows_stop_after_a_changed_workspace_passes(self, tmp_path: Path, monkeypatch):
+        """A changed workspace must be revalidated and may then complete the Stop loop."""
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
+        statuses = iter([("fail", "Tests failed"), ("pass", "Tests passed")])
+
+        class Runner:
+            def __init__(self, _path, **_kwargs):
+                pass
+
+            def run(self, _context):
+                status, summary = next(statuses)
+                return type("Verdict", (), {"status": status, "summary": summary})()
+
+        fingerprints = iter(["before", "after"])
+        monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
+        monkeypatch.setattr(
+            "entrix.stop_gate.hook.workspace_fingerprint",
+            lambda _workspace: next(fingerprints),
+            raising=False,
+        )
+        state_dir = tmp_path / "stop-gate-state"
+        payload = {"session_id": "s1", "cwd": str(tmp_path), "hook_event_name": "Stop"}
+
+        first_rc, first_out = _run(payload, tmp_path, monkeypatch, state_dir=state_dir)
+        second_rc, second_out = _run(payload, tmp_path, monkeypatch, state_dir=state_dir)
+
+        assert first_rc == 0
+        assert json.loads(first_out)["decision"] == "block"
+        assert second_rc == 0
+        assert second_out == ""
+
+    def test_stop_hook_reruns_when_branch_changes(self, tmp_path: Path, monkeypatch):
+        """A verdict for one branch cannot authorize the same files on another branch."""
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
+        calls = []
+
+        class Runner:
+            def __init__(self, _path, **_kwargs):
+                pass
+
+            def run(self, context):
+                calls.append(context["branch"])
+                return type("Verdict", (), {"status": "pass", "summary": "Tests passed"})()
+
+        monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
+        monkeypatch.setattr(
+            "entrix.stop_gate.hook.workspace_fingerprint",
+            lambda _workspace: "workspace",
+            raising=False,
+        )
+        state_dir = tmp_path / "stop-gate-state"
+        payload = {"session_id": "s1", "cwd": str(tmp_path), "hook_event_name": "Stop"}
+
+        _run({**payload, "branch": "main"}, tmp_path, monkeypatch, state_dir=state_dir)
+        _run({**payload, "branch": "release"}, tmp_path, monkeypatch, state_dir=state_dir)
+
+        assert calls == ["main", "release"]
+
+    def test_stop_hook_reruns_when_a_referenced_environment_value_changes(self, tmp_path: Path, monkeypatch):
+        """Environment-gated checks cannot reuse a verdict after their switch changes."""
+        (tmp_path / "harness.yaml").write_text(
+            "version: harness/v1\nwhen:\n  env:\n    ENTRIX_GATE_TOGGLE: 'on'\n",
+            encoding="utf-8",
+        )
+        calls = []
+
+        class Runner:
+            def __init__(self, _path, **_kwargs):
+                pass
+
+            def run(self, _context):
+                calls.append("run")
+                return type("Verdict", (), {"status": "pass", "summary": "Tests passed"})()
+
+        monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
+        monkeypatch.setattr(
+            "entrix.stop_gate.hook.workspace_fingerprint",
+            lambda _workspace: "workspace",
+            raising=False,
+        )
+        state_dir = tmp_path / "stop-gate-state"
+        payload = {"session_id": "s1", "cwd": str(tmp_path), "hook_event_name": "Stop"}
+
+        monkeypatch.setenv("ENTRIX_GATE_TOGGLE", "off")
+        _run(payload, tmp_path, monkeypatch, state_dir=state_dir)
+        monkeypatch.setenv("ENTRIX_GATE_TOGGLE", "on")
+        _run(payload, tmp_path, monkeypatch, state_dir=state_dir)
+
+        assert calls == ["run", "run"]
 
     def test_env_var_disables_gate(self, tmp_path: Path, monkeypatch):
         (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")

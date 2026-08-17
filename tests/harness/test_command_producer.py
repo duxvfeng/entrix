@@ -1,11 +1,13 @@
 """CommandProducer execution tests."""
 import sys
+import subprocess
 
 from pathlib import Path
 from entrix.harness.producers.base import ProducerContext
 from entrix.harness.producers.command import CommandProducer
 from entrix.harness.config import EvidenceProducerConfig
 from entrix.harness.conditions import WhenContext
+import entrix.harness.producers.command as command_module
 
 
 def test_command_producer_exit_code_success():
@@ -103,6 +105,44 @@ def test_command_producer_timeout():
     evidence = producer.run(context)
 
     assert evidence.status == "timeout"
+
+
+def test_command_producer_timeout_terminates_process_tree(tmp_path, monkeypatch):
+    config = EvidenceProducerConfig(
+        id="timeout-test",
+        type="test",
+        name="Timeout",
+        command="slow-command",
+        producer="test",
+        timeout_seconds=1,
+        parser={"type": "exit_code"},
+    )
+    process = type("Process", (), {"pid": 12345, "returncode": None})()
+
+    def communicate(timeout=None):
+        if timeout is not None:
+            raise subprocess.TimeoutExpired("slow-command", timeout)
+        return "", ""
+
+    process.communicate = communicate
+    process.kill = lambda: None
+    terminated = []
+    monkeypatch.setattr(command_module.subprocess, "Popen", lambda *args, **kwargs: process)
+    monkeypatch.setattr(
+        command_module,
+        "terminate_process_tree",
+        lambda candidate: terminated.append(candidate),
+    )
+    context = ProducerContext(
+        task_id="task-1",
+        repo_root=tmp_path,
+        when_context=WhenContext(repo_root=tmp_path),
+    )
+
+    evidence = CommandProducer(config).run(context)
+
+    assert evidence.status == "timeout"
+    assert terminated == [process]
 
 
 def test_command_producer_regex_parse_error():

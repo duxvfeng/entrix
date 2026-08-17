@@ -83,7 +83,7 @@ Claude 请求 Stop
 要点：
 
 - **激活条件**：仓库根目录存在 `harness.yaml`，或存在 `.harness/harness.yaml`
-- **防循环**：`stop_hook_active` 为真时立即放行（Claude Code 已因此 hook 继续工作）
+- **重验**：`stop_hook_active` 不绕过门禁；相同工作区快照复用上次裁决，代码变更后重新收集证据
 - **禁用**：`export ENTRIX_STOP_GATE_DISABLED=1`
 - **超时**：hook 层 295 秒；`ENTRIX_STOP_GATE_TIMEOUT` 或 `--timeout` 控制证据收集
 - **查找链**：PATH 上的 `entrix` → `uvx entrix` → 插件内源码副本 → 全部失败时放行

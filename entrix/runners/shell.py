@@ -14,6 +14,7 @@ from threading import Thread
 from typing import Callable
 
 from entrix.model import Gate, Metric, MetricResult, ResultState
+from entrix.runners.process import process_group_kwargs, terminate_process_tree
 
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mGKHF]")
 
@@ -22,6 +23,11 @@ _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mGKHF]")
 _OUTPUT_HEAD = 4000
 _OUTPUT_TAIL = 4000
 _OUTPUT_MAX = _OUTPUT_HEAD + _OUTPUT_TAIL + 200  # a bit of slack
+
+
+def _terminate_process_tree(process: subprocess.Popen) -> None:
+    """Compatibility wrapper for the process-tree terminator."""
+    terminate_process_tree(process)
 
 
 def _smart_truncate(text: str) -> str:
@@ -144,18 +150,29 @@ class ShellRunner:
 
     def _run_captured(self, metric: Metric, *, timeout: int) -> tuple[str, int]:
         command, use_shell = self._shell_command(metric.command)
-        result = subprocess.run(
+        process = subprocess.Popen(
             command,
             shell=use_shell,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=timeout,
             cwd=self.project_root,
             env={**environ, **self.env_overrides},
+            **process_group_kwargs(),
         )
-        return result.stdout + result.stderr, result.returncode
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _terminate_process_tree(process)
+            try:
+                process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.communicate()
+            raise
+        return stdout + stderr, process.returncode
 
     def _run_streaming(self, metric: Metric, *, timeout: int) -> tuple[str, int]:
         command, use_shell = self._shell_command(metric.command)
@@ -170,6 +187,7 @@ class ShellRunner:
             bufsize=1,
             cwd=self.project_root,
             env={**environ, **self.env_overrides},
+            **process_group_kwargs(),
         )
         queue: Queue[tuple[str, str | None]] = Queue()
         chunks: list[str] = []
@@ -201,7 +219,7 @@ class ShellRunner:
         while closed_streams < len(threads):
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                process.kill()
+                _terminate_process_tree(process)
                 process.wait()
                 raise subprocess.TimeoutExpired(metric.command, timeout)
             try:

@@ -50,6 +50,10 @@ For any bootstrap or repair task, read in this order:
   advisory-only dimensions.
 - Keep a default local `entrix run` green. Model authoritative checks that need
   CI setup with `execution_scope: ci` rather than a local fast hard gate.
+- When the Claude Stop Gate is installed, it is the sole authority for the
+  complete Harness run. Do not have Claude run `entrix run` or
+  `entrix harness run` immediately before stopping; that duplicates expensive
+  checks and can overlap JVM/Gradle processes.
 - Add a security or release metric only when the repository has a real command
   or CI signal for it.
 - Keep every existing agent entry document discoverable: point `AGENTS.md` and
@@ -145,13 +149,16 @@ entrix entrix`, then `python3 -m entrix`.
 entrix harness validate harness.yaml
 entrix run --dry-run
 entrix run --tier fast
-entrix run
-entrix harness run --json
 ```
 
 Repair invalid schema, duplicate names, weights, paths, and non-local commands
 before stopping. If a command is CI-only, move it to `execution_scope: ci` and
 keep a cheap local smoke check in the default path.
+
+For an explicit, human-requested full diagnostic run, wait for it to finish
+before requesting Stop. JVM/Gradle metrics must set `timeout_seconds` and use
+`--no-daemon --max-workers=1` unless the repository has an approved resource
+budget for more workers.
 
 ## Quality Bar
 
@@ -162,8 +169,8 @@ The skill is complete only when:
 - each metric maps to a real repository signal
 - review triggers, producers, and gate policies are inline
 - existing agent entry documents point to `harness.yaml`
-- default local `entrix run` is green, or a concrete repository blocker is
-  reported
+- the explicit local `entrix run`, when requested, is green or a concrete
+  repository blocker is reported
 - `entrix run --dry-run` and the available fast-tier checks have been exercised
 
 ## Avoid

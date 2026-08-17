@@ -2,9 +2,12 @@
 
 from datetime import date, timedelta
 from pathlib import Path
+import subprocess
 import sys
 
 from entrix.model import Metric, ResultState, Waiver
+import entrix.runners.shell as shell_module
+import entrix.runners.process as process_module
 from entrix.runners.shell import ShellRunner
 
 
@@ -78,6 +81,58 @@ def test_run_metric_specific_timeout():
     result = runner.run(m)
     assert result.passed is False
     assert "TIMEOUT (1s)" in result.output
+
+
+def test_timeout_terminates_the_complete_process_tree(tmp_path, monkeypatch):
+    """A timeout must delegate cleanup to the process-tree terminator."""
+    process = type("Process", (), {"pid": 12345, "returncode": None})()
+
+    def communicate(timeout=None):
+        if timeout is not None:
+            raise subprocess.TimeoutExpired("slow-command", timeout)
+        return "", ""
+
+    process.communicate = communicate
+    process.kill = lambda: None
+    terminated = []
+    monkeypatch.setattr(shell_module.subprocess, "Popen", lambda *args, **kwargs: process)
+    monkeypatch.setattr(
+        shell_module.subprocess,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(subprocess.TimeoutExpired("slow-command", 1)),
+    )
+    monkeypatch.setattr(
+        shell_module,
+        "_terminate_process_tree",
+        lambda candidate: terminated.append(candidate),
+        raising=False,
+    )
+    runner = ShellRunner(tmp_path, timeout=1)
+
+    result = runner.run(Metric(name="slow", command="slow-command"))
+
+    assert result.passed is False
+    assert "TIMEOUT" in result.output
+    assert terminated == [process]
+
+
+def test_process_tree_termination_targets_group_after_parent_exits(monkeypatch):
+    """A child holding inherited pipes must be killed even after its shell exits."""
+    process = type("Process", (), {"pid": 12345})()
+    process.kill = lambda: None
+    terminated = []
+    monkeypatch.setattr(process_module.os, "name", "posix")
+    monkeypatch.setattr(
+        process_module.os,
+        "killpg",
+        lambda pid, signal: terminated.append((pid, signal)),
+        raising=False,
+    )
+
+    process_module.terminate_process_tree(process)
+
+    assert terminated
+    assert terminated[0][0] == process.pid
 
 
 def test_run_hard_gate_preserved():
