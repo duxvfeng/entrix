@@ -154,3 +154,9 @@ entrix run / review-trigger / harness run / stop-gate
 4. 旧 `docs/fitness/` 不再被任何命令读取；没有 `harness.yaml` 的 `stop-gate` 仅按未配置项目放行。
 5. 默认模板维持当前质量策略的命令、硬门禁和 advisory 指标语义。
 6. `entrix --help` 与 `entrix init` 成功输出均清楚列出子命令及其用途；命令帮助测试锁定关键文字和示例。
+
+# Harness DoD 强门禁设计（2026-08-17）
+
+当前强化阶段采用渐进增强现有 Harness 的方案，覆盖 fail-closed、Gate 级条件、标准报告解析、artifact 接线、PASS 强制重验和工作区指纹修复。完整设计与验收标准见：
+
+- [`superpowers/specs/2026-08-17-harness-dod-hardening-design.md`](superpowers/specs/2026-08-17-harness-dod-hardening-design.md)
