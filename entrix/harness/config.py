@@ -11,12 +11,13 @@ from entrix.harness.gate.policy import GatePolicy, GateRule, Severity
 from entrix.harness.gate.dsl import validate_condition_syntax
 from entrix.harness.fitness import parse_dimensions
 from entrix.harness.conditions import validate_when_config
+from entrix.harness.evidence import EVIDENCE_STATUSES
 from entrix.model import Dimension
 from entrix.review_trigger import ReviewTriggerRule, parse_review_trigger_rules
 
 SUPPORTED_VERSIONS = ("harness/v1",)
 BUILTIN_PRODUCERS = frozenset({"entrix-fitness", "entrix-review-trigger", "diff-stats"})
-PARSER_TYPES = frozenset({"exit_code", "regex", "junit"})
+PARSER_TYPES = frozenset({"exit_code", "regex", "junit", "json", "evidence_json"})
 
 
 @dataclass
@@ -86,16 +87,34 @@ def _load_producer_configs(producers_data: Any) -> list[EvidenceProducerConfig]:
 
         parser_data = producer_data.get("parser", {"type": "exit_code"})
         parser_data = _require_mapping(parser_data, f"evidence_producers[{index}].parser")
-        parser_type = parser_data.get("type", "exit_code")
+        parser_type = _require_text(parser_data.get("type", "exit_code"), "parser.type")
         if parser_type not in PARSER_TYPES:
             raise ValueError(f"不支持的 parser type：{parser_type}")
+        parser_data = {**parser_data, "type": parser_type}
         pattern = parser_data.get("pattern")
         if parser_type == "regex" and (not isinstance(pattern, str) or not pattern):
             raise ValueError("regex parser 必须配置非空 pattern")
-        if parser_type == "junit" and (
-            not isinstance(parser_data.get("path"), str) or not parser_data["path"]
-        ):
-            raise ValueError("junit parser 必须配置非空 path")
+        if parser_type in {"junit", "json", "evidence_json"}:
+            parser_data["path"] = _require_text(
+                parser_data.get("path"), f"{parser_type} parser.path"
+            )
+        if parser_type == "json":
+            parser_data["status_path"] = _require_text(
+                parser_data.get("status_path"), "json parser.status_path"
+            )
+            status_map = _require_mapping(
+                parser_data.get("status_map"), "json parser.status_map"
+            )
+            for source_status, evidence_status in status_map.items():
+                _require_text(source_status, "json parser.status_map key")
+                if evidence_status not in EVIDENCE_STATUSES:
+                    raise ValueError(
+                        "json parser.status_map values must be valid Evidence statuses"
+                    )
+            summary = _require_mapping(parser_data.get("summary", {}), "json parser.summary")
+            for field_name, source_path in summary.items():
+                _require_text(field_name, "json parser.summary key")
+                _require_text(source_path, f"json parser.summary.{field_name}")
 
         timeout_seconds = producer_data.get("timeout_seconds", 60)
         if not isinstance(timeout_seconds, int) or timeout_seconds <= 0:

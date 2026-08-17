@@ -241,6 +241,89 @@ gate_policies:
     assert config.evidence_producers[0].parser == {"type": "junit", "path": "report.xml"}
 
 
+@pytest.mark.parametrize("parser_type", ["json", "evidence_json"])
+def test_json_report_parser_config(tmp_path: Path, parser_type: str) -> None:
+    parser_fields = "status_path: status\n      status_map: {ok: pass}" if parser_type == "json" else ""
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        f'''version: "harness/v1"
+evidence_producers:
+  - id: tests
+    type: test
+    name: Tests
+    command: run-tests
+    parser:
+      type: {parser_type}
+      path: report.json
+      {parser_fields}
+gate_policies:
+  - name: Tests pass
+    severity: hard
+    rule: {{evidence_id: tests, condition: 'status == "pass"'}}
+''',
+        encoding="utf-8",
+    )
+
+    config = load_harness_config(config_path)
+
+    assert config.evidence_producers[0].parser["type"] == parser_type
+
+
+@pytest.mark.parametrize(
+    ("parser", "error"),
+    [
+        ({"type": "json", "status_path": "status", "status_map": {}}, "path"),
+        ({"type": "evidence_json"}, "path"),
+        ({"type": "json", "path": "report.json", "status_map": {}}, "status_path"),
+        (
+            {"type": "json", "path": "report.json", "status_path": "status", "status_map": []},
+            "status_map",
+        ),
+        (
+            {
+                "type": "json",
+                "path": "report.json",
+                "status_path": "status",
+                "status_map": {"ok": "unknown"},
+            },
+            "status_map",
+        ),
+        (
+            {
+                "type": "json",
+                "path": "report.json",
+                "status_path": "status",
+                "status_map": {},
+                "summary": [],
+            },
+            "summary",
+        ),
+    ],
+)
+def test_invalid_json_parser_config_is_rejected(
+    tmp_path: Path, parser: dict[str, object], error: str
+) -> None:
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        f'''version: "harness/v1"
+evidence_producers:
+  - id: tests
+    type: test
+    name: Tests
+    command: run-tests
+    parser: {parser!r}
+gate_policies:
+  - name: Tests pass
+    severity: hard
+    rule: {{evidence_id: tests, condition: 'status == "pass"'}}
+''',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=error):
+        load_harness_config(config_path)
+
+
 @pytest.mark.parametrize(
     ("producer", "error"),
     [
