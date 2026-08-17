@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List
 
+from entrix.harness.conditions import WhenContext, evaluate_when
 from entrix.harness.gate.policy import GatePolicy, Severity
 from entrix.harness.gate.dsl import evaluate_condition
 from entrix.harness.evidence import EvidenceBundle, Evidence
@@ -25,6 +26,8 @@ class GateResult:
     passed: bool
     message: str = ""
     matched_evidence_id: str = ""
+    active: bool = True
+    missing_evidence: bool = False
 
 
 @dataclass
@@ -47,7 +50,9 @@ class GateEngine:
         """
         self.policies = policies
 
-    def arbitrate(self, bundle: EvidenceBundle) -> Verdict:
+    def arbitrate(
+        self, bundle: EvidenceBundle, when_context: WhenContext | None = None
+    ) -> Verdict:
         """Evaluate all gate policies against the evidence bundle.
 
         Args:
@@ -56,20 +61,51 @@ class GateEngine:
         Returns:
             Verdict containing overall status and individual gate results
         """
-        gate_results = []
+        if not bundle.active:
+            return Verdict(
+                status=VerdictStatus.PASS,
+                summary="Harness inactive for current context",
+            )
+
+        context = when_context or WhenContext()
+        gate_results: list[GateResult] = []
         overall_status = VerdictStatus.PASS
+        active_count = 0
 
         for policy in self.policies:
+            if not evaluate_when(policy.when, context):
+                gate_results.append(
+                    GateResult(
+                        policy_name=policy.name,
+                        severity=policy.severity,
+                        passed=True,
+                        active=False,
+                        message="Gate when condition not met",
+                    )
+                )
+                continue
+
+            active_count += 1
             result = self._evaluate_policy(policy, bundle)
             gate_results.append(result)
 
-            # Update overall status based on severity and result
-            if not result.passed:
-                if policy.severity == Severity.HARD:
+            if result.missing_evidence and policy.severity in {
+                Severity.HARD,
+                Severity.BLOCKED,
+            }:
+                overall_status = VerdictStatus.BLOCKED
+            elif not result.passed:
+                if policy.severity == Severity.HARD and overall_status != VerdictStatus.BLOCKED:
                     overall_status = VerdictStatus.FAIL
-                elif policy.severity == Severity.BLOCKED and result.passed is False:
-                    # blocked gates fail when condition is TRUE (opposite of hard)
+                elif policy.severity == Severity.BLOCKED:
                     overall_status = VerdictStatus.BLOCKED
+
+        if active_count == 0:
+            return Verdict(
+                status=VerdictStatus.BLOCKED,
+                gate_results=gate_results,
+                summary="No active gates for an active Harness",
+            )
 
         return Verdict(
             status=overall_status,
@@ -98,42 +134,54 @@ class GateEngine:
                 severity=policy.severity,
                 passed=False,
                 message=f"Rule has no matching evidence: {rule.evidence_id or rule.evidence_type}",
+                missing_evidence=True,
             )
 
-        # Evaluate all matching evidences
-        all_passed = True
-        messages = []
+        matched_id = matching_evidences[0].id
+        failures: list[str] = []
+        triggers: list[str] = []
+        errors: list[str] = []
 
         for evidence in matching_evidences:
             try:
                 condition_result = evaluate_condition(rule.condition, evidence)
-                if not condition_result:
-                    all_passed = False
-                    if policy.severity == Severity.SOFT:
-                        messages.append(f"Warning: condition not met for evidence {evidence.id}")
-                    else:
-                        messages.append(f"Failed for evidence {evidence.id}")
-            except Exception as e:
-                all_passed = False
-                error_msg = str(e).lower()
+                if policy.severity == Severity.BLOCKED:
+                    if condition_result:
+                        triggers.append(evidence.id)
+                elif not condition_result:
+                    failures.append(evidence.id)
+            except Exception as error:  # noqa: BLE001
+                error_msg = str(error).lower()
                 # Check if it's a field access error
                 if "none" in error_msg or "field" in error_msg or "attribute" in error_msg:
-                    messages.append("Error: condition references invalid field")
+                    errors.append("Error: condition references invalid field")
                 else:
-                    messages.append(f"Error evaluating condition: {str(e)}")
+                    errors.append(f"Error evaluating condition: {error}")
 
-        message = "; ".join(messages) if messages else "Passed"
-
-        # For blocked gates, logic is inverted - condition TRUE means failure
         if policy.severity == Severity.BLOCKED:
-            all_passed = not all_passed
+            passed = not triggers and not errors
+            if triggers:
+                matched_id = triggers[0]
+                messages = [f"Blocked by evidence {evidence_id}" for evidence_id in triggers]
+            else:
+                messages = []
+            messages.extend(errors)
+            message = "; ".join(messages) if messages else "Not triggered"
+        else:
+            passed = not failures and not errors
+            if failures:
+                matched_id = failures[0]
+            prefix = "Warning" if policy.severity == Severity.SOFT else "Failed"
+            messages = [f"{prefix} for evidence {evidence_id}" for evidence_id in failures]
+            messages.extend(errors)
+            message = "; ".join(messages) if messages else "Passed"
 
         return GateResult(
             policy_name=policy.name,
             severity=policy.severity,
-            passed=all_passed,
+            passed=passed,
             message=message,
-            matched_evidence_id=matching_evidences[0].id if matching_evidences else "",
+            matched_evidence_id=matched_id,
         )
 
     def _find_matching_evidence(self, rule, bundle: EvidenceBundle) -> List[Evidence]:
@@ -169,8 +217,9 @@ class GateEngine:
         Returns:
             Summary string
         """
-        passed_count = sum(1 for r in gate_results if r.passed)
-        total_count = len(gate_results)
+        active_results = [result for result in gate_results if result.active]
+        passed_count = sum(1 for result in active_results if result.passed)
+        total_count = len(active_results)
 
         if status == VerdictStatus.PASS:
             return f"All gates passed ({passed_count}/{total_count})"
@@ -178,7 +227,12 @@ class GateEngine:
             failed_gates = [r.policy_name for r in gate_results if not r.passed and r.severity == Severity.HARD]
             return f"Hard gates failed: {', '.join(failed_gates)}"
         elif status == VerdictStatus.BLOCKED:
-            blocked_gates = [r.policy_name for r in gate_results if not r.passed and r.severity == Severity.BLOCKED]
+            blocked_gates = [
+                result.policy_name
+                for result in active_results
+                if not result.passed
+                and (result.severity == Severity.BLOCKED or result.missing_evidence)
+            ]
             return f"Blocked gates triggered: {', '.join(blocked_gates)}"
 
         return "Unknown status"

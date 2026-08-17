@@ -49,4 +49,6 @@ class HarnessRunner:
                 status=VerdictStatus.PASS,
                 summary="Harness inactive for current context",
             )
-        return GateEngine(config.gate_policies).arbitrate(bundle)
+        return GateEngine(config.gate_policies).arbitrate(
+            bundle, harness_context.when_context
+        )

@@ -191,3 +191,37 @@ gate_policies:
         )
 
     assert gate_called is False
+
+
+def test_harness_runner_evaluates_gate_when_with_hook_context(tmp_path: Path) -> None:
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        '''version: "harness/v1"
+evidence_producers:
+  - id: tests
+    type: test
+    name: Tests
+    command: echo passed
+gate_policies:
+  - name: Frontend only
+    severity: hard
+    when: {changed_any: ["frontend/**"]}
+    rule: {evidence_id: missing, condition: 'status == "pass"'}
+  - name: Tests pass
+    severity: hard
+    rule: {evidence_id: tests, condition: 'status == "pass"'}
+''',
+        encoding="utf-8",
+    )
+
+    verdict = HarnessRunner(config_path).run(
+        {
+            "task_id": "task-1",
+            "workspace": tmp_path,
+            "changed_files": ["docs/readme.md"],
+            "branch": "main",
+        }
+    )
+
+    assert verdict.status == VerdictStatus.PASS
+    assert verdict.gate_results[0].active is False

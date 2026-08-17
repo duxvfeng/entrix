@@ -394,7 +394,7 @@ def cmd_harness_run(args: argparse.Namespace) -> int:
         # 仲裁门禁
         print("Arbitrating gates...", file=sys.stderr)
         gate_engine = GateEngine(config.gate_policies)
-        verdict = gate_engine.arbitrate(bundle)
+        verdict = gate_engine.arbitrate(bundle, context.when_context)
 
         # 输出结果
         if args.json:
@@ -407,6 +407,7 @@ def cmd_harness_run(args: argparse.Namespace) -> int:
                         "policy": r.policy_name,
                         "severity": r.severity.value if hasattr(r.severity, 'value') else r.severity,
                         "passed": r.passed,
+                        "active": r.active,
                         "message": r.message,
                     }
                     for r in verdict.gate_results
