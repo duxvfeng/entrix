@@ -161,7 +161,7 @@ flowchart LR
     C2 --> D
     C3 --> D
 
-    D --> E1[load_dimensions<br/>读取 fitness/ YAML]
+    D --> E1[load_harness_config<br/>读取 harness.yaml]
     D --> E2[get_project_preset<br/>识别项目类型]
     D --> E3[collect_changed_files<br/>git diff 增量]
 
@@ -299,11 +299,11 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph Config["配置层"]
-        CFG1[fitness/*.md<br/>Dimension + Metric]
+        CFG1[harness.yaml<br/>Fitness + Review + Gate]
         CFG2[.claude/settings.json<br/>hook 配置]
         CFG3[pyproject.toml<br/>可选依赖/项目元数据]
-        CFG4[review-triggers.yaml]
-        CFG5[release-manifest.yaml]
+        CFG4[harness.yaml review rules]
+        CFG5[release manifest]
     end
 
     subgraph Engine["Entrix 引擎"]

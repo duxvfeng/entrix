@@ -1,7 +1,6 @@
 # Code Quality Dimension Spec
 
-Use this when editing `code_quality` evidence such as
-`docs/fitness/code-quality.md`.
+Use this when editing the `code_quality` dimension in `harness.yaml`.
 
 ## Purpose
 

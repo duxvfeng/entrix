@@ -17,7 +17,8 @@ Use three layers:
 ## Important Distinctions
 
 - `dimension` is an execution and reporting concept used by Entrix
-- `evidence file` is a markdown document registered in `manifest.yaml`
+- `dimension` is one uniquely named item in `harness.yaml` under
+  `fitness.dimensions`
 - `skill spec` is agent-facing reference material
 
 These three layers often align, but they do not have to be identical.
@@ -53,14 +54,11 @@ Example:
 - `observability` and `performance` are both runtime evidence surfaces with
   weight `0`, so one `dimension-runtime.spec.md` is enough for skill guidance.
 
-## When One Dimension May Span Multiple Evidence Files
+## When One Dimension Has Multiple Metrics
 
-A single dimension may still be split across multiple evidence files when the
-evidence surfaces are different enough to deserve separate lifecycle handling.
-
-For example, this repository already has multiple UI-related evidence files in
-`docs/fitness/` that support the broader UI consistency story. The skill should
-explain the split without forcing an artificial merge.
+A single dimension can keep multiple executable checks in its `metrics` list.
+Use metric metadata such as `tier`, `execution_scope`, and `run_when_changed`
+to express lifecycle differences without splitting configuration across files.
 
 ## Decision Rules
 
@@ -68,8 +66,8 @@ Ask these questions in order:
 
 1. Is this a new concern, or just a new metric inside an existing concern?
 2. Does the concern already have a stable dimension name?
-3. Does the repository already split this concern across multiple evidence
-   files for a good reason, such as shell coverage vs e2e matrix?
+3. Does the concern need separate metrics for distinct checks, such as shell
+   coverage and an E2E matrix?
 4. Is there a real build or packaging signal that should become
    `release_readiness` instead of being ignored?
 5. Would merging increase confusion more than it reduces file count?
@@ -79,7 +77,6 @@ Ask these questions in order:
 For most repositories:
 
 - one foundation spec for schema
-- one foundation spec for manifest
 - one foundation spec for split vs merge rules
 - one skill spec per stable dimension family
 - one or more examples

@@ -69,7 +69,7 @@ def test_is_tracked_source_file():
     config = make_config()
 
     assert is_tracked_source_file("crates/foo/src/lib.rs", config) is True
-    assert is_tracked_source_file("docs/fitness/code-quality.md", config) is False
+    assert is_tracked_source_file("docs/quality-guide.md", config) is False
     assert is_tracked_source_file("crates/foo/target/generated.rs", config) is False
 
 

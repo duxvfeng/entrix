@@ -61,12 +61,11 @@ The Claude Stop Hook will:
 - Which gate policies must pass before the agent may stop
 - Severity of each gate (`hard`, `soft`, `advisory`, `blocked`)
 
-### Backwards compatibility
+### Migration
 
-- Existing `docs/fitness/*.md` metrics remain supported.
-- Existing `docs/fitness/review-triggers.yaml` remains supported.
-- They will be exposed as **built-in producers** that `harness.yaml` can reference, not replaced.
-- If a repository has no `harness.yaml`, the stop-gate will keep its current behavior: run fitness + review-trigger and apply the current hardcoded arbitration.
+- 旧的多文件 Fitness、manifest 和独立 review trigger 文件不再读取，也不提供兼容路径。
+- `harness.yaml` 内联 Fitness dimensions、review trigger rules、evidence producers 与 gate policies。
+- 若仓库没有 `harness.yaml` 或 `.harness/harness.yaml`，Stop Hook 直接放行。
 
 ### File location
 

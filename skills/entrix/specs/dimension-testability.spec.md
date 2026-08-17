@@ -1,7 +1,6 @@
 # Testability Dimension Spec
 
-Use this when editing `testability` evidence such as
-`docs/fitness/unit-test.md`.
+Use this when editing the `testability` dimension in `harness.yaml`.
 
 ## Purpose
 

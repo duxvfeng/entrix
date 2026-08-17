@@ -1,7 +1,6 @@
 # Engineering Governance Dimension Spec
 
-Use this when editing `engineering_governance` evidence such as
-`docs/fitness/engineering-governance.md`.
+Use this when editing the `engineering_governance` dimension in `harness.yaml`.
 
 ## Purpose
 

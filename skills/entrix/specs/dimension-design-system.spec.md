@@ -1,7 +1,6 @@
 # Design System Dimension Spec
 
-Use this when editing `design_system` evidence such as
-`docs/fitness/design-system-quality-layers.md`.
+Use this when editing the `design_system` dimension in `harness.yaml`.
 
 ## Purpose
 

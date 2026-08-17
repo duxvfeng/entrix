@@ -36,7 +36,7 @@ flowchart TD
     end
 
     subgraph Engine["引擎层 entrix/engine.py"]
-        R7 --> E1[load_dimensions<br/>解析 YAML/Markdown 配置]
+        R7 --> E1[load_harness_config<br/>解析 Harness 配置]
         E1 --> E2[governance.filter_dimensions<br/>按 tier/scope/维度过滤]
         E2 --> E3{存在 changed_files?}
         E3 -->|是| E4[filter_dimensions_for_incremental<br/>只保留相关 metric]

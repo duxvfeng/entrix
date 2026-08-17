@@ -1,0 +1,123 @@
+version: "harness/v1"
+
+fitness:
+  dimensions:
+    - dimension: code_quality
+      weight: 25
+      tier: normal
+      threshold:
+        pass: 100
+        warn: 90
+      metrics:
+        - name: css_lint_pass
+          command: npm run lint:css 2>&1
+          hard_gate: true
+          tier: fast
+          description: CSS naming and maintainability rules must pass.
+        - name: token_usage_contract
+          command: npm run lint:tokens 2>&1
+          hard_gate: true
+          tier: fast
+          description: Shell and navigation surfaces must keep using approved design tokens.
+    - dimension: design_system
+      weight: 35
+      tier: normal
+      threshold:
+        pass: 100
+        warn: 90
+      metrics:
+        - name: component_accessibility_smoke
+          command: npm run test:accessibility 2>&1
+          hard_gate: true
+          tier: normal
+          execution_scope: ci
+          description: Component-level accessibility smoke checks must pass in CI.
+        - name: component_visual_contract
+          command: npm run test:visual:components 2>&1
+          hard_gate: false
+          tier: normal
+          execution_scope: ci
+          gate: soft
+          description: Reusable components should keep their visual contract stable.
+    - dimension: performance
+      weight: 0
+      tier: deep
+      threshold:
+        pass: 100
+        warn: 80
+      metrics:
+        - name: frontend_perf_smoke
+          command: npm run test:performance 2>&1
+          hard_gate: false
+          tier: deep
+          execution_scope: ci
+          gate: advisory
+          kind: holistic
+          analysis: dynamic
+          stability: noisy
+          evidence_type: probe
+          confidence: medium
+          description: CI perf smoke can surface regressions without pretending local runs are authoritative.
+    - dimension: ui_consistency
+      weight: 40
+      tier: normal
+      threshold:
+        pass: 100
+        warn: 90
+      metrics:
+        - name: shell_navigation_smoke
+          command: npm run test:e2e:shell 2>&1
+          hard_gate: true
+          tier: normal
+          execution_scope: ci
+          description: Core shell and navigation journeys must stay stable.
+        - name: page_visual_baseline
+          command: npm run test:visual:pages 2>&1
+          hard_gate: false
+          tier: normal
+          execution_scope: ci
+          gate: soft
+          description: High-value pages should keep their visual baselines stable.
+
+review_triggers:
+  rules:
+    - name: shell_or_navigation_change
+      type: changed_paths
+      paths: [src/app/**, src/layouts/**, src/components/shell/**, src/components/navigation/**]
+      severity: high
+      action: require_human_review
+    - name: frontend_docs_without_evidence
+      type: evidence_gap
+      paths: [src/app/**, src/components/**]
+      evidence_paths: [harness.yaml, stories/**, tests/**]
+      severity: medium
+      action: require_human_review
+    - name: oversized_frontend_change
+      type: diff_size
+      max_files: 15
+      max_added_lines: 800
+      max_deleted_lines: 500
+      severity: medium
+      action: require_human_review
+
+evidence_producers:
+  - id: fitness
+    type: fitness
+    name: Entrix Fitness
+    builtin: entrix-fitness
+  - id: review-trigger
+    type: review-trigger
+    name: Review Trigger
+    builtin: entrix-review-trigger
+
+gate_policies:
+  - name: Fitness must pass
+    severity: hard
+    rule:
+      evidence_id: fitness
+      condition: status == "pass"
+  - name: Review trigger blocks stop
+    severity: blocked
+    rule:
+      evidence_id: review-trigger
+      condition: status == "fail"

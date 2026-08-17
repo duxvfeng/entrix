@@ -1,7 +1,6 @@
 # Security Dimension Spec
 
-Use this when editing `security` evidence such as
-`docs/fitness/security.md`.
+Use this when editing the `security` dimension in `harness.yaml`.
 
 ## Purpose
 

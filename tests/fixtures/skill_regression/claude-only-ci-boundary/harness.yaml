@@ -1,0 +1,64 @@
+version: "harness/v1"
+
+fitness:
+  dimensions:
+    - dimension: code_quality
+      weight: 60
+      tier: normal
+      threshold:
+        pass: 100
+        warn: 90
+      metrics:
+        - name: py_compile_pass
+          command: python3 -m py_compile app.py 2>&1
+          hard_gate: true
+          tier: fast
+          description: Cheap local syntax validation must pass.
+    - dimension: testability
+      weight: 40
+      tier: normal
+      threshold:
+        pass: 100
+        warn: 90
+      metrics:
+        - name: import_smoke
+          command: python3 -c "import app; print(app.answer())" 2>&1
+          hard_gate: true
+          tier: fast
+          description: Cheap local import smoke keeps default runs green.
+        - name: pytest_suite
+          command: python3 -m pytest -q 2>&1
+          hard_gate: true
+          tier: normal
+          execution_scope: ci
+          description: The authoritative suite is provisioned in CI.
+
+review_triggers:
+  rules:
+    - name: fixture_python_surface
+      type: changed_paths
+      paths: [app.py, tests/**, harness.yaml]
+      severity: medium
+      action: require_human_review
+
+evidence_producers:
+  - id: fitness
+    type: fitness
+    name: Entrix Fitness
+    builtin: entrix-fitness
+  - id: review-trigger
+    type: review-trigger
+    name: Review Trigger
+    builtin: entrix-review-trigger
+
+gate_policies:
+  - name: Fitness must pass
+    severity: hard
+    rule:
+      evidence_id: fitness
+      condition: status == "pass"
+  - name: Review trigger blocks stop
+    severity: blocked
+    rule:
+      evidence_id: review-trigger
+      condition: status == "fail"

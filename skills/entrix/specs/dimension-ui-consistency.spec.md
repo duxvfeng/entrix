@@ -1,7 +1,6 @@
 # UI Consistency Dimension Spec
 
-Use this when editing `ui_consistency` evidence such as
-`docs/fitness/design-system-shell.md` or `docs/fitness/web-qa-e2e-matrix.md`.
+Use this when editing the `ui_consistency` dimension in `harness.yaml`.
 
 ## Purpose
 

@@ -148,7 +148,7 @@
   <text x="60" y="672" font-family="sans-serif" font-size="13" fill="#64748b">Repository-native rules → executable decisions</text>
 
   <rect x="70" y="690" width="430" height="40" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
-  <text x="200" y="716" font-family="sans-serif" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">docs/fitness/*.md</text>
+  <text x="200" y="716" font-family="sans-serif" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">harness.yaml</text>
   <path d="M285 730 V755" stroke="#64748b" stroke-width="2.5" marker-end="url(#arrow)" fill="none"/>
   <rect x="70" y="760" width="430" height="40" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
   <text x="200" y="786" font-family="sans-serif" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">entrix orchestration</text>
@@ -162,7 +162,7 @@
   <text x="575" y="672" font-family="sans-serif" font-size="13" fill="#64748b">Rules, evidence, execution in version control</text>
 
   <rect x="585" y="690" width="430" height="40" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
-  <text x="715" y="716" font-family="sans-serif" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">rules: docs/fitness</text>
+  <text x="715" y="716" font-family="sans-serif" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">rules: harness.yaml</text>
   <path d="M800 730 V755" stroke="#64748b" stroke-width="2.5" marker-end="url(#arrow)" fill="none"/>
   <rect x="585" y="760" width="430" height="40" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/>
   <text x="715" y="786" font-family="sans-serif" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">evidence: VERIFIED / TODO / BLOCKED</text>

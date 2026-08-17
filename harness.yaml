@@ -1,0 +1,170 @@
+version: "harness/v1"
+
+fitness:
+  dimensions:
+    - dimension: code_quality
+      weight: 35
+      threshold: {pass: 100, warn: 90}
+      metrics:
+        - name: ruff_pass
+          command: ruff check . 2>&1
+          hard_gate: true
+          tier: fast
+          description: Ruff must pass with no lint errors.
+        - name: no_new_debug_prints
+          command: >-
+            base_ref="${ENTRIX_FITNESS_BASE:-HEAD}"
+            git diff --unified=0 "$base_ref" -- . ':(exclude)docs/**' 2>/dev/null |
+            grep -E '^\\+[^+].*\\b(print|pprint)\\(' | grep -vE '(^\\+\\+\\+|tests?/|test_)' |
+            wc -l | awk '{print "new_debug_prints:", $1}'
+          pattern: "new_debug_prints: 0"
+          tier: fast
+          description: Production code should not grow accidental debug prints.
+    - dimension: testability
+      weight: 40
+      threshold: {pass: 100, warn: 90}
+      metrics:
+        - name: pytest_pass
+          command: pytest 2>&1
+          hard_gate: true
+          tier: normal
+          description: The repository test suite must pass.
+    - dimension: release_readiness
+      weight: 25
+      threshold: {pass: 100, warn: 90}
+      metrics:
+        - name: cli_help_smoke
+          command: python3 -m entrix --help 2>&1
+          pattern: "usage: entrix"
+          hard_gate: true
+          tier: fast
+          description: The local package entrypoint must still render CLI help.
+        - name: package_build_pass
+          command: python3 -m build --no-isolation 2>&1
+          hard_gate: true
+          tier: normal
+          description: The project must still produce source and wheel distributions.
+    - dimension: observability
+      weight: 0
+      threshold: {pass: 100, warn: 80}
+      metrics:
+        - name: tracing_signal_available
+          command: ./scripts/obs/check-tracing-signal.sh 2>&1
+          pattern: "signal_ok"
+          tier: deep
+          execution_scope: staging
+          gate: advisory
+          kind: holistic
+          analysis: dynamic
+          stability: noisy
+          evidence_type: probe
+          scope: [web, runtime]
+          run_when_changed: [src/instrumentation.ts, scripts/obs/**]
+          owner: platform
+          confidence: high
+          description: Verify tracing and runtime visibility signals in staging.
+        - name: tracing_signal_contract_declared
+          command: "printf 'signal_contract: pending\\n'"
+          pattern: "signal_contract: pending"
+          tier: normal
+          execution_scope: ci
+          gate: soft
+          evidence_type: manual_attestation
+          scope: [docs, runtime]
+          run_when_changed: [harness.yaml, src/instrumentation.ts]
+          owner: platform
+          confidence: medium
+          description: Keep a lightweight CI-visible tracing contract.
+    - dimension: performance
+      weight: 0
+      threshold: {pass: 100, warn: 80}
+      metrics:
+        - name: latency_budget_probe_defined
+          command: "printf 'latency_budget: pending\\n'"
+          pattern: "latency_budget: pending"
+          tier: normal
+          execution_scope: ci
+          gate: advisory
+          kind: holistic
+          analysis: dynamic
+          stability: noisy
+          evidence_type: probe
+          scope: [web, api, runtime]
+          run_when_changed: [harness.yaml, src/**, crates/**]
+          owner: platform
+          confidence: low
+          description: Reserve a CI-visible latency budget evidence slot.
+        - name: runtime_budget_signal_unavailable
+          command: graph:runtime-budget
+          tier: deep
+          execution_scope: prod_observation
+          gate: advisory
+          kind: holistic
+          analysis: dynamic
+          stability: noisy
+          evidence_type: probe
+          scope: [runtime, performance]
+          run_when_changed: [harness.yaml, src/**, crates/**]
+          owner: platform
+          confidence: unknown
+          description: Placeholder for a future production runtime budget probe.
+
+review_triggers:
+  rules:
+    - name: core_engine_change
+      type: changed_paths
+      paths: [entrix/cli.py, entrix/engine.py, entrix/governance.py, entrix/review_trigger.py, entrix/presets/**]
+      severity: high
+      action: require_human_review
+    - name: packaging_or_workflow_change
+      type: changed_paths
+      paths: [pyproject.toml, .github/workflows/**, harness.yaml]
+      severity: medium
+      action: require_human_review
+    - name: sensitive_release_files
+      type: sensitive_file_change
+      paths: [pyproject.toml, entrix/model.py, entrix/review_trigger.py]
+      severity: high
+      action: require_human_review
+    - name: cross_boundary_engine_test_docs_change
+      type: cross_boundary_change
+      boundaries:
+        engine: [entrix/**]
+        tests: [tests/**]
+        docs: [docs/**]
+      min_boundaries: 2
+      severity: medium
+      action: require_human_review
+    - name: oversized_change
+      type: diff_size
+      max_files: 10
+      max_added_lines: 400
+      max_deleted_lines: 250
+      severity: medium
+      action: require_human_review
+
+evidence_producers:
+  - id: fitness
+    type: fitness
+    name: Entrix Fitness
+    builtin: entrix-fitness
+  - id: review-trigger
+    type: review-trigger
+    name: Review Trigger
+    builtin: entrix-review-trigger
+  - id: diff-stats
+    type: diff
+    name: Git Diff Statistics
+    builtin: diff-stats
+
+gate_policies:
+  - name: Fitness must pass
+    severity: hard
+    rule:
+      evidence_id: fitness
+      condition: status == "pass"
+  - name: Review trigger blocks stop
+    severity: blocked
+    rule:
+      evidence_id: review-trigger
+      condition: status == "fail"

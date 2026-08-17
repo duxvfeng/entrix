@@ -1,7 +1,7 @@
 # Frontend Quality Pack
 
 This example shows how a consuming web application can express layered frontend
-quality gates in normal Entrix files without hardcoding product-specific policy
+quality gates in one `harness.yaml` without hardcoding product-specific policy
 into the Entrix engine.
 
 It models four surfaces:
@@ -13,18 +13,8 @@ It models four surfaces:
 
 ## Layout
 
-Copy the `docs/fitness/` directory into your application repository and adapt
-the commands to your own scripts:
-
-```text
-docs/fitness/
-  manifest.yaml
-  code-quality.md
-  design-system.md
-  ui-consistency.md
-  performance.md
-  review-triggers.yaml
-```
+Copy `harness.yaml` into your application repository and adapt the commands,
+dimensions, review triggers, producers, and gate policies to your own scripts.
 
 ## Suggested Commands
 
@@ -32,7 +22,7 @@ docs/fitness/
 entrix validate
 entrix run --tier fast
 entrix run --tier normal --scope ci --min-score 0
-entrix review-trigger --base HEAD~1 --config docs/fitness/review-triggers.yaml
+entrix review-trigger --base HEAD~1
 ```
 
 ## Why This Pack Exists

@@ -32,5 +32,5 @@ def test_routa_preset_metric_domains():
 
 def test_routa_preset_should_ignore_changed_file():
     preset = get_project_preset()
-    assert preset.should_ignore_changed_file("docs/fitness/code-quality.md") is True
+    assert preset.should_ignore_changed_file("docs/quality-guide.md") is True
     assert preset.should_ignore_changed_file("src/app/page.tsx") is False

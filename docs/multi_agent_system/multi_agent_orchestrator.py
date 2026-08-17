@@ -404,7 +404,7 @@ class DocumentationAgent(BaseAgent):
                 from_agent=self.agent_id,
                 payload={
                     "status": "success",
-                    "updated_files": ["AGENTS.md", "docs/fitness/"],
+                    "updated_files": ["AGENTS.md", "harness.yaml"],
                     "changed_files": changed_files
                 }
             )
@@ -555,39 +555,31 @@ quality_message = Message(
         )
     
     async def generate_fitness_specs(self, quality_results: Dict[str, Any]) -> None:
-        """生成 fitness 规格"""
-        fitness_dir = self.project_root / "docs" / "fitness"
-        fitness_dir.mkdir(parents=True, exist_ok=True)
-        
-        # 生成基础质量规格
-        base_quality_spec = """---
-dimension: code_quality
-weight: 100
-threshold:
-  pass: 90
-  warn: 80
-metrics:
-  - name: lint
-    command: npm run lint 2>&1
-    hard_gate: true
-    tier: fast
-    description: 代码检查必须通过
-
-  - name: unit_tests
-    command: npm run test:run 2>&1
-    pattern: "Tests\\s+\\d+\\s+passed"
-    hard_gate: true
-    tier: normal
-    description: 单元测试必须通过
-
----
-
-# 代码质量
-
-本文档定义了代码质量的基本要求，由智能体协作系统自动维护。
+        """生成单文件 Harness 配置。"""
+        base_quality_spec = """version: "harness/v1"
+fitness:
+  dimensions:
+    - dimension: code_quality
+      weight: 100
+      threshold: {pass: 90, warn: 80}
+      metrics:
+        - name: lint
+          command: npm run lint 2>&1
+          hard_gate: true
+          tier: fast
+          description: 代码检查必须通过
+        - name: unit_tests
+          command: npm run test:run 2>&1
+          pattern: "Tests\\s+\\d+\\s+passed"
+          hard_gate: true
+          tier: normal
+          description: 单元测试必须通过
+review_triggers: {rules: []}
+evidence_producers: []
+gate_policies: []
 """
-        
-        quality_spec_path = fitness_dir / "code-quality.md"
+
+        quality_spec_path = self.project_root / "harness.yaml"
         await asyncio.to_thread(
             quality_spec_path.write_text,
             base_quality_spec,

@@ -140,11 +140,6 @@ def test_collect_review_trigger_required(tmp_path: Path):
         triggers=[trigger_mock],
     )
 
-    # 创建规则文件
-    rules_file = tmp_path / "docs" / "fitness" / "review-triggers.yaml"
-    rules_file.parent.mkdir(parents=True)
-    rules_file.write_text("rules: []")
-
     with (
         patch("entrix.stop_gate.collector.run_fitness_report") as mock_fitness,
         patch("entrix.stop_gate.collector.load_harness_config") as mock_load_config,

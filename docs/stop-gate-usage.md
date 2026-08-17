@@ -31,22 +31,24 @@ else:
 
 ### 2. 配置质量门禁
 
-在项目根目录创建 `docs/fitness/code-quality.md`：
+在项目根目录执行 `entrix init`，生成唯一的 `harness.yaml`。随后在其中配置质量维度：
 
 ```yaml
----
-dimension: code_quality
-weight: 35
-threshold:
-  pass: 90
-  warn: 80
-metrics:
-  - name: ruff_pass
-    command: ruff check . 2>&1
-    hard_gate: true
-    tier: fast
-    description: "Ruff must pass with no lint errors"
----
+version: "harness/v1"
+fitness:
+  dimensions:
+    - dimension: code_quality
+      weight: 100
+      threshold: {pass: 90, warn: 80}
+      metrics:
+        - name: ruff_pass
+          command: ruff check . 2>&1
+          hard_gate: true
+          tier: fast
+          description: Ruff must pass with no lint errors.
+review_triggers: {rules: []}
+evidence_producers: []
+gate_policies: []
 ```
 
 ### 3. 运行和测试
@@ -72,15 +74,15 @@ entrix run --tier normal
 Claude 请求 Stop
   -> hooks/stop-gate.sh 调用 entrix stop-gate
   -> 读取 stdin 的 hook 载荷（session_id / cwd / stop_hook_active）
-  -> 工作区无 docs/fitness/？直接放行
-  -> 有规格？收集证据并裁决
+  -> 工作区无 harness.yaml 或 .harness/harness.yaml？直接放行
+  -> 有 Harness 配置？收集证据并裁决
        -> PASS: 退出码 0，无输出，允许停止
        -> FAIL/BLOCKED: 输出 {"decision": "block", "reason": "..."}，Claude 继续修复
 ```
 
 要点：
 
-- **激活条件**：仓库存在 `docs/fitness/*.md` 或 `docs/fitness/manifest.yaml`
+- **激活条件**：仓库根目录存在 `harness.yaml`，或存在 `.harness/harness.yaml`
 - **防循环**：`stop_hook_active` 为真时立即放行（Claude Code 已因此 hook 继续工作）
 - **禁用**：`export ENTRIX_STOP_GATE_DISABLED=1`
 - **超时**：hook 层 295 秒；`ENTRIX_STOP_GATE_TIMEOUT` 或 `--timeout` 控制证据收集
@@ -109,7 +111,7 @@ Stop Gate 系统包含以下核心组件：
 
 **Q: Stop Gate 不工作？**
 - 确认 Entrix 正确安装：`pip install entrix`
-- 检查 `docs/fitness/` 目录存在配置文件
+- 检查 `harness.yaml` 存在且可通过 `entrix harness validate harness.yaml`
 - 查看 `.claude/stop-gate/` 中的日志
 
 **Q: 总是 BLOCKED？**

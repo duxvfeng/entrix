@@ -163,25 +163,24 @@ JSON
 ### 3. 在目标项目创建护栏配置
 
 ```bash
-mkdir -p /path/to/your-project/docs/fitness
+cd /path/to/your-project
+entrix init --repo .
 ```
 
-写入最小配置 `docs/fitness/code-quality.md`：
+随后在根目录的 `harness.yaml` 中按项目的真实命令调整指标：
 
 ```yaml
----
-dimension: code_quality
-weight: 100
-threshold:
-  pass: 90
-  warn: 80
-metrics:
-  - name: ruff_pass
-    command: ruff check . 2>&1
-    hard_gate: true
-    tier: fast
-    description: "Ruff must pass"
----
+fitness:
+  dimensions:
+    - dimension: code_quality
+      weight: 100
+      threshold: {pass: 90, warn: 80}
+      metrics:
+        - name: ruff_pass
+          command: ruff check . 2>&1
+          hard_gate: true
+          tier: fast
+          description: Ruff must pass.
 ```
 
 ### 4. 重启 Claude Code
@@ -239,7 +238,7 @@ Claude Code 的插件 CLI 可能不支持本地路径。请使用方式三的手
 
 检查以下几点：
 
-1. 目标项目是否有 `docs/fitness/` 配置
+1. 目标项目是否有可校验的 `harness.yaml` 配置
 2. 是否设置了 `ENTRIX_STOP_GATE_DISABLED=1`
 3. Claude Code 是否完整重启
 4. 插件是否完整安装（不只是 MCP 配置）
@@ -270,6 +269,6 @@ export ENTRIX_STOP_GATE_DISABLED=1
 # 3. Stop Gate 可运行
 /Users/apple/entrix/.venv/bin/python -m entrix stop-gate --help
 
-# 4. 目标项目有 docs/fitness/
-ls /path/to/your-project/docs/fitness/
+# 4. 目标项目有 Harness 配置
+ls /path/to/your-project/harness.yaml
 ```

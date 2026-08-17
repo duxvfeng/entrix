@@ -159,6 +159,23 @@ def test_run_streams_output_lines_to_callback():
     assert ("streamed", "stderr", "oops") in emitted
 
 
+def test_streaming_runner_decodes_utf8_output_on_windows(tmp_path):
+    """UTF-8 subprocess output must not depend on the Windows ANSI code page."""
+    runner = ShellRunner(tmp_path, stream_output=True, output_callback=lambda *_args: None)
+    metric = Metric(
+        name="utf8_output",
+        command=(
+            f'"{sys.executable}" -c "import sys; '
+            "sys.stdout.buffer.write('Entrix 可执行质量门禁\\n'.encode('utf-8'))\""
+        ),
+    )
+
+    result = runner.run(metric)
+
+    assert result.passed is True
+    assert "Entrix 可执行质量门禁" in result.output
+
+
 def test_run_waived_metric():
     runner = ShellRunner(Path("/tmp"))
     metric = Metric(

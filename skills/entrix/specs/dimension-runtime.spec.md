@@ -1,9 +1,7 @@
 # Runtime Dimension Spec
 
-Use this when editing runtime evidence such as:
-
-- `docs/fitness/runtime/observability.md`
-- `docs/fitness/runtime/performance.md`
+Use this when editing the `observability` or `performance` dimensions in
+`harness.yaml`.
 
 ## Purpose
 

@@ -135,48 +135,41 @@ uvx entrix install --repo .
 
 ## 首次运行
 
-### 1. 创建护栏规格
+### 1. 创建 Harness 配置
 
-默认情况下，`entrix run` 会在当前项目的以下位置查找规格：
+在项目根目录运行 `entrix init --repo .`，Entrix 会创建 `.mcp.json` 和唯一的
+`harness.yaml`。`entrix run`、`entrix validate`、`entrix review-trigger` 与 Stop
+Gate 都从该文件读取质量规则。
 
-```text
-docs/fitness/*.md
-```
-
-当存在 `docs/fitness/manifest.yaml` 时，Entrix 会将其作为权威来源。这允许使用嵌套的证据文件，例如 `docs/fitness/runtime/observability.md` 和 `docs/fitness/runtime/performance.md`。
-
-示例 `docs/fitness/code-quality.md`：
+示例 `harness.yaml` 的 Fitness 段：
 
 ```yaml
----
-dimension: code_quality
-weight: 20
-threshold:
-  pass: 90
-  warn: 80
-metrics:
-  - name: lint
-    command: npm run lint 2>&1
-    hard_gate: true
-    tier: fast
-    description: ESLint 必须通过
-
-  - name: unit_tests
-    command: npm run test:run 2>&1
-    pattern: "Tests\\s+\\d+\\s+passed"
-    hard_gate: true
-    tier: normal
-    description: 单元测试必须通过
----
-
-# 代码质量
-
-叙事性证据、规则和归属说明可以放在 frontmatter 下方。
+version: "harness/v1"
+fitness:
+  dimensions:
+    - dimension: code_quality
+      weight: 100
+      threshold: {pass: 90, warn: 80}
+      metrics:
+        - name: lint
+          command: npm run lint 2>&1
+          hard_gate: true
+          tier: fast
+          description: ESLint 必须通过。
+        - name: unit_tests
+          command: npm run test:run 2>&1
+          pattern: "Tests\\s+\\d+\\s+passed"
+          hard_gate: true
+          tier: normal
+          description: 单元测试必须通过。
+review_triggers: {rules: []}
+evidence_producers: []
+gate_policies: []
 ```
 
 ### 高级指标字段
 
-除了上述基本字段外，frontmatter 中的每个指标还支持更多选项：
+除了上述基本字段外，`fitness.dimensions[].metrics` 中的每个指标还支持更多选项：
 
 ```yaml
 metrics:
@@ -238,36 +231,31 @@ entrix run --changed-only --base HEAD~1
 entrix validate
 ```
 
-使用 `--metric` 可以在不创建临时维度文件的情况下仅运行特定指标。使用 `--base HEAD~1` 的命令必须在具有有效 base revision 的 Git 仓库内运行。
+使用 `--metric` 可以仅运行特定指标。使用 `--base HEAD~1` 的命令必须在具有有效 base revision 的 Git 仓库内运行。
 
 ### 3. 添加审查触发器
 
-默认情况下，`review-trigger` 会加载当前项目的：
-
-```text
-docs/fitness/review-triggers.yaml
-```
-
-示例 `docs/fitness/review-triggers.yaml`：
+`review-trigger` 从 `harness.yaml` 的 `review_triggers.rules` 读取规则：
 
 ```yaml
 review_triggers:
-  - name: high_risk_directory_change
-    type: changed_paths
-    paths:
-      - src/core/acp/**
-      - src/core/orchestration/**
-      - services/api/**
-    severity: high
-    action: require_human_review
+  rules:
+    - name: high_risk_directory_change
+      type: changed_paths
+      paths:
+        - src/core/acp/**
+        - src/core/orchestration/**
+        - services/api/**
+      severity: high
+      action: require_human_review
 
-  - name: oversized_change
-    type: diff_size
-    max_files: 12
-    max_added_lines: 600
-    max_deleted_lines: 400
-    severity: medium
-    action: require_human_review
+    - name: oversized_change
+      type: diff_size
+      max_files: 12
+      max_added_lines: 600
+      max_deleted_lines: 400
+      severity: medium
+      action: require_human_review
 ```
 
 运行：
@@ -336,7 +324,7 @@ entrix/stop_gate/
 
 安装 Claude Code 插件后，Stop Gate 通过 `hooks/hooks.json` 注册的 `Stop` hook 自动接管任务结束裁决，无需手动配置：
 
-- **仅对配置了 `docs/fitness/` 的仓库激活**——未配置的仓库直接放行，插件可以放心全局安装
+- **仅对存在 `harness.yaml` 或 `.harness/harness.yaml` 的仓库激活**——未配置的仓库直接放行，插件可以放心全局安装
 - Claude 请求结束任务时，hook 独立收集证据并裁决：PASS 放行，FAIL/BLOCKED 以 `{"decision": "block", "reason": ...}` 阻止停止并把失败原因回传给 Claude 继续修复
 - 内置防循环保护（`stop_hook_active`）与禁用开关（`export ENTRIX_STOP_GATE_DISABLED=1`）
 - 优先使用 PATH 上的 `entrix`，其次 `uvx entrix`，最后回退到插件内的源码副本；全部不可用时放行
@@ -425,7 +413,7 @@ pip install -e .
 
 大多数仓库只需要这三个命令：
 
-- `entrix run`：执行 `docs/fitness/*.md` 中的护栏检查
+- `entrix run`：执行 `harness.yaml` 中的 Fitness 护栏检查
 - `entrix validate`：验证护栏配置
 - `entrix review-trigger`：将高风险 diff 升级至人工审查
 
@@ -440,7 +428,7 @@ Entrix 在 [`examples/`](./examples/) 下提供了可复制示例：
 
 ### `entrix run`
 
-从 `docs/fitness/*.md` 加载基于维度的护栏检查。
+从 `harness.yaml` 的 `fitness.dimensions` 加载基于维度的护栏检查。
 
 常用标志：
 
@@ -462,7 +450,7 @@ entrix run --min-score 90
 
 ### `entrix install` / `entrix init`
 
-为目标仓库生成 Claude Code MCP 集成的 `.mcp.json`。
+为目标仓库生成 Claude Code MCP 集成的 `.mcp.json` 与唯一的 `harness.yaml`。
 
 ```bash
 entrix install --repo .
@@ -479,10 +467,11 @@ entrix serve
 
 ### `entrix validate`
 
-检查维度权重是否总和为 `100%`。
+检查 `harness.yaml` 的维度权重、review 规则、producer 与 gate policy。
 
 ```bash
 entrix validate
+entrix harness validate harness.yaml
 ```
 
 ### `entrix review-trigger`
@@ -495,7 +484,7 @@ entrix validate
 entrix review-trigger --base HEAD~1
 entrix review-trigger --json
 entrix review-trigger --fail-on-trigger
-entrix review-trigger --config docs/fitness/review-triggers.yaml
+entrix review-trigger --config harness.yaml
 ```
 
 ### `entrix analyze long-file`
@@ -587,12 +576,10 @@ entrix graph review-context --base HEAD~1 --output context.json
 
 ## 预设系统
 
-Entrix 使用预设系统来适应不同的项目布局。默认 `ProjectPreset` 在 `docs/fitness/` 中查找护栏规格，在 `docs/fitness/review-triggers.yaml` 中查找审查触发器。
+Entrix 使用预设系统来适应不同的项目布局。Harness 配置始终由项目根目录的 `harness.yaml`（或 `.harness/harness.yaml`）提供；预设不再决定质量配置的位置。
 
 自定义预设可以覆盖：
 
-- `fitness_dir(project_root)` — 护栏规格文件位置
-- `review_trigger_config(project_root)` — review trigger YAML 路径
 - `should_ignore_changed_file(file_path)` — 过滤无关变更文件
 - `domains_from_files(files)` — 从变更文件路径提取域标签
 
@@ -602,51 +589,26 @@ Entrix 使用预设系统来适应不同的项目布局。默认 `ProjectPreset`
 
 如果 AI 代理正在生成或更新护栏规格，以下约定效果最佳：
 
-- 每个文件一个维度
-- frontmatter 可执行，正文用于解释
+- 每个维度在 `harness.yaml` 的 `fitness.dimensions` 中有一个条目
+- 相关检查放在该条目的 `metrics` 列表中
 - 优先使用稳定的命令输出，而非脆弱的文本匹配
 - 仅在失败确实应该阻塞进度时使用 `hard_gate: true`
 - 将 review-trigger 规则与评分指标分开
-- 将 markdown 视为叙事层，而非唯一的结构来源
+
+配置布局：
 
 推荐文件布局：
 
 ```text
 your-project/
-  docs/
-    fitness/
-      README.md
-      manifest.yaml
-      code-quality.md
-      security.md
-      runtime/
-        observability.md
-        performance.md
-      review-triggers.yaml
+  harness.yaml
 ```
 
 新仓库最小启动流程：
 
 ```bash
-mkdir -p docs/fitness
-cat > docs/fitness/code-quality.md <<'EOF'
----
-dimension: code_quality
-weight: 100
-threshold:
-  pass: 100
-  warn: 80
-metrics:
-  - name: lint
-    command: npm run lint 2>&1
-    hard_gate: true
-    tier: fast
----
-
-# Code Quality
-EOF
-
-entrix validate
+entrix init --repo .
+entrix harness validate harness.yaml
 entrix run --tier fast
 ```
 
@@ -659,12 +621,12 @@ entrix run --tier fast
 
 推荐启动策略：
 
-- 不要停留在看似合理的草稿；启动完成的标志是本地 `entrix validate` 和普通本地 `entrix run` 均通过
+- 不要停留在看似合理的草稿；启动完成的标志是 `entrix harness validate harness.yaml` 和普通本地 `entrix run` 均通过
 - 默认本地运行应由仓库安全包装器或廉价冒烟检查支持
 - 将权威但需预配置的检查移入 `execution_scope: ci`
 - 将 `AGENTS.md` 和 `CLAUDE.md` 的可发现性视为启动的一部分，而非可选的后续清理
 
-本仓库还附带一个打包技能 `skills/entrix/`，供需要自动生成或修复 `docs/fitness/` 的代理使用。该技能遵循上述相同的启动规则，并针对多个真实仓库进行验证。
+本仓库还附带一个打包技能 `skills/entrix/`，供需要生成或修复 `harness.yaml` 的代理使用。该技能遵循上述相同的启动规则，并针对多个真实仓库进行验证。
 
 ## Skill 回归测试工具
 
@@ -712,11 +674,11 @@ from entrix.review_trigger import (
     collect_changed_files,
     collect_diff_stats,
     evaluate_review_triggers,
-    load_review_triggers,
 )
+from entrix.harness.config import load_harness_config
 
 repo_root = Path(".").resolve()
-rules = load_review_triggers(repo_root / "docs" / "fitness" / "review-triggers.yaml")
+rules = load_harness_config(repo_root / "harness.yaml").review_trigger_rules
 changed_files = collect_changed_files(repo_root, "HEAD~1")
 diff_stats = collect_diff_stats(repo_root, "HEAD~1")
 report = evaluate_review_triggers(rules, changed_files, diff_stats, base="HEAD~1")
@@ -728,9 +690,9 @@ print(report.to_dict())
 ```python
 from pathlib import Path
 
-from entrix.evidence import load_dimensions
+from entrix.harness.config import load_harness_config
 
-dimensions = load_dimensions(Path("docs/fitness"))
+dimensions = load_harness_config(Path("harness.yaml")).fitness_dimensions
 for dimension in dimensions:
     print(dimension.name, len(dimension.metrics))
 ```
@@ -794,7 +756,7 @@ current file length 2383 exceeds limit 1600: src/app/page.tsx
 
 当前边界：
 
-- 默认创作格式为 `docs/fitness/` 下的 markdown frontmatter
+- 默认创作格式为根目录的 `harness.yaml`
 - 图命令需要可选的图依赖：`pip install entrix[graph]`
 - 当前检出中的公共 CLI 暴露 `run`、`validate`、`review-trigger`、`hook`、`analyze` 和 `graph`
 - `analyze long-file` 结构分析支持 Python、Rust、Go、Java、TypeScript 和 JavaScript

@@ -1,9 +1,0 @@
-review_triggers:
-  - name: fixture_python_surface
-    type: changed_paths
-    paths:
-      - app.py
-      - tests/**
-      - docs/fitness/**
-    severity: medium
-    action: require_human_review

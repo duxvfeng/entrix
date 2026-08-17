@@ -131,12 +131,11 @@ async def check_system_status():
     print(f"存在 docs/multi_agent_system/: {(project_root / 'docs/multi_agent_system').exists()}")
     
     # 检查 Entrix 配置
-    fitness_dir = project_root / "docs/fitness"
-    print(f"存在 docs/fitness/: {fitness_dir.exists()}")
+    harness_path = project_root / "harness.yaml"
+    print(f"存在 harness.yaml: {harness_path.exists()}")
     
-    if fitness_dir.exists():
-        fitness_files = list(fitness_dir.glob("*.md"))
-        print(f"Fitness 文件数量: {len(fitness_files)}")
+    if harness_path.exists():
+        print("Harness 配置已就绪")
 
 
 def main():

@@ -52,7 +52,7 @@ Entrix 已经实现的是可独立执行的质量检查器，而不是 Claude �
 
 ### 3.1 Entrix Fitness Runner
 
-责任：根据 `docs/fitness/` 中的规则执行客观质量指标，形成单次运行报告。
+责任：根据 `harness.yaml` 中的规则执行客观质量指标，形成单次运行报告。
 
 已有输出应作为 Gate Arbiter 的证据输入，包括：
 

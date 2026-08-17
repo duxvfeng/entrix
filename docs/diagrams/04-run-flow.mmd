@@ -8,7 +8,7 @@ flowchart LR
     C2 --> D
     C3 --> D
 
-    D --> E1[load_dimensions<br/>读取 fitness/ YAML]
+    D --> E1[load_harness_config<br/>读取 harness.yaml]
     D --> E2[get_project_preset<br/>识别项目类型]
     D --> E3[collect_changed_files<br/>git diff 增量]
 

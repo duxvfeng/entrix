@@ -1,7 +1,6 @@
 # API Contract Dimension Spec
 
-Use this when editing `api_contract` or contract-adjacent evidence such as
-`docs/fitness/rust-api-test.md` or `docs/fitness/api-contract.md`.
+Use this when editing the `api_contract` dimension in `harness.yaml`.
 
 ## Purpose
 

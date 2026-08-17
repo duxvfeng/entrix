@@ -174,7 +174,7 @@ def test_parser_review_trigger_flags():
             "--base",
             "main",
             "--config",
-            "docs/fitness/review-triggers.yaml",
+            "harness.yaml",
             "--fail-on-trigger",
             "--json",
             "src/core/acp/foo.ts",
@@ -182,7 +182,7 @@ def test_parser_review_trigger_flags():
     )
     assert args.command == "review-trigger"
     assert args.base == "main"
-    assert args.config == "docs/fitness/review-triggers.yaml"
+    assert args.config == "harness.yaml"
     assert args.fail_on_trigger is True
     assert args.json is True
     assert args.files == ["src/core/acp/foo.ts"]
@@ -213,7 +213,7 @@ def test_parser_release_trigger_flags():
             "--base",
             "main",
             "--config",
-            "docs/fitness/release-triggers.yaml",
+            "docs/release-triggers.yaml",
             "--fail-on-trigger",
             "--json",
             "scripts/release/stage-routa-cli-npm.mjs",
@@ -223,7 +223,7 @@ def test_parser_release_trigger_flags():
     assert args.manifest == "dist/release/manifest.json"
     assert args.baseline_manifest == "dist/release/baseline.json"
     assert args.base == "main"
-    assert args.config == "docs/fitness/release-triggers.yaml"
+    assert args.config == "docs/release-triggers.yaml"
     assert args.fail_on_trigger is True
     assert args.json is True
     assert args.files == ["scripts/release/stage-routa-cli-npm.mjs"]
@@ -709,7 +709,7 @@ def test_cmd_run_defaults_scope_to_local(tmp_path, monkeypatch):
 
 
 def test_cmd_run_emits_runtime_fitness_event(tmp_path, monkeypatch):
-    dimension = type("Dimension", (), {"name": "testability", "weight": 18, "source_file": "docs/fitness/unit-test.md"})()
+    dimension = type("Dimension", (), {"name": "testability", "weight": 18, "source_file": "harness.yaml"})()
     report = FitnessReport(
         final_score=97.0,
         hard_gate_blocked=False,

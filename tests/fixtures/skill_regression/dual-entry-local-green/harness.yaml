@@ -1,0 +1,70 @@
+version: "harness/v1"
+
+fitness:
+  dimensions:
+    - dimension: code_quality
+      weight: 40
+      tier: normal
+      threshold:
+        pass: 100
+        warn: 90
+      metrics:
+        - name: lint_pass
+          command: python -c "print('lint passed')"
+          hard_gate: true
+          tier: fast
+          description: Root-safe lint wrapper must pass.
+    - dimension: testability
+      weight: 40
+      tier: normal
+      threshold:
+        pass: 100
+        warn: 90
+      metrics:
+        - name: tests_pass
+          command: python -c "print('tests passed')"
+          hard_gate: true
+          tier: fast
+          description: The repository test wrapper must pass.
+    - dimension: release_readiness
+      weight: 20
+      tier: normal
+      threshold:
+        pass: 100
+        warn: 90
+      metrics:
+        - name: build_pass
+          command: python -c "print('build passed')"
+          hard_gate: true
+          tier: fast
+          description: The repo's release wrapper must stay runnable.
+
+review_triggers:
+  rules:
+    - name: fixture_docs_change
+      type: changed_paths
+      paths: [harness.yaml, AGENTS.md, CLAUDE.md]
+      severity: medium
+      action: require_human_review
+
+evidence_producers:
+  - id: fitness
+    type: fitness
+    name: Entrix Fitness
+    builtin: entrix-fitness
+  - id: review-trigger
+    type: review-trigger
+    name: Review Trigger
+    builtin: entrix-review-trigger
+
+gate_policies:
+  - name: Fitness must pass
+    severity: hard
+    rule:
+      evidence_id: fitness
+      condition: status == "pass"
+  - name: Review trigger blocks stop
+    severity: blocked
+    rule:
+      evidence_id: review-trigger
+      condition: status == "fail"

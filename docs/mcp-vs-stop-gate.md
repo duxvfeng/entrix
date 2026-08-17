@@ -117,8 +117,8 @@ Claude Code 通过 stdin 发送给 `entrix stop-gate` 的 JSON：
 ## 手动测试 Stop Gate
 
 ```bash
-# 1. 确保当前仓库有 docs/fitness/ 配置
-ls docs/fitness/
+# 1. 确保当前仓库有 Harness 配置
+ls harness.yaml
 
 # 2. 模拟 Claude Code 输入
 echo '{"session_id": "test", "cwd": "'"$PWD"'"}' | entrix stop-gate

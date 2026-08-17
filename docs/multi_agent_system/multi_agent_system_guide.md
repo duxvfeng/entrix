@@ -247,7 +247,7 @@ capabilities = [
 
 **自动维护的文档**：
 - `AGENTS.md`：智能体使用指南
-- `docs/fitness/*.md`：质量规格文档
+- `harness.yaml`：质量规格与门禁配置
 - `docs/architecture.md`：架构文档
 
 ## 协作模式
