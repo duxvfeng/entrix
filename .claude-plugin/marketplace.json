@@ -22,7 +22,14 @@
         "mcp",
         "architecture",
         "code-review"
-      ]
+      ],
+      "binaries": {
+        "windows": "bin/entrix.bat",
+        "linux-amd64": "bin/entrix",
+        "linux-arm64": "bin/entrix",
+        "macos-amd64": "bin/entrix",
+        "macos-arm64": "bin/entrix"
+      }
     }
   ]
 }
