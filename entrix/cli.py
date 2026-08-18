@@ -334,9 +334,9 @@ def cmd_install(args: argparse.Namespace) -> int:
         return 0
 
     mcp_path.write_text(config_text, encoding="utf-8")
-    print(f"Wrote Claude MCP config to {mcp_path}")
-    print("Run `entrix --help` to verify the command is available.")
-    print("Restart Claude Code after changing MCP settings.")
+    print(f"已写入 Claude MCP 配置到 {mcp_path}")
+    print("运行 `entrix --help` 验证命令是否可用。")
+    print("更改 MCP 设置后请重启 Claude Code。")
     return 0
 
 
@@ -360,10 +360,10 @@ def cmd_init(args: argparse.Namespace) -> int:
         return 1
 
     if args.dry_run:
-        print(f"Selected Harness profile: {selected_profile}")
-        print(f"Would write {mcp_path.name}:")
+        print(f"已选择 Harness profile: {selected_profile}")
+        print(f"将写入 {mcp_path.name}:")
         print(mcp_text, end="")
-        print(f"Would write {harness_path.name}:")
+        print(f"将写入 {harness_path.name}:")
         print(harness_text, end="")
         return 0
 
@@ -375,10 +375,10 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 
 def cmd_phase(args: argparse.Namespace) -> int:
-    """Set the short-lived Stop Gate phase for a repository."""
+    """为仓库设置短期有效的 Stop Gate 阶段。"""
     target = Path(args.repo).resolve() if args.repo else Path.cwd().resolve()
     write_phase(target, args.mode)
-    print(f"Stop Gate phase set to {args.mode} for {target}")
+    print(f"已将 {target} 的 Stop Gate 阶段设置为 {args.mode}")
     return 0
 
 
@@ -388,13 +388,13 @@ def cmd_harness_validate(args: argparse.Namespace) -> int:
 
     try:
         config = load_harness_config(config_path)
-        print(f"Valid harness configuration: {config_path}")
-        print(f"  Version: {config.version}")
-        print(f"  Evidence producers: {len(config.evidence_producers)}")
-        print(f"  Gate policies: {len(config.gate_policies)}")
+        print(f"有效的 harness 配置: {config_path}")
+        print(f"  版本: {config.version}")
+        print(f"  证据生产者: {len(config.evidence_producers)}")
+        print(f"  门禁策略: {len(config.gate_policies)}")
         return 0
     except Exception as e:
-        print(f"Invalid configuration: {e}", file=sys.stderr)
+        print(f"无效的配置: {e}", file=sys.stderr)
         return 1
 
 
@@ -417,14 +417,14 @@ def cmd_harness_run(args: argparse.Namespace) -> int:
         )
 
         # 收集证据
-        print("Collecting evidence...", file=sys.stderr)
+        print("正在收集证据...", file=sys.stderr)
         engine = EvidenceEngine(config)
         bundle = engine.collect(context)
 
-        print(f"Collected {len(bundle.evidence)} evidence items", file=sys.stderr)
+        print(f"已收集 {len(bundle.evidence)} 条证据", file=sys.stderr)
 
         # 仲裁门禁
-        print("Arbitrating gates...", file=sys.stderr)
+        print("正在仲裁门禁...", file=sys.stderr)
         gate_engine = GateEngine(config.gate_policies)
         verdict = gate_engine.arbitrate(bundle, context.when_context)
 
@@ -471,7 +471,7 @@ def cmd_harness_run(args: argparse.Namespace) -> int:
         return 0 if (verdict.status.value if hasattr(verdict.status, 'value') else verdict.status) == "pass" else 1
 
     except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+        print(f"错误: {e}", file=sys.stderr)
         return 1
 
 
@@ -518,7 +518,7 @@ def _find_release_trigger_config(project_root: Path) -> Path:
     """定位默认的 release-trigger config。"""
     config_path = get_project_preset().release_trigger_config(project_root)
     if not config_path.is_file():
-        print(f"Error: release-trigger config not found at {config_path}")
+        print(f"错误: 在 {config_path} 未找到 release-trigger 配置")
         sys.exit(1)
     return config_path
 
@@ -1499,12 +1499,12 @@ def build_parser() -> HintingArgumentParser:
 
     phase_parser = subparsers.add_parser(
         "phase",
-        help="Set the current Stop Gate phase without running checks",
+        help="设置当前 Stop Gate 阶段而不运行检查",
     )
     phase_parser.add_argument(
         "mode",
         choices=["planning", "implementation"],
-        help="Current task phase",
+        help="当前任务阶段",
     )
     phase_parser.add_argument(
         "--repo",

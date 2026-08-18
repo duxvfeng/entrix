@@ -14,7 +14,7 @@ def create_server(project_root: Path | None = None):
         from fastmcp import FastMCP
     except ImportError as e:
         raise ImportError(
-            "fastmcp is not installed. Install with: pip install entrix[mcp]"
+            "未安装 fastmcp。请使用以下命令安装: pip install entrix[mcp]"
         ) from e
 
     if project_root is None:
