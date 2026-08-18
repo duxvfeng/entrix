@@ -8,6 +8,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+# Skip all MCP tests if fastmcp is not installed
+pytest.importorskip("fastmcp", reason="requires fastmcp package")
+
 from entrix.model import (
     DimensionScore,
     FitnessReport,

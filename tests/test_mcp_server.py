@@ -7,6 +7,9 @@ from typing import Any
 
 import pytest
 
+# Skip all MCP tests if fastmcp is not installed
+pytest.importorskip("fastmcp", reason="requires fastmcp package")
+
 from entrix.server import create_server
 
 
