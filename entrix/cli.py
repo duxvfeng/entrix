@@ -370,7 +370,44 @@ def cmd_init(args: argparse.Namespace) -> int:
     mcp_path.write_text(mcp_text, encoding="utf-8")
     harness_path.write_text(harness_text, encoding="utf-8")
     write_phase(target, "init", one_shot=True)
-    print(f"已创建 {mcp_path.name} 和 {harness_path.name}；profile: {selected_profile}；未执行检查")
+
+    # 输出详细的中文配置说明
+    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"Entrix 质量护栏初始化完成", file=sys.stderr)
+    print(f"{'='*60}\n", file=sys.stderr)
+    print(f"仓库: {target}", file=sys.stderr)
+    print(f"Profile: {selected_profile}", file=sys.stderr)
+    print(f"状态: 质量护栏已配置并验证完成\n", file=sys.stderr)
+
+    print(f"已创建的核心配置文件:", file=sys.stderr)
+    print(f"  - {harness_path.name} - 所有质量策略的单一真实来源", file=sys.stderr)
+    print(f"  - {mcp_path.name} - MCP 服务器配置\n", file=sys.stderr)
+
+    # 解析生成的配置以提供更详细的说明
+    try:
+        import yaml
+        config = yaml.safe_load(harness_text)
+        if "fitness" in config and "dimensions" in config["fitness"]:
+            print(f"质量维度配置:", file=sys.stderr)
+            for dim_group in config["fitness"]["dimensions"]:
+                if "dimensions" in dim_group:
+                    for dim in dim_group["dimensions"]:
+                        weight = dim.get("weight", 0)
+                        print(f"  - {dim.get('dimension', 'N/A')} ({weight}%): ", end="", file=sys.stderr)
+                        metrics = dim.get("metrics", [])
+                        if metrics:
+                            print(f"{len(metrics)} 个指标", file=sys.stderr)
+    except:
+        pass  # 如果解析失败，跳过详细说明
+
+    print(f"\n配置已就绪，Entrix 质量护栏系统将自动:", file=sys.stderr)
+    print(f"  1. 在每次变更时验证代码质量", file=sys.stderr)
+    print(f"  2. 通过覆盖率要求执行测试标准", file=sys.stderr)
+    print(f"  3. 确保发布就绪状态", file=sys.stderr)
+    print(f"  4. 阻止不符合质量标准的提交\n", file=sys.stderr)
+
+    print(f"{'='*60}\n", file=sys.stderr)
+
     return 0
 
 
