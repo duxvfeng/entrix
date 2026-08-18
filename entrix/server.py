@@ -119,6 +119,7 @@ def create_server(project_root: Path | None = None):
         changed_files: list[str] | None = None,
         depth: int = 2,
         base: str = "HEAD",
+        build_mode: str = "auto",
     ) -> dict:
         """使用 code graph 分析变更的 blast radius。
 
@@ -128,6 +129,7 @@ def create_server(project_root: Path | None = None):
             changed_files: 显式文件列表，或 None 以通过 git 自动检测。
             depth: 影响分析的 BFS 遍历深度。
             base: 用于 diff 的 Git ref。
+            build_mode: Graph 构建模式（auto、full、skip）。
         """
         from entrix.runners.graph import GraphRunner
 
@@ -135,12 +137,15 @@ def create_server(project_root: Path | None = None):
         if not runner.available:
             return {"status": "unavailable", "reason": "graph backend unavailable"}
 
-        result = runner.probe_impact(base=base, max_depth=depth)
-        return {
-            "status": "ok",
-            "passed": result.passed,
-            "output": result.output,
-        }
+        result = runner.analyze_impact(
+            changed_files=changed_files,
+            base=base,
+            max_depth=depth,
+            build_mode=build_mode,
+        )
+
+        # analyze_impact already returns a dict with all details
+        return result
 
     return mcp
 
