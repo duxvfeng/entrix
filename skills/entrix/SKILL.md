@@ -140,10 +140,23 @@ review-trigger, producer, and policy sections together in the same file.
 If an entry document already exists, add a short note that rules live in
 `harness.yaml`. Do not duplicate the full configuration into entry documents.
 
-### 4. Validate and iterate
+### 4. Ask before validation
 
-Run the best available Entrix invocation in this order: `entrix`, `uvx --from
-entrix entrix`, then `python3 -m entrix`.
+`entrix init` only creates `.mcp.json` and `harness.yaml`. After creating or
+repairing configuration, report the files changed and ask the user:
+
+```text
+Configuration is ready. Do you want to run configuration validation or local checks now?
+```
+
+Do not run `entrix harness validate`, `entrix run --dry-run`, `entrix run
+--tier fast`, `entrix harness run`, or Stop Gate until the user explicitly
+answers yes. A request to initialize, create, or repair configuration is not
+approval to run checks.
+
+When validation is explicitly approved, run the best available Entrix
+invocation in this order: `entrix`, `uvx --from entrix entrix`, then `python3
+-m entrix`.
 
 ```bash
 entrix harness validate harness.yaml
@@ -164,14 +177,15 @@ budget for more workers.
 
 The skill is complete only when:
 
-- `harness.yaml` exists and validates
+- `harness.yaml` exists; when validation is explicitly requested, it validates
 - Fitness dimensions with positive weights total `100`
 - each metric maps to a real repository signal
 - review triggers, producers, and gate policies are inline
 - existing agent entry documents point to `harness.yaml`
 - the explicit local `entrix run`, when requested, is green or a concrete
   repository blocker is reported
-- `entrix run --dry-run` and the available fast-tier checks have been exercised
+- `entrix run --dry-run` and available fast-tier checks run only after explicit
+  user approval
 
 ## Avoid
 
@@ -179,4 +193,5 @@ The skill is complete only when:
 - inventing commands or security tools
 - leaving a CI-provisioned suite as a default local fast hard gate
 - placing a non-runnable optional tool in default local execution
+- running validation or checks merely because `entrix init` succeeded
 - stopping after producing configuration that only looks plausible

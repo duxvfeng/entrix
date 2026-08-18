@@ -1,6 +1,8 @@
 """Entrix subcommand hints and output-isolation tests."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from entrix.cli import build_parser, run_cli
@@ -88,3 +90,18 @@ def test_machine_and_persistent_commands_do_not_emit_next_step_hints(
 def test_render_next_steps_uses_declared_command_mapping() -> None:
     assert render_next_steps(("harness", "validate")) == ("entrix harness run --json",)
     assert render_next_steps(("unknown",)) == ()
+
+
+def test_init_only_creates_configuration_without_check_guidance(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert run_cli(["init", "--repo", str(tmp_path)]) == 0
+
+    captured = capsys.readouterr()
+    assert (tmp_path / ".mcp.json").is_file()
+    assert (tmp_path / "harness.yaml").is_file()
+    assert "未执行检查" in captured.out
+    assert "下一步" not in captured.err
+    assert "harness validate" not in captured.err
+    assert "entrix run" not in captured.err
+    assert render_next_steps(("init",)) == ()

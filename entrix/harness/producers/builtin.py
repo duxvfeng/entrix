@@ -1,15 +1,33 @@
 """Builtin evidence producers for Entrix-specific functionality."""
 
 import subprocess
-from dataclasses import asdict
+from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
+from enum import Enum
 from time import monotonic
+from typing import Any
 
 from entrix.harness.config import EvidenceProducerConfig
 from entrix.harness.evidence import Evidence
 from entrix.harness.producers.base import Producer, ProducerContext
 from entrix.model import Dimension
 from entrix.review_trigger import ReviewTriggerRule
+
+
+def _serialize_for_json(obj: Any) -> Any:
+    """Convert an object to a JSON-serializable representation.
+
+    This handles dataclasses, enums, lists, and dicts recursively.
+    """
+    if is_dataclass(obj):
+        return {k: _serialize_for_json(v) for k, v in asdict(obj).items()}
+    if isinstance(obj, Enum):
+        return obj.value
+    if isinstance(obj, list):
+        return [_serialize_for_json(item) for item in obj]
+    if isinstance(obj, dict):
+        return {k: _serialize_for_json(v) for k, v in obj.items()}
+    return obj
 
 
 def _new_evidence(config: EvidenceProducerConfig, producer: str, context: ProducerContext) -> Evidence:
@@ -57,7 +75,7 @@ class EntrixFitnessProducer(Producer):
                 "hard_gate_blocked": report.hard_gate_blocked,
                 "score_blocked": report.score_blocked,
             }
-            evidence.raw = asdict(report)
+            evidence.raw = _serialize_for_json(report)
         except Exception as error:  # noqa: BLE001
             evidence.status = "error"
             evidence.raw = {"error": str(error)}

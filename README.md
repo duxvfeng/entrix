@@ -141,6 +141,9 @@ uvx entrix install --repo .
 `harness.yaml`。`entrix run`、`entrix validate`、`entrix review-trigger` 与 Stop
 Gate 都从该文件读取质量规则。
 
+`entrix init` 只生成配置，不会执行校验、Fitness、Harness 或 Stop Gate。通过 Claude
+Code 使用时，Claude 必须先询问是否继续运行检查；只有得到明确确认后才可执行下方命令。
+
 示例 `harness.yaml` 的 Fitness 段：
 
 ```yaml
@@ -229,7 +232,7 @@ metrics:
       expires_at: "2025-06-01"
 ```
 
-### 2. 运行检查
+### 2. 确认后运行检查
 
 ```bash
 entrix run --tier fast
@@ -642,10 +645,15 @@ your-project/
   harness.yaml
 ```
 
-新仓库最小启动流程：
+新仓库初始化只创建配置：
 
 ```bash
 entrix init --repo .
+```
+
+确认需要校验后，再运行：
+
+```bash
 entrix harness validate harness.yaml
 entrix run --tier fast
 ```
@@ -659,7 +667,7 @@ entrix run --tier fast
 
 推荐启动策略：
 
-- 不要停留在看似合理的草稿；启动完成的标志是 `entrix harness validate harness.yaml` 和普通本地 `entrix run` 均通过
+- 初始化完成的标志是配置文件已创建；仅在用户明确要求校验时，才以 `entrix harness validate harness.yaml` 和普通本地 `entrix run` 作为检查完成标志
 - 默认本地运行应由仓库安全包装器或廉价冒烟检查支持
 - 将权威但需预配置的检查移入 `execution_scope: ci`
 - 将 `AGENTS.md` 和 `CLAUDE.md` 的可发现性视为启动的一部分，而非可选的后续清理

@@ -45,6 +45,7 @@ class HarnessConfig:
 
     version: str = ""
     failure_mode: str = "closed"
+    max_parallel_producers: int = 1
     when: dict[str, Any] | None = None
     evidence_producers: list[EvidenceProducerConfig] = field(default_factory=list)
     gate_policies: list[GatePolicy] = field(default_factory=list)
@@ -213,6 +214,13 @@ def load_harness_config(config_path: Path) -> HarnessConfig:
     failure_mode = settings.get("failure_mode", "closed")
     if failure_mode != "closed":
         raise ValueError("settings.failure_mode 仅支持 closed")
+    max_parallel_producers = settings.get("max_parallel_producers", 1)
+    if (
+        isinstance(max_parallel_producers, bool)
+        or not isinstance(max_parallel_producers, int)
+        or max_parallel_producers <= 0
+    ):
+        raise ValueError("settings.max_parallel_producers 必须是正整数")
 
     producers = _load_producer_configs(data.get("evidence_producers", []))
     policies = _load_gate_policies(data.get("gate_policies", []))
@@ -230,6 +238,7 @@ def load_harness_config(config_path: Path) -> HarnessConfig:
     return HarnessConfig(
         version=version,
         failure_mode=failure_mode,
+        max_parallel_producers=max_parallel_producers,
         when=validate_when_config(data.get("when"), "when"),
         evidence_producers=producers,
         gate_policies=policies,

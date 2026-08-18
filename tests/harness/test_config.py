@@ -9,7 +9,7 @@ def test_loads_closed_settings_and_gate_when(tmp_path: Path) -> None:
     config_path = tmp_path / "harness.yaml"
     config_path.write_text(
         '''version: "harness/v1"
-settings: {failure_mode: closed}
+settings: {failure_mode: closed, max_parallel_producers: 2}
 evidence_producers:
   - id: tests
     type: test
@@ -27,7 +27,47 @@ gate_policies:
     config = load_harness_config(config_path)
 
     assert config.failure_mode == "closed"
+    assert config.max_parallel_producers == 2
     assert config.gate_policies[0].when == {"changed_any": ["src/**"]}
+
+
+def test_max_parallel_producers_defaults_to_one(tmp_path: Path) -> None:
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        '''version: "harness/v1"
+evidence_producers:
+  - {id: tests, type: test, name: Tests, command: pytest}
+gate_policies:
+  - name: Tests pass
+    severity: hard
+    rule: {evidence_id: tests, condition: 'status == "pass"'}
+''',
+        encoding="utf-8",
+    )
+
+    config = load_harness_config(config_path)
+
+    assert config.max_parallel_producers == 1
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "true", "two"])
+def test_rejects_invalid_max_parallel_producers(tmp_path: Path, value: str) -> None:
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        f'''version: "harness/v1"
+settings: {{failure_mode: closed, max_parallel_producers: {value}}}
+evidence_producers:
+  - {{id: tests, type: test, name: Tests, command: pytest}}
+gate_policies:
+  - name: Tests pass
+    severity: hard
+    rule: {{evidence_id: tests, condition: 'status == "pass"'}}
+''',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="max_parallel_producers"):
+        load_harness_config(config_path)
 
 
 @pytest.mark.parametrize(

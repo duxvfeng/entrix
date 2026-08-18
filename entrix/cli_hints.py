@@ -6,7 +6,6 @@ import difflib
 from typing import Any, TextIO
 
 NEXT_STEPS: dict[tuple[str, ...], tuple[str, ...]] = {
-    ("init",): ("entrix harness validate harness.yaml", "entrix run"),
     ("harness", "validate"): ("entrix harness run --json",),
     ("run",): ("entrix harness run --json",),
     ("review-trigger",): ("entrix harness run --json",),

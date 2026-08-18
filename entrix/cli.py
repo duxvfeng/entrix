@@ -348,7 +348,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     mcp_path.write_text(mcp_text, encoding="utf-8")
     harness_path.write_text(harness_text, encoding="utf-8")
-    print(f"已创建 {mcp_path.name} 和 {harness_path.name}")
+    print(f"已创建 {mcp_path.name} 和 {harness_path.name}；未执行检查")
     return 0
 
 
