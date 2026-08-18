@@ -4,6 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
+import pytest
+
 from entrix.cli import (
     _ShellOutputController,
     _domains_from_files,
@@ -21,6 +23,7 @@ from entrix.model import ExecutionScope, FitnessReport, Metric, MetricResult, Re
 from entrix.presets import get_project_preset
 from entrix.reporting import report_to_dict
 from entrix.harness.config import HarnessConfig, load_harness_config
+from entrix.harness.evidence import EvidenceBundle
 import entrix.cli as cli_module
 
 
@@ -30,6 +33,7 @@ def test_parser_run_defaults():
     assert args.command == "run"
     assert args.tier is None
     assert args.parallel is False
+    assert args.max_workers == 4
     assert args.dry_run is False
     assert args.verbose is False
     assert args.stream == "failures"
@@ -79,6 +83,59 @@ def test_init_preserves_existing_harness_unless_forced(tmp_path, capsys):
     assert load_harness_config(harness_path).version == "harness/v1"
 
 
+def test_harness_run_defaults_to_serial_collection(monkeypatch, tmp_path):
+    captured = []
+    config = HarnessConfig(version="harness/v1", max_parallel_producers=2)
+
+    def collect(_self, context):
+        captured.append(context)
+        return EvidenceBundle(task_id=context.task_id, active=False)
+
+    monkeypatch.setattr(cli_module, "load_harness_config", lambda _path: config)
+    monkeypatch.setattr(cli_module.EvidenceEngine, "collect", collect)
+
+    assert cli_module.run_cli(["harness", "run", "--config", str(tmp_path / "harness.yaml")]) == 0
+    assert captured[0].parallel_producers is False
+    assert captured[0].max_parallel_producers is None
+
+
+def test_harness_run_passes_explicit_parallel_worker_request(monkeypatch, tmp_path):
+    captured = []
+    config = HarnessConfig(version="harness/v1", max_parallel_producers=2)
+
+    def collect(_self, context):
+        captured.append(context)
+        return EvidenceBundle(task_id=context.task_id, active=False)
+
+    monkeypatch.setattr(cli_module, "load_harness_config", lambda _path: config)
+    monkeypatch.setattr(cli_module.EvidenceEngine, "collect", collect)
+
+    assert (
+        cli_module.run_cli(
+            [
+                "harness",
+                "run",
+                "--parallel",
+                "--max-workers",
+                "4",
+                "--config",
+                str(tmp_path / "harness.yaml"),
+            ]
+        )
+        == 0
+    )
+    assert captured[0].parallel_producers is True
+    assert captured[0].max_parallel_producers == 4
+
+
+def test_harness_run_rejects_non_positive_worker_count(capsys):
+    with pytest.raises(SystemExit) as error:
+        build_parser().parse_args(["harness", "run", "--parallel", "--max-workers", "0"])
+
+    assert error.value.code == 2
+    assert "positive integer" in capsys.readouterr().err
+
+
 def test_root_help_includes_harness_command_guide():
     help_text = build_parser().format_help()
 
@@ -96,6 +153,8 @@ def test_parser_run_all_flags():
             "--tier",
             "fast",
             "--parallel",
+            "--max-workers",
+            "2",
             "--dry-run",
             "--verbose",
             "--stream",
@@ -128,6 +187,7 @@ def test_parser_run_all_flags():
     )
     assert args.tier == "fast"
     assert args.parallel is True
+    assert args.max_workers == 2
     assert args.dry_run is True
     assert args.verbose is True
     assert args.stream == "all"
@@ -679,7 +739,10 @@ def test_cmd_run_defaults_scope_to_local(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "entrix.cli.run_fitness_report",
         lambda _project_root, policy, _preset, **_kwargs: (
-            captured.setdefault("execution_scope", policy.execution_scope),
+            captured.update(
+                execution_scope=policy.execution_scope,
+                max_workers=policy.max_workers,
+            ),
             [],
         ),
     )
@@ -689,6 +752,7 @@ def test_cmd_run_defaults_scope_to_local(tmp_path, monkeypatch):
         tier=None,
         scope=None,
         parallel=False,
+        max_workers=2,
         dry_run=False,
         verbose=False,
         stream="off",
@@ -706,6 +770,7 @@ def test_cmd_run_defaults_scope_to_local(tmp_path, monkeypatch):
 
     assert exit_code == 0
     assert captured["execution_scope"] == ExecutionScope.LOCAL
+    assert captured["max_workers"] == 2
 
 
 def test_cmd_run_emits_runtime_fitness_event(tmp_path, monkeypatch):

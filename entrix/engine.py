@@ -163,6 +163,7 @@ def run_fitness_report(
             graph_runner=graph_runner,
             dry_run=policy.dry_run,
             parallel=policy.parallel,
+            max_workers=policy.max_workers,
             changed_files=effective_changed_files,
             base=base,
             progress_callback=progress_callback,
@@ -180,6 +181,7 @@ def _run_metric_batch(
     graph_runner: GraphRunner,
     dry_run: bool,
     parallel: bool,
+    max_workers: int,
     changed_files: list[str],
     base: str,
     progress_callback: ProgressCallback | None,
@@ -237,6 +239,7 @@ def _run_metric_batch(
             shell_batch,
             parallel=parallel,
             dry_run=dry_run,
+            max_workers=max_workers,
             progress_callback=progress_callback,
         )
         for index, result in zip(shell_indexes, shell_results, strict=False):

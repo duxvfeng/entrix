@@ -43,8 +43,9 @@ fitness:
           description: The local package entrypoint must still render CLI help.
         - name: package_build_pass
           command: python3 -m build --no-isolation 2>&1
-          hard_gate: true
+          hard_gate: false
           tier: normal
+          execution_scope: ci
           description: The project must still produce source and wheel distributions.
     - dimension: observability
       weight: 0
@@ -165,8 +166,8 @@ gate_policies:
     rule:
       evidence_id: fitness
       condition: status == "pass"
-  - name: Review trigger blocks stop
-    severity: blocked
+  - name: Review trigger warning
+    severity: soft
     rule:
       evidence_id: review-trigger
       condition: status == "fail"

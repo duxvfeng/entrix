@@ -5,10 +5,13 @@ import yaml
 from entrix.harness.template import default_harness_config, render_default_harness
 
 
-def test_default_harness_template_contains_inline_quality_configuration():
+def test_default_harness_template_limits_producer_parallelism():
     config = default_harness_config()
 
-    assert config["settings"] == {"failure_mode": "closed"}
+    assert config["settings"] == {
+        "failure_mode": "closed",
+        "max_parallel_producers": 1,
+    }
     assert len(config["fitness"]["dimensions"]) == 5
     assert len(config["review_triggers"]["rules"]) == 5
     builtins = {producer["builtin"] for producer in config["evidence_producers"]}

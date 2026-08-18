@@ -119,6 +119,17 @@ def _configure_utf8_streams() -> None:
                 continue
 
 
+def _positive_int(value: str) -> int:
+    """Parse a strictly positive command-line integer."""
+    try:
+        parsed = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be a positive integer") from error
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
 def _runtime_root(project_root: Path) -> Path:
     return Path(tempfile.gettempdir()) / "harness-monitor" / "runtime" / _runtime_marker(project_root)
 
@@ -382,6 +393,8 @@ def cmd_harness_run(args: argparse.Namespace) -> int:
             repo_root=repo_root,
             when_context=WhenContext(repo_root=repo_root, changed_files=[], current_branch="manual"),
             store=EvidenceStore(repo_root),
+            parallel_producers=args.parallel,
+            max_parallel_producers=args.max_workers if args.parallel else None,
         )
 
         # 收集证据
@@ -766,6 +779,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     policy = GovernancePolicy(
         tier_filter=tier_filter,
         parallel=args.parallel,
+        max_workers=getattr(args, "max_workers", 4),
         dry_run=args.dry_run,
         verbose=args.verbose,
         stream_output=args.stream,
@@ -1351,6 +1365,12 @@ def build_parser() -> HintingArgumentParser:
         "--tier", choices=["fast", "normal", "deep"], help="Run only metrics up to this tier"
     )
     run_parser.add_argument("--parallel", action="store_true", help="Run metrics in parallel")
+    run_parser.add_argument(
+        "--max-workers",
+        type=_positive_int,
+        default=4,
+        help="Maximum concurrently running metrics when --parallel is set",
+    )
     run_parser.add_argument("--dry-run", action="store_true", help="Show what would run")
     run_parser.add_argument("--verbose", action="store_true", help="Show output on failure")
     run_parser.add_argument(
@@ -1518,6 +1538,17 @@ def build_parser() -> HintingArgumentParser:
     harness_run = harness_subparsers.add_parser("run", help="Execute harness collection and arbitration")
     harness_run.add_argument("--config", default="harness.yaml", help="Path to harness.yaml (default: harness.yaml)")
     harness_run.add_argument("--json", action="store_true", help="Emit JSON output")
+    harness_run.add_argument(
+        "--parallel",
+        action="store_true",
+        help="Run evidence producers in parallel within the harness.yaml limit",
+    )
+    harness_run.add_argument(
+        "--max-workers",
+        type=_positive_int,
+        default=None,
+        help="Requested producer workers when --parallel is set",
+    )
     harness_run.set_defaults(func=cmd_harness_run)
 
     hook_parser = subparsers.add_parser("hook", help="Reusable local hook helpers")

@@ -28,7 +28,8 @@ class HarnessRunContext:
     attempt_id: str = "unknown"
     store: Optional[EvidenceStore] = None
     base_ref: str = "HEAD"
-    parallel_producers: bool = True
+    parallel_producers: bool = False
+    max_parallel_producers: int | None = None
 
 
 class EvidenceEngine:
@@ -79,8 +80,9 @@ class EvidenceEngine:
             else:
                 evidence_list.append(self._skipped_evidence(producer_config, context))
 
-        if context.parallel_producers:
-            with ThreadPoolExecutor(max_workers=4) as executor:
+        max_workers = self._effective_max_workers(context)
+        if max_workers > 1:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {
                     executor.submit(self._run_producer, producer_config, context): producer_config
                     for producer_config in active_producers
@@ -108,6 +110,14 @@ class EvidenceEngine:
         self._save_bundle(context, bundle)
 
         return bundle
+
+    def _effective_max_workers(self, context: HarnessRunContext) -> int:
+        """Return the bounded producer worker count for one collection."""
+        if not context.parallel_producers:
+            return 1
+        if context.max_parallel_producers is None:
+            return self.config.max_parallel_producers
+        return min(context.max_parallel_producers, self.config.max_parallel_producers)
 
     @staticmethod
     def _skipped_evidence(

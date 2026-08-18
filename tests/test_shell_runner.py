@@ -1,6 +1,7 @@
 """Tests for entrix.runners.shell."""
 
 from datetime import date, timedelta
+from concurrent.futures import Future
 from pathlib import Path
 import subprocess
 import sys
@@ -165,6 +166,34 @@ def test_run_batch_parallel():
     # Order preserved
     assert results[0].metric_name == "a"
     assert results[1].metric_name == "b"
+
+
+def test_run_batch_parallel_uses_requested_worker_limit(monkeypatch):
+    captured: list[int] = []
+
+    class CapturingExecutor:
+        def __init__(self, max_workers: int) -> None:
+            captured.append(max_workers)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def submit(self, func, *args):
+            future = Future()
+            future.set_result(func(*args))
+            return future
+
+    monkeypatch.setattr(shell_module, "ThreadPoolExecutor", CapturingExecutor)
+    runner = ShellRunner(Path("/tmp"))
+    metrics = [Metric(name="a", command="echo a"), Metric(name="b", command="echo b")]
+
+    results = runner.run_batch(metrics, parallel=True, max_workers=2)
+
+    assert [result.metric_name for result in results] == ["a", "b"]
+    assert captured == [2]
 
 
 def test_run_batch_dry_run():

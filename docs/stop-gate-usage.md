@@ -25,11 +25,12 @@ ENTRIX_STOP_GATE_DISABLED=1 entrix stop-gate
 
 ## 最小严格配置
 
-`settings.failure_mode` 只能是 `closed`。每个配置至少包含一个 producer 和一个 Gate：
+`settings.failure_mode` 只能是 `closed`。`max_parallel_producers` 是手工 Harness 运行时的
+producer 硬上限，缺省为 `1`；Stop Gate 始终串行。每个配置至少包含一个 producer 和一个 Gate：
 
 ```yaml
 version: "harness/v1"
-settings: {failure_mode: closed}
+settings: {failure_mode: closed, max_parallel_producers: 1}
 evidence_producers:
   - id: api-test
     type: test
@@ -46,6 +47,30 @@ gate_policies:
 每个成功或失败的收集都会写入标准 Evidence Bundle，保存位置由 Stop Hook 的外部状态目录
 控制。Gate 不识别 `pytest`、Playwright 或 Maven 等工具名，只识别如 `status`、`summary`
 和 artifact 构成的 Evidence。
+
+## 资源保护
+
+默认 `entrix harness run` 串行收集 producer。需要并行时，必须显式传入 `--parallel`；实际
+并发数取 `--max-workers` 请求值与 `settings.max_parallel_producers` 中的较小者：
+
+```bash
+entrix harness run --parallel --max-workers 2 --config harness.yaml --json
+```
+
+Entrix 不识别或改写 Java 构建命令。一个 Maven 或 Gradle producer 仍可能在内部派生多个 JVM，
+所以 Java 项目应在命令或项目配置中限制内部并发：Maven Reactor 用 `-T1`，Surefire/Failsafe
+用 `forkCount=1` 和 `reuseForks=true`，Gradle 用 `--max-workers=1`。例如：
+
+```yaml
+- id: java-tests
+  type: test
+  name: Java tests
+  command: mvn -B -T1 -DforkCount=1 -DreuseForks=true test
+  parser: {type: exit_code}
+```
+
+`-Xmx` 只限制单个 JVM 的堆内存。它不能限制 Reactor、测试 fork 或 Gradle worker 的总内存；
+项目内限制需要和 Entrix 的外层上限一起使用。
 
 ## 条件激活
 

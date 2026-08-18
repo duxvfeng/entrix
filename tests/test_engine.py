@@ -335,3 +335,32 @@ def test_run_fitness_report_passes_streaming_shell_options(monkeypatch, tmp_path
 
     assert captured["stream_output"] is True
     assert captured["output_callback"] is capture_output
+
+
+def test_run_fitness_report_passes_policy_worker_limit(monkeypatch, tmp_path: Path):
+    captured: dict[str, int] = {}
+
+    class CapturingShellRunner(FakeShellRunner):
+        def run_batch(self, metrics: list[Metric], **kwargs) -> list[MetricResult]:
+            captured["max_workers"] = kwargs["max_workers"]
+            return super().run_batch(metrics, **kwargs)
+
+    configured_dimensions = [
+        Dimension(
+            name="code_quality",
+            weight=100,
+            metrics=[Metric(name="shell_metric", command="npm run lint")],
+        )
+    ]
+    monkeypatch.setattr(engine_module, "ShellRunner", CapturingShellRunner)
+    monkeypatch.setattr(engine_module, "SarifRunner", FakeSarifRunner)
+    monkeypatch.setattr(engine_module, "GraphRunner", FakeGraphRunner)
+
+    engine_module.run_fitness_report(
+        tmp_path,
+        GovernancePolicy(parallel=True, max_workers=2),
+        get_project_preset(),
+        dimensions=configured_dimensions,
+    )
+
+    assert captured["max_workers"] == 2

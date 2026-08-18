@@ -1,7 +1,5 @@
 """Test that fitness report serialization works correctly."""
 import json
-from dataclasses import dataclass
-from enum import Enum
 
 from entrix.harness.producers.builtin import _serialize_for_json
 from entrix.model import Tier, MetricResult, DimensionScore, FitnessReport
@@ -72,3 +70,4 @@ if __name__ == "__main__":
     test_serialize_tier_enum()
     test_serialize_fitness_report()
     print("\nAll serialization tests passed!")
+# Cache bust - Tue Aug 18 10:33:50     2026

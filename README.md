@@ -144,6 +144,50 @@ Gate 都从该文件读取质量规则。
 `entrix init` 只生成配置，不会执行校验、Fitness、Harness 或 Stop Gate。通过 Claude
 Code 使用时，Claude 必须先询问是否继续运行检查；只有得到明确确认后才可执行下方命令。
 
+### 并发与 Java 多模块项目
+
+Entrix 只限制自身同时启动的外层检查数量，不解析或改写 Maven、Surefire、Failsafe 或
+Gradle 命令。默认 `entrix run` 和 `entrix harness run` 都串行执行；Stop Gate 始终串行。
+
+手工执行 Harness 时，必须显式声明 `--parallel` 才会并行。实际 producer 数不超过
+`harness.yaml` 中的 `settings.max_parallel_producers`，也不超过 CLI 的 `--max-workers`：
+
+```yaml
+settings:
+  failure_mode: closed
+  max_parallel_producers: 1
+```
+
+```bash
+entrix harness run --parallel --max-workers 2
+entrix run --parallel --max-workers 2
+```
+
+Java 多模块项目还需在检查命令中限制构建工具的内部并发。`-Xmx256m` 只限制单个 JVM 的
+堆内存，不能限制多个 fork 后的总内存。Maven Reactor 使用 `-T1`，Surefire/Failsafe 使用
+`forkCount=1` 与 `reuseForks=true`，Gradle 使用 `--max-workers=1`：
+
+```yaml
+fitness:
+  dimensions:
+    - dimension: java_build
+      weight: 100
+      threshold: {pass: 100, warn: 90}
+      metrics:
+        - name: compile_fast
+          command: mvn -B -T1 -Dmaven.test.skip=true compile
+          tier: fast
+          hard_gate: true
+        - name: tests_serial
+          command: mvn -B -T1 -DforkCount=1 -DreuseForks=true test
+          tier: normal
+          hard_gate: true
+```
+
+若 `pom.xml` 固定了 Surefire/Failsafe 配置，请在对应插件中设置相同值。Gradle 项目的测试
+命令应形如 `./gradlew test --max-workers=1`。这些项目内限制与 Entrix 的外层 worker 限制需要
+同时配置。
+
 示例 `harness.yaml` 的 Fitness 段：
 
 ```yaml

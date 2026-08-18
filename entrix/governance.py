@@ -16,6 +16,7 @@ class GovernancePolicy:
 
     tier_filter: Tier | None = None
     parallel: bool = False
+    max_workers: int = 4
     dry_run: bool = False
     verbose: bool = False
     stream_output: StreamOutputMode = "failures"

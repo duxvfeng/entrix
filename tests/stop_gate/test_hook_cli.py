@@ -648,7 +648,8 @@ def test_shell_wrapper_blocks_when_no_runner_is_available(tmp_path: Path) -> Non
     result = subprocess.run(
         [bash, str(script)],
         input="{}",
-        text=True,
+        encoding="utf-8",  # Fix Windows encoding issue
+        errors="replace",  # Replace invalid characters instead of failing
         capture_output=True,
         env=environment,
         check=False,
@@ -670,7 +671,8 @@ def test_shell_wrapper_audits_explicit_disable(tmp_path: Path) -> None:
     result = subprocess.run(
         [bash, str(script)],
         input="{}",
-        text=True,
+        encoding="utf-8",  # Fix Windows encoding issue
+        errors="replace",  # Replace invalid characters instead of failing
         capture_output=True,
         env=environment,
         check=False,

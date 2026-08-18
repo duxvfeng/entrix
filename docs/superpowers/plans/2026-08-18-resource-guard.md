@@ -8,6 +8,10 @@
 
 **技术栈：** Python 3.10+、argparse、dataclasses、pytest、Ruff、Mypy。
 
+**实施状态（2026-08-18）：** 任务 0 至任务 5 已完成并通过针对性回归、类型检查和配置校验。
+任务 6 的全量 Ruff 仍被工作区中无关的 `tests/test_serialization_fix.py` 未使用导入阻断；本次
+变更涉及文件的 Ruff 已通过。Java 多模块样例仓库的最终验收仍需在目标项目中执行。
+
 ---
 
 ## 文件职责
