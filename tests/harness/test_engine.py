@@ -321,8 +321,8 @@ def test_collect_with_storage():
         assert len(list(evidence_dir.glob("*.json"))) == 1
 
 
-def test_collect_runs_producers_serially_when_requested(tmp_path):
-    """Stop Gate must not start independent heavy producers at the same time."""
+def test_collect_defaults_to_serial_producer_execution(tmp_path):
+    """Manual collection must not start independent heavy producers by default."""
     config = HarnessConfig(
         version="harness/v1",
         evidence_producers=[
@@ -362,10 +362,56 @@ def test_collect_runs_producers_serially_when_requested(tmp_path):
         task_id="stop-gate",
         repo_root=tmp_path,
         when_context=WhenContext(repo_root=tmp_path),
-        parallel_producers=False,
     )
 
     bundle = engine.collect(context)
 
     assert [evidence.id for evidence in bundle.evidence] == ["first", "second"]
     assert max_active == 1
+
+
+def test_collect_caps_parallel_producers_at_configured_limit(tmp_path):
+    """An explicit parallel request must never exceed the YAML producer cap."""
+    config = HarnessConfig(
+        version="harness/v1",
+        max_parallel_producers=2,
+        evidence_producers=[
+            EvidenceProducerConfig(id="first", type="test", name="first", command="true"),
+            EvidenceProducerConfig(id="second", type="test", name="second", command="true"),
+            EvidenceProducerConfig(id="third", type="test", name="third", command="true"),
+        ],
+        gate_policies=[],
+    )
+    release = Event()
+    lock = Lock()
+    active = 0
+    max_active = 0
+
+    class Producer:
+        def __init__(self, producer_id: str) -> None:
+            self.producer_id = producer_id
+
+        def run(self, _context):
+            nonlocal active, max_active
+            with lock:
+                active += 1
+                max_active = max(max_active, active)
+            release.wait(timeout=0.1)
+            with lock:
+                active -= 1
+            return type("Evidence", (), {"id": self.producer_id})()
+
+    engine = EvidenceEngine(config)
+    engine._create_producer = lambda producer_config: Producer(producer_config.id)
+    context = HarnessRunContext(
+        task_id="manual-run",
+        repo_root=tmp_path,
+        when_context=WhenContext(repo_root=tmp_path),
+        parallel_producers=True,
+        max_parallel_producers=4,
+    )
+
+    bundle = engine.collect(context)
+
+    assert len(bundle.evidence) == 3
+    assert max_active == 2
