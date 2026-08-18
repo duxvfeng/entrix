@@ -15,6 +15,38 @@ Evidence Engine 只产生标准化 Evidence，Gate Engine 只根据 Evidence 仲
 `BLOCKED` 与 `error` 会缓存，避免代理重复执行已知失败的慢检查。工作区内容、分支、
 base ref、Harness 配置或 `when.env` 依赖发生变化时，缓存失效并重新收集。
 
+### Claude 如何调用 Stop Gate
+
+插件的 `hooks/hooks.json` 注册了 `Stop` matcher。Claude Code 准备结束一次操作时，
+会把 Stop 事件 JSON 写入 hook 的 stdin，并执行：
+
+```text
+Claude Stop 事件
+  -> hooks/stop-gate.sh
+  -> entrix stop-gate
+  -> 阶段判定与 harness.yaml 发现
+  -> Evidence Engine
+  -> Evidence Store
+  -> Gate Engine
+```
+
+典型 payload 如下：
+
+```json
+{
+  "session_id": "current-session",
+  "cwd": "D:/project/my-app",
+  "hook_event_name": "Stop",
+  "stop_hook_active": false,
+  "reason": "agent_completed"
+}
+```
+
+Hook 契约是退出码 `0`：stdout 为空表示放行；stdout 为
+`{"decision":"block","reason":"..."}` 表示阻断。阻断原因会回传给 Claude，
+Claude 继续修复后再次尝试停止。MCP 的 `entrix serve` 是主动工具调用通道，
+不参与这条任务结束链路。
+
 Stop Gate 只应服务于实现阶段的 DoD。头脑风暴或规划阶段运行：
 
 ```bash

@@ -393,6 +393,41 @@ entrix/stop_gate/
 - 唯一的紧急旁路是 `ENTRIX_STOP_GATE_DISABLED=1`，其使用会写入 stderr 审计警告
 - 优先使用 PATH 上的 `entrix`，其次 `uvx entrix`，最后回退到插件内的源码副本；配置存在而所有运行器均不可用时输出阻断决策
 
+### Claude 结束操作时的实际调用链
+
+插件安装后，Claude Code 在每次准备结束一次操作时匹配 `hooks/hooks.json` 中的
+`Stop` hook，并执行：
+
+```text
+Claude 尝试停止
+  -> bash "${CLAUDE_PLUGIN_ROOT}/hooks/stop-gate.sh"
+  -> entrix stop-gate
+  -> 读取 Stop payload、阶段状态和 harness.yaml
+  -> Evidence Engine 收集标准 Evidence
+  -> Gate Engine 进行 DoD 仲裁
+```
+
+Claude Code 会把类似下面的 JSON 通过 stdin 传给 hook，Entrix 不需要 Claude 手工拼接：
+
+```json
+{
+  "session_id": "current-session",
+  "cwd": "D:/project/my-app",
+  "hook_event_name": "Stop",
+  "stop_hook_active": false,
+  "reason": "agent_completed"
+}
+```
+
+`stop-gate.sh` 依次尝试 PATH 中的 `entrix`、`uvx entrix` 和插件源码入口。
+没有 `harness.yaml` 时直接放行；有配置时，空 stdout 表示允许 Claude 停止，
+stdout 输出 `{"decision":"block","reason":"..."}` 表示阻断，Claude 会看到
+原因并继续修复，之后再次触发 Stop hook。配置错误、证据收集失败、门禁失败和运行器不可用
+均走阻断路径。`planning` 或一次性 `init` 阶段按阶段规则跳过本次门禁。
+
+`entrix serve` 是独立的 MCP 通道：Claude 主动调用 Entrix MCP 工具时才启动，
+不会替代任务结束时的 `Stop -> stop-gate.sh -> entrix stop-gate` 链路。
+
 手动测试 hook 行为：
 
 ```bash
