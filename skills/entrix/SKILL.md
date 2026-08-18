@@ -6,6 +6,9 @@ license: MIT
 
 # Entrix Skill
 
+命令提示：`/entrix [init] [phase planning|implementation] [harness validate|run]
+[run] [stop-gate] [--repo <path>]`
+
 Leave the target repository with one working `harness.yaml`. It is the sole
 source of truth for Fitness dimensions, review triggers, evidence producers,
 and gate policies. Do not create or read a separate Fitness directory,

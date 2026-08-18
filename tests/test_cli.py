@@ -162,6 +162,8 @@ def test_root_help_includes_harness_command_guide():
     assert "harness validate" in help_text
     assert "harness run" in help_text
     assert "stop-gate" in help_text
+    assert "/entrix [init]" in help_text
+    assert "[--repo <path>]" in help_text
 
 
 def test_parser_run_all_flags():

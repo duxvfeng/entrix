@@ -1364,7 +1364,10 @@ def build_parser() -> HintingArgumentParser:
             "  entrix harness run --json   收集 evidence 并执行门禁裁决\n"
             "  entrix review-trigger       识别需要人工审查的改动\n"
             "  entrix stop-gate            作为 Claude Code Stop Hook 执行\n"
-            "  entrix serve                启动 MCP 服务"
+            "  entrix serve                启动 MCP 服务\n"
+            "\n"
+            "命令提示：/entrix [init] [phase planning|implementation] "
+            "[harness validate|run] [run] [stop-gate] [--repo <path>]"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
