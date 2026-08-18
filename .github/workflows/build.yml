@@ -1,0 +1,124 @@
+name: Build Executables
+
+on:
+  push:
+    tags:
+      - 'v*'
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+            arch: amd64
+            binary_name: entrix.exe
+            platform: windows
+          - os: ubuntu-latest
+            name: linux
+            arch: amd64
+            binary_name: entrix
+            platform: linux
+          - os: macos-latest
+            name: macos
+            arch: amd64
+            binary_name: entrix
+            platform: macos
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+
+    - name: Install build dependencies
+      run: |
+        pip install pyinstaller
+        pip install -e .
+        pip install fastmcp
+
+    - name: Build with PyInstaller (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        pyinstaller --onefile --name entrix --add-data "entrix;entrix" --hidden-import fastmcp --hidden-import yaml --hidden-import tree_sitter entrix/cli.py
+
+    - name: Build with PyInstaller (Linux/macOS)
+      if: matrix.os != 'windows-latest'
+      run: |
+        pyinstaller --onefile --name entrix --add-data "entrix:entrix" --hidden-import fastmcp --hidden-import yaml --hidden-import tree_sitter entrix/cli.py
+
+    - name: Create package
+      shell: bash
+      run: |
+        cd dist
+        if [ "${{ matrix.platform }}" = "windows" ]; then
+          zip -r entrix-${{ matrix.platform }}-${{ matrix.arch }}.zip entrix.exe
+        else
+          tar -czf entrix-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz entrix
+        fi
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: entrix-${{ matrix.platform }}-${{ matrix.arch }}
+        path: |
+          dist/entrix*.zip
+          dist/entrix*.tar.gz
+        retention-days: 7
+
+    - name: Upload to Release
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/entrix*.zip
+          dist/entrix*.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-python-package:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install build dependencies
+      run: |
+        pip install build
+        pip install -e .
+
+    - name: Build Python packages
+      run: |
+        python -m build
+
+    - name: Upload Python packages
+      uses: actions/upload-artifact@v3
+      with:
+        name: python-packages
+        path: dist/
+        retention-days: 7
+
+    - name: Publish to PyPI
+      if: github.event_name == 'release' && startsWith(github.ref, 'refs/tags/')
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        pip install twine
+        twine upload dist/*
