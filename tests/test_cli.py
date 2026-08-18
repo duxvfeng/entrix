@@ -51,7 +51,7 @@ def test_parser_run_defaults():
 
 
 def test_init_creates_mcp_config_and_harness_template(tmp_path, capsys):
-    args = argparse.Namespace(repo=str(tmp_path), dry_run=False, force=False)
+    args = argparse.Namespace(repo=str(tmp_path), dry_run=False, force=False, profile="auto")
 
     exit_code = cli_module.cmd_init(args)
 
@@ -67,6 +67,60 @@ def test_init_creates_mcp_config_and_harness_template(tmp_path, capsys):
         "performance",
     }
     assert "已创建" in capsys.readouterr().out
+
+
+def test_init_auto_detects_python_profile(tmp_path, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'demo'\n", encoding="utf-8")
+
+    args = argparse.Namespace(repo=str(tmp_path), dry_run=False, force=False, profile="auto")
+
+    assert cli_module.cmd_init(args) == 0
+
+    output = capsys.readouterr().out
+    assert "profile: python" in output
+    config = load_harness_config(tmp_path / "harness.yaml")
+    commands = [
+        metric.command
+        for dimension in config.fitness_dimensions
+        for metric in dimension.metrics
+    ]
+    assert any("pytest" in command for command in commands)
+
+
+def test_init_requires_explicit_profile_for_multi_language_repository(tmp_path, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'demo'\n", encoding="utf-8")
+    (tmp_path / "package.json").write_text("{}\n", encoding="utf-8")
+
+    args = argparse.Namespace(repo=str(tmp_path), dry_run=False, force=False, profile="auto")
+
+    assert cli_module.cmd_init(args) == 1
+    assert not (tmp_path / "harness.yaml").exists()
+    error = capsys.readouterr().err
+    assert "--profile" in error
+    assert "python" in error
+    assert "node-typescript" in error
+
+
+def test_init_explicit_profile_overrides_auto_detection(tmp_path, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'demo'\n", encoding="utf-8")
+    (tmp_path / "package.json").write_text("{}\n", encoding="utf-8")
+
+    args = argparse.Namespace(
+        repo=str(tmp_path), dry_run=False, force=False, profile="node-typescript"
+    )
+
+    assert cli_module.cmd_init(args) == 0
+    assert "profile: node-typescript" in capsys.readouterr().out
+
+
+def test_init_parser_defaults_to_auto_and_accepts_profiles(tmp_path):
+    parser = build_parser()
+
+    args = parser.parse_args(["init", "--repo", str(tmp_path)])
+    assert args.profile == "auto"
+
+    explicit = parser.parse_args(["init", "--profile", "java-maven"])
+    assert explicit.profile == "java-maven"
 
 
 def test_phase_command_writes_planning_state_without_running_checks(tmp_path, capsys):

@@ -578,10 +578,25 @@ entrix run --min-score 90
 ### `entrix install` / `entrix init`
 
 为目标仓库生成 Claude Code MCP 集成的 `.mcp.json` 与唯一的 `harness.yaml`。
+`entrix init` 默认使用 `--profile auto` 根据仓库标记选择语言模板；未知仓库回退到
+`generic`，检测到多个语言时要求显式选择。初始化只写文件，不执行检查。
 
 ```bash
 entrix install --repo .
 entrix init --dry-run
+entrix init --profile python
+entrix init --profile java-maven
+entrix init --profile java-gradle
+```
+
+支持的 profile 为 `generic`、`python`、`node-typescript`、`java-maven`、
+`java-gradle`、`go` 和 `rust`。Java 模板将 Maven Reactor、Surefire/Failsafe
+或 Gradle worker 限制为单路；这只控制模板命令的内部并发，仍需结合项目自身的
+JVM 内存设置。初始化完成并得到用户明确同意后，再运行配置校验或本地检查：
+
+```bash
+entrix harness validate harness.yaml
+entrix run --tier fast
 ```
 
 ### `entrix serve`

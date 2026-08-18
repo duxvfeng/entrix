@@ -7,7 +7,7 @@ license: MIT
 # Entrix Skill
 
 命令提示：`/entrix [init] [phase planning|implementation] [harness validate|run]
-[run] [stop-gate] [--repo <path>]`
+[run] [stop-gate] [--repo <path>] [--profile <name>]`
 
 Leave the target repository with one working `harness.yaml`. It is the sole
 source of truth for Fitness dimensions, review triggers, evidence producers,
@@ -147,9 +147,28 @@ surface.
 
 ### 3. Create or repair `harness.yaml`
 
-For a new repository, prefer `entrix init --repo .`, then replace only template
-commands that are not real for the target repository. Keep the Fitness,
-review-trigger, producer, and policy sections together in the same file.
+For a new repository, prefer `entrix init --repo .`. `init` defaults to
+`--profile auto` and selects a language template from repository markers:
+
+- `pyproject.toml`, `pytest.ini`, `requirements.txt`, `setup.py`, or `setup.cfg` -> `python`
+- `package.json` or `tsconfig.json` -> `node-typescript`
+- `pom.xml` -> `java-maven`
+- `build.gradle`, `build.gradle.kts`, or Gradle wrappers -> `java-gradle`
+- `go.mod` -> `go`
+- `Cargo.toml` -> `rust`
+
+An empty or otherwise unknown repository uses `generic`. If multiple profiles
+are detected, stop and ask the user to choose one explicitly, for example
+`entrix init --repo . --profile java-maven`. The supported explicit profiles are
+`generic`, `python`, `node-typescript`, `java-maven`, `java-gradle`, `go`, and
+`rust`. Keep the generated Fitness, review-trigger, producer, and policy
+sections together in the same file; adjust a command only when inspection
+shows that the repository uses a different real task runner.
+
+Java templates intentionally constrain process fan-out: Maven uses `-T1` and
+tests use `-DforkCount=1 -DreuseForks=true`; Gradle uses
+`--no-daemon --max-workers=1`. These limit the build tool's own workers in
+addition to Entrix's outer producer limit.
 
 If an entry document already exists, add a short note that rules live in
 `harness.yaml`. Do not duplicate the full configuration into entry documents.

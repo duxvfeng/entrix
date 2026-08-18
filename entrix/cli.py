@@ -42,6 +42,7 @@ from entrix.harness.gate.arbiter import GateEngine
 from entrix.harness.conditions import WhenContext
 from entrix.harness.store import EvidenceStore
 from entrix.harness.template import render_default_harness
+from entrix.harness.profiles import PROFILE_NAMES, ProfileDetectionError, resolve_profile
 from entrix.cli_hints import (
     HintingArgumentParser,
     print_next_steps,
@@ -344,14 +345,22 @@ def cmd_init(args: argparse.Namespace) -> int:
     target = Path(args.repo).resolve() if args.repo else Path.cwd().resolve()
     harness_path = target / "harness.yaml"
     mcp_path = target / ".mcp.json"
-    harness_text = render_default_harness()
     mcp_text = json.dumps(_default_mcp_config(), indent=2) + "\n"
 
     if harness_path.exists() and not args.force:
         print(f"Harness 配置已存在：{harness_path}；如需重建请使用 --force", file=sys.stderr)
         return 1
 
+    requested_profile = getattr(args, "profile", "auto")
+    try:
+        selected_profile = resolve_profile(requested_profile, target)
+        harness_text = render_default_harness(selected_profile, target)
+    except (ProfileDetectionError, ValueError) as error:
+        print(f"无法初始化 Harness：{error}", file=sys.stderr)
+        return 1
+
     if args.dry_run:
+        print(f"Selected Harness profile: {selected_profile}")
         print(f"Would write {mcp_path.name}:")
         print(mcp_text, end="")
         print(f"Would write {harness_path.name}:")
@@ -361,7 +370,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     mcp_path.write_text(mcp_text, encoding="utf-8")
     harness_path.write_text(harness_text, encoding="utf-8")
     write_phase(target, "init", one_shot=True)
-    print(f"已创建 {mcp_path.name} 和 {harness_path.name}；未执行检查")
+    print(f"已创建 {mcp_path.name} 和 {harness_path.name}；profile: {selected_profile}；未执行检查")
     return 0
 
 
@@ -1478,6 +1487,12 @@ def build_parser() -> HintingArgumentParser:
         "--dry-run",
         action="store_true",
         help="预览 .mcp.json 与 harness.yaml，不写入文件。",
+    )
+    init_parser.add_argument(
+        "--profile",
+        choices=PROFILE_NAMES,
+        default="auto",
+        help="Harness 模板 profile；默认 auto，检测冲突时请显式选择。",
     )
     init_parser.add_argument("--force", action="store_true", help="覆盖已有 harness.yaml 并重建默认配置。")
     init_parser.set_defaults(func=cmd_init)
