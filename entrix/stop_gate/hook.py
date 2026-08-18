@@ -25,10 +25,11 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import IO
+from typing import IO, Any
 
 import yaml
 
+from entrix.stop_gate.feedback import format_block_feedback
 from entrix.stop_gate.revalidation import CachedVerdict, StopGateStateStore
 from entrix.stop_gate.phase import consume_phase, read_phase
 
@@ -400,7 +401,7 @@ def _run_configured_stop_gate(
     from entrix.stop_gate.runner import HarnessRunner
 
     try:
-        verdict = HarnessRunner(
+        result = HarnessRunner(
             harness_config,
             evidence_root=state_store.evidence_root(workspace),
         ).run(context)
@@ -410,12 +411,22 @@ def _run_configured_stop_gate(
         _write_block_decision(output_stream, summary)
         return 0
 
+    verdict = result.verdict
     status = str(getattr(verdict.status, "value", verdict.status))
     summary = verdict.summary or "Harness 门禁未通过。"
     _save_cached_verdict(state_store, workspace, session_id, snapshot, status, summary)
     if status == "pass":
         return 0
-    _write_block_decision(output_stream, summary)
+    if result.bundle is not None:
+        feedback = format_block_feedback(
+            verdict,
+            result.bundle,
+            bundle_path=result.bundle_path,
+            attempt_id=str(context.get("attempt_id") or session_id),
+        )
+        _write_block_decision(output_stream, feedback.reason, feedback.to_dict())
+    else:
+        _write_block_decision(output_stream, summary)
     return 0
 
 
@@ -445,12 +456,11 @@ def _save_cached_verdict(
         return
 
 
-def _write_block_decision(output_stream: IO[str], reason: str) -> None:
-    json.dump(
-        {"decision": BLOCK_DECISION, "reason": reason},
-        output_stream,
-        ensure_ascii=False,
-    )
+def _write_block_decision(output_stream: IO[str], reason: str, details: dict[str, Any] | None = None) -> None:
+    payload: dict[str, Any] = {"decision": BLOCK_DECISION, "reason": reason}
+    if details:
+        payload.update(details)
+    json.dump(payload, output_stream, ensure_ascii=False)
     output_stream.write("\n")
     output_stream.flush()
 

@@ -1,25 +1,14 @@
-"""Entrix Stop Gate - 自动化质量门禁系统"""
+"""Entrix Stop Gate - Claude Code Stop Hook 集成。"""
 
-from entrix.stop_gate.adapter import StopGateAdapter
-from entrix.stop_gate.engine import StopGateEngine
-from entrix.stop_gate.model import (
-    AttemptState,
-    AttemptStatus,
-    EvidencePack,
-    Finding,
-    GateAttempt,
-    StopDecision,
-    Verdict,
-)
+from entrix.stop_gate.feedback import BlockFeedback, format_block_feedback
+from entrix.stop_gate.hook import main, run_stop_gate_hook
+from entrix.stop_gate.runner import HarnessRunner, RunResult
 
 __all__ = [
-    "AttemptState",
-    "AttemptStatus",
-    "EvidencePack",
-    "Finding",
-    "GateAttempt",
-    "StopDecision",
-    "StopGateAdapter",
-    "StopGateEngine",
-    "Verdict",
+    "BlockFeedback",
+    "format_block_feedback",
+    "HarnessRunner",
+    "main",
+    "RunResult",
+    "run_stop_gate_hook",
 ]

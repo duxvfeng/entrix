@@ -6,39 +6,9 @@ import sys
 
 import pytest
 
-from entrix.stop_gate.adapter import StopGateAdapter
+from entrix.harness.gate.arbiter import VerdictStatus
 from entrix.stop_gate.hook import run_stop_gate_hook
 from entrix.stop_gate.runner import HarnessRunner
-from entrix.harness.gate.arbiter import VerdictStatus
-
-
-def test_adapter_creates_context_from_payload():
-    """测试适配器将 hook 载荷转换为 HarnessRunContext"""
-    payload = {
-        "task_id": "test-task-123",
-        "repo_path": "/tmp/test_repo",
-        "changed_files": ["src/main.py", "tests/test_main.py"],
-        "branch": "feature/add-auth",
-    }
-
-    adapter = StopGateAdapter()
-    context = adapter.adapt_payload(payload)
-
-    assert context.task_id == "test-task-123"
-    assert context.repo_root == Path("/tmp/test_repo")
-    assert context.when_context.changed_files == ["src/main.py", "tests/test_main.py"]
-    assert context.when_context.current_branch == "feature/add-auth"
-
-
-def test_adapter_without_changed_files():
-    """测试适配器处理载荷中缺少的 changed_files"""
-    payload = {"task_id": "test-task-456", "repo_path": "/tmp/test_repo"}
-
-    adapter = StopGateAdapter()
-    context = adapter.adapt_payload(payload)
-
-    assert context.task_id == "test-task-456"
-    assert context.when_context.changed_files == []
 
 
 def test_harness_runner_collects_and_arbitrates(tmp_path):
@@ -74,7 +44,8 @@ gate_policies:
     }
 
     runner = HarnessRunner(config_path)
-    verdict = runner.run(context)
+    result = runner.run(context)
+    verdict = result.verdict
 
     assert verdict.status == VerdictStatus.PASS  # 应该通过，因为 failed=0
     assert len(verdict.gate_results) == 1
@@ -100,9 +71,10 @@ gate_policies:
     )
     evidence_root = tmp_path.parent / "stop-gate-runtime"
 
-    verdict = HarnessRunner(config_path, evidence_root=evidence_root).run(
+    result = HarnessRunner(config_path, evidence_root=evidence_root).run(
         {"task_id": "task-1", "workspace": tmp_path, "branch": "main"}
     )
+    verdict = result.verdict
 
     assert verdict.status == VerdictStatus.PASS
     assert list((evidence_root / ".harness" / "evidence" / "task-1").glob("*.json"))
@@ -139,13 +111,14 @@ gate_policies:
     )
     evidence_root = tmp_path / "runtime"
 
-    verdict = HarnessRunner(config_path, evidence_root=evidence_root).run(
+    result = HarnessRunner(config_path, evidence_root=evidence_root).run(
         {
             "task_id": "task-1",
             "workspace": tmp_path,
             "branch": "docs/readme-update",
         }
     )
+    verdict = result.verdict
 
     assert verdict.status == VerdictStatus.PASS
     assert verdict.gate_results == []
@@ -177,7 +150,7 @@ gate_policies:
     )
     gate_called = False
 
-    def fail_save(*_args: object) -> None:
+    def fail_save(*_args: object, **_kwargs: object) -> None:
         raise OSError("disk unavailable")
 
     def record_arbitration(*_args: object):
@@ -191,7 +164,7 @@ gate_policies:
     with pytest.raises(OSError, match="disk unavailable"):
         HarnessRunner(config_path).run(
             {"task_id": "task-1", "workspace": tmp_path, "branch": "main"}
-        )
+        ).verdict
 
     assert gate_called is False
 
@@ -217,7 +190,7 @@ gate_policies:
         encoding="utf-8",
     )
 
-    verdict = HarnessRunner(config_path).run(
+    result = HarnessRunner(config_path).run(
         {
             "task_id": "task-1",
             "workspace": tmp_path,
@@ -225,6 +198,7 @@ gate_policies:
             "branch": "main",
         }
     )
+    verdict = result.verdict
 
     assert verdict.status == VerdictStatus.PASS
     assert verdict.gate_results[0].active is False
@@ -308,3 +282,56 @@ gate_policies:
     bundles = list((state_dir / "evidence").rglob("*-bundle.json"))
     assert len(bundles) == 3
     assert json.loads(bundles[-1].read_text(encoding="utf-8"))["evidence"][0]["status"] == "pass"
+
+
+def test_stop_hook_block_feedback_includes_gate_and_evidence_details(tmp_path: Path) -> None:
+    """FAIL 时 stdout 必须输出包含 Gate 与 Evidence 详情的结构化反馈。"""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "report.json").write_text(
+        json.dumps({"status": "fail", "summary": {"total": 5, "passed": 4, "failed": 1}}),
+        encoding="utf-8",
+    )
+    (workspace / "harness.yaml").write_text(
+        '''version: "harness/v1"
+settings: {failure_mode: closed}
+evidence_producers:
+  - id: api-test
+    type: test
+    name: API tests
+    command: echo done
+    producer: fixture-report
+    parser:
+      type: json
+      path: report.json
+      status_path: status
+      status_map: {pass: pass, fail: fail}
+      summary: {total: summary.total, passed: summary.passed, failed: summary.failed}
+gate_policies:
+  - name: API tests pass
+    severity: hard
+    rule: {evidence_id: api-test, condition: 'status == "pass"'}
+''',
+        encoding="utf-8",
+    )
+    state_dir = tmp_path / "stop-gate-state"
+    output = io.StringIO()
+
+    rc = run_stop_gate_hook(
+        input_stream=io.StringIO(json.dumps({"session_id": "session-1", "cwd": str(workspace)})),
+        output_stream=output,
+        state_dir=state_dir,
+    )
+
+    assert rc == 0
+    result = json.loads(output.getvalue())
+    assert result["decision"] == "block"
+    assert result["status"] == "fail"
+    assert result["schema_version"] == "stop-gate-feedback/v1"
+    assert result["next_action"] == "fix_issues_and_retry"
+    assert any(gate["name"] == "API tests pass" and not gate["passed"] for gate in result["gates"])
+    assert any(
+        ev["id"] == "api-test" and ev["summary"].get("failed") == 1
+        for ev in result["evidence"]
+    )
+    assert result["evidence_bundle_path"].endswith("-bundle.json")

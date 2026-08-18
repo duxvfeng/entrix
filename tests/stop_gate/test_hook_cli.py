@@ -18,6 +18,7 @@ from entrix.stop_gate.hook import (
     workspace_fingerprint,
 )
 from entrix.stop_gate.phase import write_phase
+from entrix.stop_gate.runner import RunResult
 
 
 def _run(
@@ -192,14 +193,14 @@ class TestRunStopGateHook:
         (legacy_dir / "code-quality.md").write_text("legacy", encoding="utf-8")
         calls = []
 
-        class Adapter:
+        class Runner:
             def __init__(self, **_kwargs):
                 calls.append("constructed")
 
-            def on_before_stop(self, _context):
-                raise AssertionError("legacy adapter must not run")
+            def run(self, _context):
+                raise AssertionError("Runner must not run without harness.yaml")
 
-        monkeypatch.setattr("entrix.stop_gate.adapter.StopGateAdapter", Adapter)
+        monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
 
         rc, output = _run({"session_id": "s1", "cwd": str(tmp_path)}, tmp_path, monkeypatch)
 
@@ -222,7 +223,7 @@ class TestRunStopGateHook:
 
             def run(self, context):
                 calls["context"] = context
-                return type("Verdict", (), {"status": type("Status", (), {"value": "pass"})(), "summary": ""})()
+                return RunResult(verdict=type("Verdict", (), {"status": type("Status", (), {"value": "pass"})(), "summary": ""})())
 
         monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
 
@@ -260,7 +261,7 @@ class TestRunStopGateHook:
 
             def run(self, _context):
                 calls.append("run")
-                return type("Verdict", (), {"status": "pass", "summary": ""})()
+                return RunResult(verdict=type("Verdict", (), {"status": "pass", "summary": ""})())
 
         monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
         monkeypatch.setattr("entrix.stop_gate.hook.derive_changed_files", lambda _workspace: None)
@@ -303,7 +304,7 @@ class TestRunStopGateHook:
 
             def run(self, _context):
                 calls.append("run")
-                return type("Verdict", (), {"status": "pass", "summary": ""})()
+                return RunResult(verdict=type("Verdict", (), {"status": "pass", "summary": ""})())
 
         monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
         monkeypatch.setattr("entrix.stop_gate.hook.derive_changed_files", lambda _workspace: [])
@@ -342,7 +343,7 @@ class TestRunStopGateHook:
 
             def run(self, context):
                 calls["context"] = context
-                return type("Verdict", (), {"status": "pass", "summary": ""})()
+                return RunResult(verdict=type("Verdict", (), {"status": "pass", "summary": ""})())
 
         monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
 
@@ -369,7 +370,7 @@ class TestRunStopGateHook:
                 assert path == config_path
 
             def run(self, context):
-                return type("Verdict", (), {"status": type("Status", (), {"value": "pass"})(), "summary": ""})()
+                return RunResult(verdict=type("Verdict", (), {"status": type("Status", (), {"value": "pass"})(), "summary": ""})())
 
         monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
 
@@ -453,7 +454,7 @@ class TestRunStopGateHook:
 
             def run(self, _context):
                 calls.append("run")
-                return type("Verdict", (), {"status": status, "summary": "Tests failed"})()
+                return RunResult(verdict=type("Verdict", (), {"status": status, "summary": "Tests failed"})())
 
         monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
         monkeypatch.setattr(
@@ -488,7 +489,7 @@ class TestRunStopGateHook:
 
             def run(self, _context):
                 calls.append("run")
-                return type("Verdict", (), {"status": "fail", "summary": "Tests failed"})()
+                return RunResult(verdict=type("Verdict", (), {"status": "fail", "summary": "Tests failed"})())
 
         monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
         monkeypatch.setattr("entrix.stop_gate.hook.derive_changed_files", lambda _workspace: [])
@@ -515,7 +516,7 @@ class TestRunStopGateHook:
 
             def run(self, _context):
                 calls.append("run")
-                return type("Verdict", (), {"status": "fail", "summary": "Tests failed"})()
+                return RunResult(verdict=type("Verdict", (), {"status": "fail", "summary": "Tests failed"})())
 
         fingerprints = iter(["before", "before", "after"])
         monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
@@ -552,7 +553,7 @@ class TestRunStopGateHook:
             def run(self, _context):
                 calls.append("run")
                 status, summary = next(statuses)
-                return type("Verdict", (), {"status": status, "summary": summary})()
+                return RunResult(verdict=type("Verdict", (), {"status": status, "summary": summary})())
 
         fingerprints = iter(["before", "after", "after"])
         monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
@@ -587,7 +588,7 @@ class TestRunStopGateHook:
 
             def run(self, context):
                 calls.append(context["branch"])
-                return type("Verdict", (), {"status": "fail", "summary": "Tests failed"})()
+                return RunResult(verdict=type("Verdict", (), {"status": "fail", "summary": "Tests failed"})())
 
         monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
         monkeypatch.setattr(
@@ -615,7 +616,7 @@ class TestRunStopGateHook:
 
             def run(self, context):
                 calls.append(context["base_ref"])
-                return type("Verdict", (), {"status": "fail", "summary": "Tests failed"})()
+                return RunResult(verdict=type("Verdict", (), {"status": "fail", "summary": "Tests failed"})())
 
         monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
         monkeypatch.setattr(
@@ -649,7 +650,7 @@ class TestRunStopGateHook:
 
             def run(self, _context):
                 calls.append("run")
-                return type("Verdict", (), {"status": "fail", "summary": "Tests failed"})()
+                return RunResult(verdict=type("Verdict", (), {"status": "fail", "summary": "Tests failed"})())
 
         monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
         monkeypatch.setattr(
@@ -685,7 +686,7 @@ class TestRunStopGateHook:
 
             def run(self, _context):
                 calls.append("run")
-                return type("Verdict", (), {"status": "fail", "summary": "Tests failed"})()
+                return RunResult(verdict=type("Verdict", (), {"status": "fail", "summary": "Tests failed"})())
 
         monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
         monkeypatch.setattr(
@@ -721,7 +722,7 @@ class TestRunStopGateHook:
                 pass
 
             def run(self, _context):
-                return type("Verdict", (), {"status": "fail", "summary": "Fitness failed"})()
+                return RunResult(verdict=type("Verdict", (), {"status": "fail", "summary": "Fitness failed"})())
 
         monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
         payload = {
