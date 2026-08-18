@@ -1,19 +1,7 @@
-#!/bin/bash
-# Entrix CLI launcher script
-# This script finds and executes the entrix Python module
+#!/usr/bin/env python3
+# Entrix CLI launcher script - Unix/Linux/macOS
+import sys
+import subprocess
 
-# Try to use installed entrix command first
-if command -v entrix &> /dev/null; then
-    exec entrix "$@"
-fi
-
-# Fallback to python -m entrix
-if command -v python &> /dev/null; then
-    exec python -m entrix "$@"
-elif command -v python3 &> /dev/null; then
-    exec python3 -m entrix "$@"
-else
-    echo "Error: Neither 'entrix' command nor Python found" >&2
-    echo "Please install entrix: pip install entrix" >&2
-    exit 1
-fi
+if __name__ == "__main__":
+    sys.exit(subprocess.run([sys.executable, "-m", "entrix"] + sys.argv[1:]).returncode)
