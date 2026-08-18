@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+# MCP tests require fastmcp - skip at module level
+import pytest
+pytest.importorskip("fastmcp", reason="requires fastmcp package")
+
 from pathlib import Path
 from unittest.mock import patch
 
 import json
-import pytest
-
-# Skip all MCP tests if fastmcp is not installed
-pytest.importorskip("fastmcp", reason="requires fastmcp package")
 
 from entrix.model import (
     DimensionScore,

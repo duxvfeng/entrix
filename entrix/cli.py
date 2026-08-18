@@ -371,43 +371,8 @@ def cmd_init(args: argparse.Namespace) -> int:
     harness_path.write_text(harness_text, encoding="utf-8")
     write_phase(target, "init", one_shot=True)
 
-    # 输出详细的中文配置说明（同时输出到 stdout 和 stderr）
-    border = "=" * 60
-    message = f"\n{border}\nEntrix 质量护栏初始化完成\n{border}\n\n"
-    message += f"仓库: {target}\n"
-    message += f"Profile: {selected_profile}\n"
-    message += f"状态: 质量护栏已配置并验证完成\n\n"
-    message += f"已创建的核心配置文件:\n"
-    message += f"  - {harness_path.name} - 所有质量策略的单一真实来源\n"
-    message += f"  - {mcp_path.name} - MCP 服务器配置\n\n"
-
-    # 解析生成的配置以提供更详细的说明
-    try:
-        import yaml
-        config = yaml.safe_load(harness_text)
-        if "fitness" in config and "dimensions" in config["fitness"]:
-            message += f"质量维度配置:\n"
-            for dim_group in config["fitness"]["dimensions"]:
-                if "dimensions" in dim_group:
-                    for dim in dim_group["dimensions"]:
-                        weight = dim.get("weight", 0)
-                        message += f"  - {dim.get('dimension', 'N/A')} ({weight}%): "
-                        metrics = dim.get("metrics", [])
-                        if metrics:
-                            message += f"{len(metrics)} 个指标\n"
-    except:
-        pass  # 如果解析失败，跳过详细说明
-
-    message += f"\n配置已就绪，Entrix 质量护栏系统将自动:\n"
-    message += f"  1. 在每次变更时验证代码质量\n"
-    message += f"  2. 通过覆盖率要求执行测试标准\n"
-    message += f"  3. 确保发布就绪状态\n"
-    message += f"  4. 阻止不符合质量标准的提交\n\n"
-    message += f"{border}\n"
-
-    # 输出到两个流
-    print(message, end="", file=sys.stderr)
-    print(message, end="", file=sys.stdout)
+    # 输出详细的中文配置说明
+    print(f"\n已创建 {mcp_path.name} 和 {harness_path.name}；profile: {selected_profile}；未执行检查")
 
     return 0
 
