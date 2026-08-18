@@ -47,6 +47,7 @@ from entrix.cli_hints import (
     print_next_steps,
     should_show_next_steps,
 )
+from entrix.stop_gate.phase import write_phase
 
 
 class _ShellOutputController:
@@ -359,7 +360,16 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     mcp_path.write_text(mcp_text, encoding="utf-8")
     harness_path.write_text(harness_text, encoding="utf-8")
+    write_phase(target, "init", one_shot=True)
     print(f"已创建 {mcp_path.name} 和 {harness_path.name}；未执行检查")
+    return 0
+
+
+def cmd_phase(args: argparse.Namespace) -> int:
+    """Set the short-lived Stop Gate phase for a repository."""
+    target = Path(args.repo).resolve() if args.repo else Path.cwd().resolve()
+    write_phase(target, args.mode)
+    print(f"Stop Gate phase set to {args.mode} for {target}")
     return 0
 
 
@@ -1348,6 +1358,7 @@ def build_parser() -> HintingArgumentParser:
         epilog=(
             "常用命令：\n"
             "  entrix init                 初始化 .mcp.json 与 harness.yaml\n"
+            "  entrix phase planning      标记当前回合为规划阶段\n"
             "  entrix harness validate     检查 Harness 配置\n"
             "  entrix run                  执行 Fitness 指标\n"
             "  entrix harness run --json   收集 evidence 并执行门禁裁决\n"
@@ -1467,6 +1478,22 @@ def build_parser() -> HintingArgumentParser:
     )
     init_parser.add_argument("--force", action="store_true", help="覆盖已有 harness.yaml 并重建默认配置。")
     init_parser.set_defaults(func=cmd_init)
+
+    phase_parser = subparsers.add_parser(
+        "phase",
+        help="Set the current Stop Gate phase without running checks",
+    )
+    phase_parser.add_argument(
+        "mode",
+        choices=["planning", "implementation"],
+        help="Current task phase",
+    )
+    phase_parser.add_argument(
+        "--repo",
+        default=None,
+        help="Optional repo root (defaults to current working directory).",
+    )
+    phase_parser.set_defaults(func=cmd_phase)
 
     serve_parser = subparsers.add_parser(
         "serve",

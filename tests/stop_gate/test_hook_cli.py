@@ -17,6 +17,7 @@ from entrix.stop_gate.hook import (
     main as stop_gate_main,
     workspace_fingerprint,
 )
+from entrix.stop_gate.phase import write_phase
 
 
 def _run(
@@ -154,13 +155,13 @@ class TestHarnessConfigDiscovery:
 
 
 class TestDeriveChangedFiles:
-    def test_non_git_directory_returns_empty(self, tmp_path: Path, monkeypatch):
+    def test_non_git_directory_reports_detection_failure(self, tmp_path: Path, monkeypatch):
         class Result:
             returncode = 1
             stdout = ""
 
         monkeypatch.setattr("entrix.stop_gate.hook.subprocess.run", lambda *args, **kwargs: Result())
-        assert derive_changed_files(tmp_path) == []
+        assert derive_changed_files(tmp_path) is None
 
     def test_parses_porcelain_entries(self, tmp_path: Path):
         import subprocess
@@ -210,6 +211,10 @@ class TestRunStopGateHook:
         config_path = tmp_path / "harness.yaml"
         config_path.write_text("version: harness/v1\n")
         calls = {}
+        monkeypatch.setattr(
+            "entrix.stop_gate.hook.derive_changed_files",
+            lambda _workspace: ["src/app.py"],
+        )
 
         class Runner:
             def __init__(self, path, **_kwargs):
@@ -227,6 +232,105 @@ class TestRunStopGateHook:
         assert out == ""
         assert calls["config_path"] == config_path
         assert calls["context"]["workspace"] == tmp_path
+
+    def test_skips_unmodified_workspace_before_runner(self, tmp_path: Path, monkeypatch):
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n")
+        calls = []
+
+        class Runner:
+            def __init__(self, _path, **_kwargs):
+                calls.append("constructed")
+
+        monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
+        monkeypatch.setattr("entrix.stop_gate.hook.derive_changed_files", lambda _workspace: [])
+
+        rc, out = _run({"session_id": "s1", "cwd": str(tmp_path)}, tmp_path, monkeypatch)
+
+        assert rc == 0
+        assert out == ""
+        assert calls == []
+
+    def test_runs_runner_when_change_detection_fails(self, tmp_path: Path, monkeypatch):
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n")
+        calls = []
+
+        class Runner:
+            def __init__(self, _path, **_kwargs):
+                calls.append("constructed")
+
+            def run(self, _context):
+                calls.append("run")
+                return type("Verdict", (), {"status": "pass", "summary": ""})()
+
+        monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
+        monkeypatch.setattr("entrix.stop_gate.hook.derive_changed_files", lambda _workspace: None)
+
+        rc, out = _run({"session_id": "s1", "cwd": str(tmp_path)}, tmp_path, monkeypatch)
+
+        assert rc == 0
+        assert out == ""
+        assert calls == ["constructed", "run"]
+
+    def test_planning_phase_skips_even_with_workspace_changes(self, tmp_path: Path, monkeypatch):
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n")
+        write_phase(tmp_path, "planning")
+        calls = []
+
+        class Runner:
+            def __init__(self, _path, **_kwargs):
+                calls.append("constructed")
+
+        monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
+        monkeypatch.setattr(
+            "entrix.stop_gate.hook.derive_changed_files",
+            lambda _workspace: ["src/app.py"],
+        )
+
+        rc, out = _run({"session_id": "s1", "cwd": str(tmp_path)}, tmp_path, monkeypatch)
+
+        assert rc == 0
+        assert out == ""
+        assert calls == []
+
+    def test_implementation_phase_runs_without_workspace_changes(self, tmp_path: Path, monkeypatch):
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n")
+        write_phase(tmp_path, "implementation")
+        calls = []
+
+        class Runner:
+            def __init__(self, _path, **_kwargs):
+                calls.append("constructed")
+
+            def run(self, _context):
+                calls.append("run")
+                return type("Verdict", (), {"status": "pass", "summary": ""})()
+
+        monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
+        monkeypatch.setattr("entrix.stop_gate.hook.derive_changed_files", lambda _workspace: [])
+
+        rc, out = _run({"session_id": "s1", "cwd": str(tmp_path)}, tmp_path, monkeypatch)
+
+        assert rc == 0
+        assert out == ""
+        assert calls == ["constructed", "run"]
+
+    def test_init_phase_is_consumed_without_running_runner(self, tmp_path: Path, monkeypatch):
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n")
+        write_phase(tmp_path, "init", one_shot=True)
+        calls = []
+
+        class Runner:
+            def __init__(self, _path, **_kwargs):
+                calls.append("constructed")
+
+        monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
+
+        rc, out = _run({"session_id": "s1", "cwd": str(tmp_path)}, tmp_path, monkeypatch)
+
+        assert rc == 0
+        assert out == ""
+        assert calls == []
+        assert not (tmp_path / ".harness" / "runtime" / "phase.json").exists()
 
     def test_passes_branch_and_base_ref_to_harness_runner(self, tmp_path: Path, monkeypatch):
         (tmp_path / "harness.yaml").write_text("version: harness/v1\n")
@@ -369,6 +473,35 @@ class TestRunStopGateHook:
         assert second_rc == 0
         assert json.loads(second_out)["decision"] == "block"
         assert "未检测到代码变更" in json.loads(second_out)["reason"]
+        assert calls == ["run"]
+
+    def test_unmodified_workspace_preserves_cached_failure_after_implementation(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Planning skips must not bypass a failed implementation verdict."""
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
+        calls = []
+
+        class Runner:
+            def __init__(self, _path, **_kwargs):
+                pass
+
+            def run(self, _context):
+                calls.append("run")
+                return type("Verdict", (), {"status": "fail", "summary": "Tests failed"})()
+
+        monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
+        monkeypatch.setattr("entrix.stop_gate.hook.derive_changed_files", lambda _workspace: [])
+        state_dir = tmp_path.parent / "stop-gate-state"
+        payload = {"session_id": "s1", "cwd": str(tmp_path), "hook_event_name": "Stop"}
+        write_phase(tmp_path, "implementation")
+
+        _run(payload, tmp_path, monkeypatch, state_dir=state_dir)
+        (tmp_path / ".harness" / "runtime" / "phase.json").unlink()
+        second_rc, second_out = _run(payload, tmp_path, monkeypatch, state_dir=state_dir)
+
+        assert second_rc == 0
+        assert json.loads(second_out)["decision"] == "block"
         assert calls == ["run"]
 
     def test_stop_hook_reruns_after_workspace_changes(self, tmp_path: Path, monkeypatch):

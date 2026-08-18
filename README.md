@@ -144,6 +144,13 @@ Gate 都从该文件读取质量规则。
 `entrix init` 只生成配置，不会执行校验、Fitness、Harness 或 Stop Gate。通过 Claude
 Code 使用时，Claude 必须先询问是否继续运行检查；只有得到明确确认后才可执行下方命令。
 
+Stop Gate 按任务阶段触发：头脑风暴和规划阶段使用 `entrix phase planning --repo .`，不执行
+门禁；用户批准开始开发后使用 `entrix phase implementation --repo .`，实现阶段结束时执行
+完整门禁。`entrix init` 会自动写入一次性初始化标记，当前初始化回合结束时跳过门禁。没有阶段
+标记时，为兼容直接编辑工作流，工作区有变更仍会触发 Stop Gate；没有变更则直接放行。
+阶段标记按工作区保存并默认 8 小时过期，不提供会话级隔离；并发会话或遗留规划标记存在时，
+开始实现前必须显式切换到 `implementation`。
+
 ### 并发与 Java 多模块项目
 
 Entrix 只限制自身同时启动的外层检查数量，不解析或改写 Maven、Surefire、Failsafe 或

@@ -24,6 +24,7 @@ from entrix.presets import get_project_preset
 from entrix.reporting import report_to_dict
 from entrix.harness.config import HarnessConfig, load_harness_config
 from entrix.harness.evidence import EvidenceBundle
+from entrix.stop_gate.phase import read_phase
 import entrix.cli as cli_module
 
 
@@ -56,6 +57,7 @@ def test_init_creates_mcp_config_and_harness_template(tmp_path, capsys):
 
     assert exit_code == 0
     assert json.loads((tmp_path / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]
+    assert read_phase(tmp_path) == "init"
     config = load_harness_config(tmp_path / "harness.yaml")
     assert {dimension.name for dimension in config.fitness_dimensions} == {
         "code_quality",
@@ -65,6 +67,23 @@ def test_init_creates_mcp_config_and_harness_template(tmp_path, capsys):
         "performance",
     }
     assert "已创建" in capsys.readouterr().out
+
+
+def test_phase_command_writes_planning_state_without_running_checks(tmp_path, capsys):
+    args = argparse.Namespace(repo=str(tmp_path), mode="planning")
+
+    assert cli_module.cmd_phase(args) == 0
+
+    assert read_phase(tmp_path) == "planning"
+    assert "planning" in capsys.readouterr().out
+
+
+def test_phase_parser_accepts_implementation_mode(tmp_path):
+    args = build_parser().parse_args(["phase", "implementation", "--repo", str(tmp_path)])
+
+    assert args.command == "phase"
+    assert args.mode == "implementation"
+    assert args.repo == str(tmp_path)
 
 
 def test_init_preserves_existing_harness_unless_forced(tmp_path, capsys):

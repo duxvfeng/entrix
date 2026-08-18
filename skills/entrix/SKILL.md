@@ -54,6 +54,10 @@ For any bootstrap or repair task, read in this order:
   complete Harness run. Do not have Claude run `entrix run` or
   `entrix harness run` immediately before stopping; that duplicates expensive
   checks and can overlap JVM/Gradle processes.
+- Treat the task phase as part of the Stop Gate lifecycle. At the beginning of
+  planning or brainstorming, run `entrix phase planning --repo .`. Only after
+  the user explicitly approves implementation, run `entrix phase implementation
+  --repo .`.
 - Add a security or release metric only when the repository has a real command
   or CI signal for it.
 - Keep every existing agent entry document discoverable: point `AGENTS.md` and
@@ -118,6 +122,13 @@ fields such as `execution_scope`, `timeout_seconds`, `gate`, `evidence_type`,
 
 ### 1. Inspect the repository
 
+If this invocation is still in planning or brainstorming, mark that phase
+before reading or changing configuration:
+
+```bash
+entrix phase planning --repo .
+```
+
 Identify real signals from package scripts, task runners, CI workflows,
 checked-in helper scripts, and an existing `harness.yaml`. Prefer local
 repository commands first, then root-safe commands copied from CI, then direct
@@ -142,8 +153,9 @@ If an entry document already exists, add a short note that rules live in
 
 ### 4. Ask before validation
 
-`entrix init` only creates `.mcp.json` and `harness.yaml`. After creating or
-repairing configuration, report the files changed and ask the user:
+`entrix init` creates `.mcp.json` and `harness.yaml` plus a one-shot runtime
+phase marker. After creating or repairing configuration, report the files
+changed and ask the user:
 
 ```text
 Configuration is ready. Do you want to run configuration validation or local checks now?
@@ -153,6 +165,18 @@ Do not run `entrix harness validate`, `entrix run --dry-run`, `entrix run
 --tier fast`, `entrix harness run`, or Stop Gate until the user explicitly
 answers yes. A request to initialize, create, or repair configuration is not
 approval to run checks.
+
+When the user approves implementation work, switch the phase before editing
+source or running implementation checks:
+
+```bash
+entrix phase implementation --repo .
+```
+
+`entrix init` writes a one-shot initialization phase automatically. The Stop
+Hook consumes it at the end of that initialization turn, so configuration
+creation does not trigger a full Harness run before the user answers the
+confirmation question.
 
 When validation is explicitly approved, run the best available Entrix
 invocation in this order: `entrix`, `uvx --from entrix entrix`, then `python3

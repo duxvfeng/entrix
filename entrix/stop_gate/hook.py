@@ -30,6 +30,7 @@ from typing import IO
 import yaml
 
 from entrix.stop_gate.revalidation import CachedVerdict, StopGateStateStore
+from entrix.stop_gate.phase import consume_phase, read_phase
 
 DEFAULT_TIMEOUT_SECONDS = 240
 
@@ -78,10 +79,11 @@ def read_hook_payload(stream: IO[str] | None = None) -> dict:
     return payload if isinstance(payload, dict) else {}
 
 
-def derive_changed_files(workspace: Path) -> list[str]:
+def derive_changed_files(workspace: Path) -> list[str] | None:
     """从 git 工作区状态推导本次会话的变更文件列表。
 
-    非 git 仓库或 git 不可用时返回空列表（等价于全量检查）。
+    非 git 仓库或 git 不可用时返回 ``None``，由调用方进入完整检查，
+    避免把无法确认变更状态误判为干净工作区。
     """
     try:
         result = subprocess.run(
@@ -93,9 +95,9 @@ def derive_changed_files(workspace: Path) -> list[str]:
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
-        return []
+        return None
     if result.returncode != 0:
-        return []
+        return None
 
     changed: list[str] = []
     for line in result.stdout.splitlines():
@@ -321,6 +323,14 @@ def run_stop_gate_hook(
     if harness_config is None:
         return 0
     try:
+        phase = read_phase(workspace)
+        if consume_phase(workspace, "init") or phase == "planning":
+            return 0
+        detected_changed_files = derive_changed_files(workspace)
+        changed_files = detected_changed_files or []
+        detection_failed = detected_changed_files is None
+        should_collect = phase == "implementation" or bool(changed_files) or detection_failed
+
         session_id = str(payload.get("session_id") or "unknown-session")
         stop_reason = str(payload.get("reason") or "agent_completed")
         branch = str(payload.get("branch") or derive_current_branch(workspace))
@@ -331,6 +341,8 @@ def run_stop_gate_hook(
             branch=branch,
             base_ref=base_ref,
             harness_config=harness_config,
+            changed_files=changed_files,
+            should_collect=should_collect,
             output_stream=output_stream,
             state_dir=state_dir,
         )
@@ -347,6 +359,8 @@ def _run_configured_stop_gate(
     branch: str,
     base_ref: str | None,
     harness_config: Path,
+    changed_files: list[str],
+    should_collect: bool,
     output_stream: IO[str],
     state_dir: Path | None,
 ) -> int:
@@ -370,11 +384,14 @@ def _run_configured_stop_gate(
             return 0
         state_store.delete(workspace, session_id)
 
+    if not should_collect:
+        return 0
+
     context = {
         "session_id": session_id,
         "task_id": session_id,
         "workspace": workspace,
-        "changed_files": derive_changed_files(workspace),
+        "changed_files": changed_files,
         "branch": branch,
         "stop_reason": stop_reason,
         "base_ref": base_ref,

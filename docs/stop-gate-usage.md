@@ -15,6 +15,26 @@ Evidence Engine 只产生标准化 Evidence，Gate Engine 只根据 Evidence 仲
 `BLOCKED` 与 `error` 会缓存，避免代理重复执行已知失败的慢检查。工作区内容、分支、
 base ref、Harness 配置或 `when.env` 依赖发生变化时，缓存失效并重新收集。
 
+Stop Gate 只应服务于实现阶段的 DoD。头脑风暴或规划阶段运行：
+
+```bash
+entrix phase planning --repo .
+```
+
+用户批准开始开发后切换为：
+
+```bash
+entrix phase implementation --repo .
+```
+
+`entrix init` 会写入一次性初始化阶段，Stop Hook 消费该标记后放行当前回合。阶段状态保存在
+`.harness/runtime/phase.json`，属于短期运行时状态，不是 `harness.yaml` 中的永久豁免。没有
+阶段标记时，只有检测到工作区变更才进入门禁，兼容直接编辑项目的使用方式。
+
+阶段标记按工作区保存，默认有效 8 小时，不是 Claude 会话级锁。一个仓库存在并发会话时，
+后设置的阶段可能覆盖先设置的阶段；开始任何实现工作前都应显式执行
+`entrix phase implementation --repo .`，不要依赖遗留的 `planning` 标记。
+
 唯一的紧急旁路是：
 
 ```bash

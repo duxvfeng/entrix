@@ -20,3 +20,4 @@ venv/
 .claude/settings.json
 .claude/stop-gate/
 .harness/evidence/
+.harness/runtime/
