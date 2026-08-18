@@ -1,9 +1,9 @@
-# Harness Schema Spec
+# Harness Schema 规范
 
-Entrix reads one repository-root `harness.yaml`. The file contains all
-executable Fitness, review, evidence, and gate policy data.
+Entrix 读取仓库根目录的一个 `harness.yaml`。该文件包含所有可执行的 Fitness、
+review、evidence 和 gate policy 数据。
 
-## Required Shape
+## 必需结构
 
 ```yaml
 version: "harness/v1"
@@ -22,38 +22,36 @@ evidence_producers: []
 gate_policies: []
 ```
 
-## Dimension Rules
+## 维度规则
 
-- `fitness.dimensions` is a list of uniquely named dimensions.
-- Each dimension has `dimension`, non-negative `weight`, `threshold`, and a
-  `metrics` list.
-- Active weighted dimensions must total exactly `100`.
-- Metric names are unique within a dimension. Each metric needs a non-empty
-  `name` and `command`.
-- Use `snake_case` for dimension and metric names.
+- `fitness.dimensions` 是名称唯一的维度列表。
+- 每个维度包含 `dimension`、非负 `weight`、`threshold` 和 `metrics` 列表。
+- 生效的加权维度总和必须严格为 `100`。
+- 同一维度内的 metric 名称必须唯一。每个 metric 都需要非空的 `name` 和 `command`。
+- 维度和 metric 名称使用 `snake_case`。
 
-## Metric Fields
+## Metric 字段
 
-Start with `name`, `command`, `pattern`, `hard_gate`, `tier`, and
-`description`. Add `execution_scope`, `timeout_seconds`, `gate`,
-`evidence_type`, `confidence`, `stability`, `kind`, `analysis`, `owner`,
-`run_when_changed`, or `waiver` only when there is a repository-specific need.
+从 `name`、`command`、`pattern`、`hard_gate`、`tier` 和 `description` 开始。只有
+仓库有特定需要时，才添加 `execution_scope`、`timeout_seconds`、`gate`、
+`evidence_type`、`confidence`、`stability`、`kind`、`analysis`、`owner`、
+`run_when_changed` 或 `waiver`。
 
-Commands run from the repository root. Prefer existing repository wrappers and
-put CI-only authority behind `execution_scope: ci`.
+命令从仓库根目录运行。优先使用仓库已有的包装器，并将仅 CI 权威检查放在
+`execution_scope: ci` 后面。
 
-## Review, Producers, and Gates
+## Review、Producer 和 Gate
 
-- Put review rules in `review_triggers.rules`.
-- Define command or builtin producers in `evidence_producers`.
-- Reference one evidence id or type from each `gate_policies[].rule`.
-- Use `entrix-fitness`, `entrix-review-trigger`, and `diff-stats` for Entrix's
-  builtin producers.
+- 将 review 规则放入 `review_triggers.rules`。
+- 在 `evidence_producers` 中定义 command 或 builtin producer。
+- 每个 `gate_policies[].rule` 引用一个 evidence id 或 type。
+- Entrix 的 builtin producer 使用 `entrix-fitness`、`entrix-review-trigger` 和
+  `diff-stats`。
 
-## Anti-Patterns
+## 反模式
 
-- duplicate dimension or metric names
-- weights that do not total `100`
-- placeholder commands such as `echo TODO`
-- local hard gates that depend on uninstalled tooling
-- separate files for dimensions, manifests, or review rules
+- 重复的维度或 metric 名称
+- 总和不为 `100` 的权重
+- `echo TODO` 一类的占位命令
+- 依赖未安装工具的本地硬门禁
+- 为维度、manifest 或 review 规则创建独立文件

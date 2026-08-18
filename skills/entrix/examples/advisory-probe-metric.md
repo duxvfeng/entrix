@@ -1,4 +1,4 @@
-Add this metric under the appropriate `harness.yaml` `fitness.dimensions[].metrics` list:
+将此 metric 添加到适用的 `harness.yaml` `fitness.dimensions[].metrics` 列表中：
 
 ```yaml
 - name: graph_test_radius_probe

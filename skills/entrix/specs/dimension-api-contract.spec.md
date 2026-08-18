@@ -1,29 +1,28 @@
-# API Contract Dimension Spec
+# API 契约（API Contract）维度规范
 
-Use this when editing the `api_contract` dimension in `harness.yaml`.
+编辑 `harness.yaml` 中的 `api_contract` 维度时使用本规范。
 
-## Purpose
+## 目的
 
-Guard externally visible behavior that clients and integrations depend on.
+保护客户端和集成所依赖的外部可见行为。
 
-## Typical Signals
+## 典型信号
 
-- API parity checks
-- schema validation
-- endpoint behavior matrices
-- request or response compatibility tests
-- negative-path coverage for contract failures
+- API parity 检查
+- Schema 校验
+- 端点行为矩阵
+- 请求或响应兼容性测试
+- 契约失败的负向路径覆盖
 
-## Split Guidance
+## 拆分指导
 
-It is acceptable for one repository to keep:
+一个仓库保留以下内容是可以接受的：
 
-- one evidence file for executable API tests
-- another evidence file for broader compatibility or evolvability rules
+- 一个用于可执行 API 测试的 evidence 文件
+- 另一个用于更广泛兼容性或可演进性规则的 evidence 文件
 
-The important thing is that the split is explicit and discoverable.
+重要的是，拆分必须明确且易于发现。
 
-## Boundary
+## 边界
 
-Do not bury contract checks inside generic test buckets when the repository has
-clear API-facing guarantees.
+当仓库存在明确的 API 保障时，不要把契约检查隐藏在通用测试分类中。

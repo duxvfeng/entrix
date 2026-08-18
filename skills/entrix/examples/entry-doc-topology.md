@@ -1,13 +1,12 @@
-# Entry Document Topology
+# 入口文档拓扑
 
-Use this decision table when deciding which agent entry documents to update.
+决定要更新哪些代理入口文档时，使用以下决策表。
 
-| Repository state | Required result |
+| 仓库状态 | 必需结果 |
 | --- | --- |
-| `AGENTS.md` exists, `CLAUDE.md` missing | update `AGENTS.md` only |
-| `CLAUDE.md` exists, `AGENTS.md` missing | update `CLAUDE.md` only |
-| both exist | update both and keep the fitness section identical |
-| neither exists | create only `AGENTS.md` |
+| `AGENTS.md` 存在，`CLAUDE.md` 缺失 | 只更新 `AGENTS.md` |
+| `CLAUDE.md` 存在，`AGENTS.md` 缺失 | 只更新 `CLAUDE.md` |
+| 两者都存在 | 两者都更新，并保持 fitness 部分一致 |
+| 两者都不存在 | 只创建 `AGENTS.md` |
 
-Never create an extra second entry document just because it exists in other
-repositories.
+不要仅因为其他仓库中存在第二个入口文档，就额外创建一个入口文档。

@@ -1,7 +1,7 @@
-# CI-Scoped Authoritative Metric
+# CI 范围的权威 Metric
 
-Use this `harness.yaml` dimension when the real suite needs CI provisioning but
-the default local path must remain green:
+当真实测试套件需要 CI 提供环境、但默认本地路径必须保持绿色时，使用此
+`harness.yaml` 维度：
 
 ```yaml
 - dimension: testability

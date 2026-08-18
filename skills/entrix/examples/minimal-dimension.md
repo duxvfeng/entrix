@@ -1,6 +1,6 @@
-# Minimal Dimension
+# 最小维度
 
-Add this item to `harness.yaml` under `fitness.dimensions`:
+将此条目添加到 `harness.yaml` 的 `fitness.dimensions` 下：
 
 ```yaml
 - dimension: code_quality

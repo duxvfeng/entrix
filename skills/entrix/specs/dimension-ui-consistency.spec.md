@@ -1,26 +1,24 @@
-# UI Consistency Dimension Spec
+# UI 一致性（UI Consistency）维度规范
 
-Use this when editing the `ui_consistency` dimension in `harness.yaml`.
+编辑 `harness.yaml` 中的 `ui_consistency` 维度时使用本规范。
 
-## Purpose
+## 目的
 
-Guard end-user consistency across shells, key journeys, and high-value UI
-surfaces.
+保护 shell、关键用户旅程和高价值 UI 质量面之间的终端用户一致性。
 
-## Typical Signals
+## 典型信号
 
-- shell coverage checks
-- page-level navigation or layout evidence
-- manual or automated QA matrices
-- browser-flow validation for critical journeys
+- shell 覆盖率检查
+- 页面级导航或布局证据
+- 手工或自动化 QA 矩阵
+- 关键旅程的浏览器流程校验
 
-## Split Guidance
+## 拆分指导
 
-This dimension is a good candidate for multiple evidence files when the
-repository needs to separate:
+当仓库需要区分以下内容时，此维度适合拆分为多个 evidence 文件：
 
-- shell-level consistency
-- web QA or e2e journey evidence
+- shell 级一致性
+- Web QA 或 E2E 旅程证据
 
-If you keep the same dimension name across files, explain the split clearly in
-the file body and keep manifest entries accurate.
+如果多个文件使用同一个维度名称，应在文件正文中清楚解释拆分方式，并保持 manifest
+条目准确。

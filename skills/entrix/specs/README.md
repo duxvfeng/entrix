@@ -1,16 +1,15 @@
-# Fitness Skill Specs
+# Fitness Skill 规范
 
-Use this index the same way `slide-skill/artifact_tool/README.md` is used: it
-is a second-level map, not the full implementation.
+像使用 `slide-skill/artifact_tool/README.md` 一样使用此索引：它是第二层级的导航图，
+不是完整实现。
 
-## Foundation Specs
+## 基础规范
 
-- `harness-schema.spec.md`: required and optional `harness.yaml` fields, plus
-  when to use advanced metric metadata.
-- `dimension-boundaries.spec.md`: how to decide whether a metric belongs in an
-  existing dimension or a new quality surface.
+- `harness-schema.spec.md`：`harness.yaml` 的必需和可选字段，以及何时使用高级
+  metric 元数据。
+- `dimension-boundaries.spec.md`：如何判断一个 metric 属于已有维度还是新的质量面。
 
-## Dimension Specs
+## 维度规范
 
 - `dimension-code-quality.spec.md`
 - `dimension-engineering-governance.spec.md`
@@ -22,7 +21,7 @@ is a second-level map, not the full implementation.
 - `dimension-ui-consistency.spec.md`
 - `dimension-runtime.spec.md`
 
-## Examples
+## 示例
 
 - `../examples/minimal-dimension.md`
 - `../examples/advisory-probe-metric.md`
@@ -31,18 +30,15 @@ is a second-level map, not the full implementation.
 - `../examples/ci-scoped-authoritative-metric.md`
 - `../examples/toolchain-boundary-ci-scope.md`
 
-## Reading Guidance
+## 阅读指导
 
-Read only the specs needed for the current task:
+只阅读当前任务所需的规范：
 
-- adding or editing metrics: `harness-schema.spec.md` + one dimension spec
-- adding or consolidating dimensions: `dimension-boundaries.spec.md`
-- deciding whether to add a dimension: `dimension-boundaries.spec.md`
-- adding runtime evidence: `dimension-runtime.spec.md`
-- deciding what to do with build or packaging signals:
-  `dimension-release-readiness.spec.md`
-- resolving agent-entry ambiguity: `../examples/entry-doc-topology.md`
-- modeling CI-only authoritative checks:
-  `../examples/ci-scoped-authoritative-metric.md`
-- modeling local toolchain boundaries:
-  `../examples/toolchain-boundary-ci-scope.md`
+- 新增或编辑 metric：`harness-schema.spec.md` + 一个维度规范
+- 新增或合并维度：`dimension-boundaries.spec.md`
+- 判断是否新增维度：`dimension-boundaries.spec.md`
+- 添加运行时证据：`dimension-runtime.spec.md`
+- 决定如何处理构建或打包信号：`dimension-release-readiness.spec.md`
+- 解决代理入口歧义：`../examples/entry-doc-topology.md`
+- 建模仅 CI 权威检查：`../examples/ci-scoped-authoritative-metric.md`
+- 建模本地工具链边界：`../examples/toolchain-boundary-ci-scope.md`

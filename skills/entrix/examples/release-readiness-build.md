@@ -1,6 +1,6 @@
-# Release Readiness Build
+# Release Readiness 构建
 
-Add this item to `harness.yaml` under `fitness.dimensions`:
+将此条目添加到 `harness.yaml` 的 `fitness.dimensions` 下：
 
 ```yaml
 - dimension: release_readiness

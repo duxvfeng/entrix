@@ -1,63 +1,55 @@
-# Testability Dimension Spec
+# 可测试性（Testability）维度规范
 
-Use this when editing the `testability` dimension in `harness.yaml`.
+编辑 `harness.yaml` 中的 `testability` 维度时使用本规范。
 
-## Purpose
+## 目的
 
-Guard whether the repository has enough executable regression evidence for the
-behaviors it changes.
+保护仓库是否拥有足够的可执行回归证据，来覆盖它所变更的行为。
 
-## Typical Signals
+## 典型信号
 
-- unit test pass
-- integration test pass
-- graph-derived test radius probes
-- evidence matrices that map behavior to tests
+- 单元测试通过
+- 集成测试通过
+- 基于图的测试半径 probe
+- 将行为映射到测试的 evidence 矩阵
 
-## Authoring Pattern
+## 编写模式
 
-Combine executable frontmatter with a narrative checklist of verified,
-blocked, and pending behaviors.
+将可执行的 frontmatter 与已验证、已阻塞和待处理行为的叙述性清单结合起来。
 
-This dimension works well when the markdown body captures:
+当 Markdown 正文记录以下内容时，此维度效果良好：
 
-- critical behaviors
-- status per behavior
-- exact test file paths
-- gaps that still block confidence
+- 关键行为
+- 每个行为的状态
+- 准确的测试文件路径
+- 仍会阻塞信心的缺口
 
-## Local vs CI Authority
+## 本地与 CI 权威性
 
-Prefer locally runnable tests for the default bootstrap path.
+默认初始化路径优先使用可在本地运行的测试。
 
-If the repository's real test suite is authoritative but the current local
-environment is missing repo-specific dev dependencies, treat that as an
-environment boundary instead of forcing the suite into a local `fast` hard
-gate. In those cases:
+如果仓库的真实测试套件具有权威性，但当前本地环境缺少仓库专属开发依赖，应将其
+视为环境边界，而不是强行把套件放入本地 `fast` 硬门禁。在这种情况下：
 
-- keep any cheap local smoke or scoped tests in local tiers when they truly run
-- model the full authoritative suite with `execution_scope: ci` when CI is the
-  real place it is provisioned to run
-- explain the dependency boundary in the markdown body
+- 确实可以运行时，在本地 tier 中保留廉价的冒烟或范围测试
+- 如果 CI 才是真正准备并运行套件的地方，使用 `execution_scope: ci` 建模完整的
+  权威套件
+- 在 Markdown 正文中解释依赖边界
 
-For bootstrap output, prefer making plain local `entrix run` green on a fresh
-machine. A repository's full pytest or integration suite can still be preserved
-as authoritative evidence, but if it depends on dev-only packages that are not
-installed locally, it should usually be `execution_scope: ci` rather than a
-default local metric.
+对于初始化输出，优先让普通本地 `entrix run` 在新机器上保持绿色。仓库完整的
+pytest 或集成测试套件仍可作为权威证据保留；但如果它依赖本地未安装的开发专用包，
+通常应设置为 `execution_scope: ci`，而不是默认本地 metric。
 
-The same rule applies to coverage generation and similar non-hard-gate checks:
-if they are useful evidence but not reliably green in ordinary local runs,
-model them as CI-scoped or otherwise keep them from dragging the weighted local
-score below the dimension threshold.
+同样的规则适用于覆盖率生成和其他非硬门禁检查：如果它们是有用证据，但无法在普通
+本地运行中稳定保持绿色，应将其建模为 CI 范围，或以其他方式避免它们把本地加权分数
+拖到维度阈值以下。
 
-## Boundary
+## 边界
 
-Keep endpoint-level contract details in `api_contract` when the repository
-treats API parity as a first-class surface.
+当仓库将 API parity 视为一等质量面时，将端点级契约细节放入 `api_contract`。
 
-Use `testability` for:
+以下内容使用 `testability`：
 
-- behavior regression evidence
-- unit or integration breadth
-- verification completeness
+- 行为回归证据
+- 单元或集成测试广度
+- 验证完整性

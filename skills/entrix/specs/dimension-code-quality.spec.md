@@ -1,45 +1,44 @@
-# Code Quality Dimension Spec
+# 代码质量（Code Quality）维度规范
 
-Use this when editing the `code_quality` dimension in `harness.yaml`.
+编辑 `harness.yaml` 中的 `code_quality` 维度时使用本规范。
 
-## Purpose
+## 目的
 
-Guard the shape and maintainability of the code itself.
+保护代码本身的结构和可维护性。
 
-## Typical Signals
+## 典型信号
 
 - lint
 - typecheck
-- clippy or compiler warnings
-- file or function budgets
-- duplicate code checks
-- structural smell scans
-- complexity limits
+- clippy 或编译器警告
+- 文件或函数预算
+- 重复代码检查
+- 结构异味扫描
+- 复杂度限制
 
-## Good Metric Patterns
+## 良好的 Metric 模式
 
-- prefer repository scripts for lint and typecheck
-- use diff-aware commands for expensive static checks when the repository
-  already does that
-- keep hard gates for checks that should truly block merge
-- avoid optional toolchain-specific checks as bootstrap `fast` hard gates unless
-  they are locally runnable or a checked-in repo wrapper bootstraps them
+- lint 和 typecheck 优先使用仓库脚本
+- 如果仓库已经支持，对昂贵的静态检查使用感知 diff 的命令
+- 只有确实应该阻塞合并的检查才设置硬门禁
+- 不要将可选的工具链专属检查作为初始化 `fast` 硬门禁，除非它们可以在本地运行，
+  或由已提交的仓库包装器负责准备环境
 
-## Split Guidance
+## 拆分指导
 
-Keep `code_quality` focused on static or source-local concerns.
+让 `code_quality` 专注于静态或源码本地的关注点。
 
-Do not hide these here:
+不要将以下内容隐藏在此维度中：
 
-- API parity checks
-- runtime telemetry probes
-- e2e flows
-- security scanners
+- API parity 检查
+- 运行时 telemetry probe
+- E2E 流程
+- 安全扫描器
 
-## Narrative Body
+## 叙述正文
 
-Use the markdown body to explain:
+使用 Markdown 正文说明：
 
-- what code-quality failure means in this repository
-- why specific budgets or thresholds exist
-- any known legacy hotspots or waivers
+- 代码质量失败在本仓库中的含义
+- 设置特定预算或阈值的原因
+- 已知的遗留热点或豁免

@@ -1,32 +1,31 @@
-# Engineering Governance Dimension Spec
+# 工程治理（Engineering Governance）维度规范
 
-Use this when editing the `engineering_governance` dimension in `harness.yaml`.
+编辑 `harness.yaml` 中的 `engineering_governance` 维度时使用本规范。
 
-## Purpose
+## 目的
 
-Guard repository hygiene, review discipline, and change blast radius.
+保护仓库整洁度、审查纪律和变更影响范围。
 
-## Typical Signals
+## 典型信号
 
-- diff size or blast radius probes
-- external link validity
-- TODO or FIXME growth
-- script sprawl or budget enforcement
-- repo policy conformance
+- diff 大小或影响范围 probe
+- 外部链接有效性
+- TODO 或 FIXME 增长
+- 脚本泛滥或预算执行
+- 仓库策略符合性
 
-## Boundary
+## 边界
 
-This dimension is about safe change process and repository shape, not code
-correctness itself.
+此维度关注安全的变更流程和仓库结构，而不是代码正确性本身。
 
-Move checks elsewhere if they are really about:
+如果检查实际关注以下内容，应将其移到其他维度：
 
-- code semantics or compile correctness
-- security findings
-- API contract behavior
-- UI rendering fidelity
+- 代码语义或编译正确性
+- 安全发现
+- API 契约行为
+- UI 渲染保真度
 
-## Good Uses
+## 适用场景
 
-- checks that help decide whether deeper review is needed
-- governance rules that should warn or gate before risky changes land
+- 帮助判断是否需要深入审查的检查
+- 在高风险变更落地前发出警告或执行门禁的治理规则

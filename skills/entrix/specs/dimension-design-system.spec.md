@@ -1,22 +1,21 @@
-# Design System Dimension Spec
+# 设计系统（Design System）维度规范
 
-Use this when editing the `design_system` dimension in `harness.yaml`.
+编辑 `harness.yaml` 中的 `design_system` 维度时使用本规范。
 
-## Purpose
+## 目的
 
-Guard component-system fidelity, tokens, accessibility layers, and visual
-contracts that are broader than one page shell.
+保护组件系统的一致性、设计 token、无障碍层，以及超出单个页面外壳范围的视觉契约。
 
-## Typical Signals
+## 典型信号
 
-- token or CSS contract checks
-- component-layer visual regression
-- accessibility-focused checks
-- design-system coverage matrices
+- token 或 CSS 契约检查
+- 组件层视觉回归
+- 面向无障碍的检查
+- design-system 覆盖率矩阵
 
-## Boundary
+## 边界
 
-Keep this dimension focused on reusable system quality.
+让此维度专注于可复用的系统质量。
 
-Move page-shell or navigation-shell concerns to `ui_consistency` when the
-repository treats them as a separate surface.
+如果仓库将页面外壳或导航外壳视为独立质量面，则将相关关注点移到
+`ui_consistency`。

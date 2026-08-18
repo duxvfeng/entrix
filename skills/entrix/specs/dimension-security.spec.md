@@ -1,41 +1,38 @@
-# Security Dimension Spec
+# 安全（Security）维度规范
 
-Use this when editing the `security` dimension in `harness.yaml`.
+编辑 `harness.yaml` 中的 `security` 维度时使用本规范。
 
-## Purpose
+## 目的
 
-Guard dependency risk and security scanning outcomes.
+保护依赖风险和安全扫描结果。
 
-## Typical Signals
+## 典型信号
 
 - `npm audit`
 - `cargo audit`
 - `pip-audit`
 - semgrep
-- SARIF-producing scanners
+- 生成 SARIF 的扫描器
 
-Only use a security tool when the repository already shows direct evidence for
-it in:
+只有在仓库已经通过以下来源提供该安全工具的直接证据时，才使用它：
 
-- CI workflows
-- checked-in task runners or scripts
-- checked-in security docs
-- existing fitness files
+- CI 工作流
+- 已提交的任务运行器或脚本
+- 已提交的安全文档
+- 已有的 fitness 文件
 
-## Hard-Gate Guidance
+## 硬门禁指导
 
-Reserve hard gates for truly blocking findings, typically critical
-vulnerabilities or repository policies with clear merge-stop meaning.
+将硬门禁保留给真正会阻塞流程的问题，通常是严重漏洞，或具有明确停止合并含义的
+仓库策略。
 
-## Boundary
+## 边界
 
-Do not move generic lint or code-quality issues here just because they “feel
-unsafe”. Security metrics should reflect actual security tools, policies, or
-findings.
+不要仅因为通用 lint 或代码质量问题“感觉不安全”就把它们移到这里。安全 metric
+应反映真实的安全工具、策略或发现结果。
 
-## Anti-Patterns
+## 反模式
 
-- adding `cargo audit` because it is common in Rust repos when the repository
-  only runs `cargo deny`
-- inferring a security scanner from ecosystem conventions instead of repository
-  evidence
+- 因为 `cargo audit` 在 Rust 仓库中很常见，就在实际只运行 `cargo deny` 的仓库中
+  添加它
+- 根据生态惯例而不是仓库证据推断存在某个安全扫描器

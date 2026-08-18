@@ -1,7 +1,7 @@
-# Zero-Weight Runtime Dimension
+# 零权重运行时维度
 
-Add this item to `harness.yaml` under `fitness.dimensions` when the signal is
-valuable but not trustworthy enough for the weighted local score:
+当信号有价值、但可靠性不足以纳入本地加权评分时，将此条目添加到
+`harness.yaml` 的 `fitness.dimensions` 下：
 
 ```yaml
 - dimension: observability

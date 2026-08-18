@@ -1,10 +1,9 @@
-# Toolchain Boundary Example
+# 工具链边界示例
 
-If the repository clearly uses a command but the current machine is below the
-required runtime or compiler version, preserve the signal without poisoning the
-default local path.
+如果仓库明确使用某个命令，但当前机器低于所需的运行时或编译器版本，应保留该信号，
+同时不要污染默认本地路径。
 
-Add these metrics under the appropriate `harness.yaml` `fitness.dimensions[].metrics` list:
+将以下 metric 添加到适用的 `harness.yaml` `fitness.dimensions[].metrics` 列表中：
 
 ```yaml
 - name: local_smoke
