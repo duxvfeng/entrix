@@ -306,7 +306,6 @@ def test_run_fitness_tier_filter_passed_correctly(
 
         # Verify run_fitness_report was called
         assert mock_run.called
-        call_args = mock_run.call_args
 
 
 def test_get_dimension_status_includes_final_score_in_result(
@@ -344,7 +343,7 @@ def test_analyze_change_impact_with_none_changed_files_uses_git(
         analyze_change_impact = tools_dict.get("analyze_change_impact")
 
         # Call with None changed_files
-        result = analyze_change_impact(changed_files=None, depth=2, base="HEAD")
+        analyze_change_impact(changed_files=None, depth=2, base="HEAD")
 
         # Verify git_changed_files was called
         assert mock_git.called
