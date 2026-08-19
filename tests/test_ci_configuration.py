@@ -21,6 +21,16 @@ def test_python_baseline_is_311_for_package_and_release_ci() -> None:
         assert "3.10" not in workflow
 
 
+def test_type_checking_uses_project_mypy_configuration() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "test.yml").read_text(encoding="utf-8")
+    payload = yaml.safe_load(workflow)
+    steps = payload["jobs"]["test"]["steps"]
+    type_step = next(step for step in steps if step.get("name") == "Type checking")
+
+    assert type_step["run"].splitlines() == ["pip install mypy", "mypy"]
+    assert "continue-on-error" not in type_step
+
+
 def test_defense_workflow_uses_the_checked_out_entrix_package() -> None:
     workflow = (ROOT / ".github" / "workflows" / "defense.yml").read_text(encoding="utf-8")
 

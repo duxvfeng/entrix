@@ -39,5 +39,4 @@ jobs:
     - name: Type checking
       run: |
         pip install mypy
-        mypy entrix/
-        continue-on-error: true
+        mypy

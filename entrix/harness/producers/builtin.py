@@ -19,7 +19,7 @@ def _serialize_for_json(obj: Any) -> Any:
 
     This handles dataclasses, enums, lists, and dicts recursively.
     """
-    if is_dataclass(obj):
+    if is_dataclass(obj) and not isinstance(obj, type):
         return {k: _serialize_for_json(v) for k, v in asdict(obj).items()}
     if isinstance(obj, Enum):
         return obj.value
