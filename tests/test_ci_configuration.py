@@ -66,7 +66,7 @@ def test_release_workflow_builds_verified_five_platform_assets() -> None:
         "windows-latest",
         "ubuntu-latest",
         "ubuntu-24.04-arm",
-        "macos-13",
+        "macos-15-intel",
         "macos-14",
     } <= runners
     assert 'pip install -e ".[mcp]"' in workflow

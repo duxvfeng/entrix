@@ -343,7 +343,7 @@ git commit -m "feat(plugin): route MCP and Stop Gate through binary launcher"
 
 测试必须读取 YAML 并确认：
 
-- 包含 `windows-latest`、`ubuntu-latest`、`ubuntu-24.04-arm`、`macos-13`、`macos-14`；
+- 包含 `windows-latest`、`ubuntu-latest`、`ubuntu-24.04-arm`、`macos-15-intel`、`macos-14`；
 - 安装命令包含 `pip install -e ".[mcp]"`；
 - PyInstaller 命令包含 `--onefile`、`--collect-all fastmcp`、`--collect-all tree_sitter_language_pack`；
 - Release 上传 `.sha256` 和原始二进制；
@@ -495,4 +495,3 @@ git status --short
 git diff --check
 git commit -m "release: verify python-free plugin distribution"
 ```
-

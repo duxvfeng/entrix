@@ -50,7 +50,7 @@ Claude Plugin
 | Windows x64 | `windows-latest` | `entrix-windows-amd64.exe` |
 | Linux x64 | `ubuntu-latest` | `entrix-linux-amd64` |
 | Linux arm64 | `ubuntu-24.04-arm` | `entrix-linux-arm64` |
-| macOS x64 | `macos-13` | `entrix-macos-amd64` |
+| macOS x64 | `macos-15-intel` | `entrix-macos-amd64` |
 | macOS arm64 | `macos-14` | `entrix-macos-arm64` |
 
 PyInstaller 构建必须：
