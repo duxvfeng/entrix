@@ -472,7 +472,7 @@ def run_stop_gate_hook(
             should_collect=should_collect,
             output_stream=output_stream,
             state_dir=state_dir,
-            snapshot=snapshot,
+            snapshot=snapshot or "",
             state_store=state_store,
         )
     except Exception as error:  # noqa: BLE001
