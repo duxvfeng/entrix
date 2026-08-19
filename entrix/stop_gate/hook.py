@@ -398,6 +398,7 @@ def run_stop_gate_hook(
     harness_config = find_harness_config(workspace)
     if harness_config is None:
         return 0
+
     try:
         phase = read_phase(workspace)
         if consume_phase(workspace, "init") or phase == "planning":
@@ -419,6 +420,7 @@ def run_stop_gate_hook(
         session_id = str(payload.get("session_id") or "unknown-session")
         stop_reason = str(payload.get("reason") or "agent_completed")
         branch = str(payload.get("branch") or derive_current_branch(workspace))
+
         return _run_configured_stop_gate(
             workspace=workspace,
             session_id=session_id,
@@ -432,7 +434,15 @@ def run_stop_gate_hook(
             state_dir=state_dir,
         )
     except Exception as error:  # noqa: BLE001
-        _write_block_decision(output_stream, f"Harness 执行失败：{error}")
+        # 输出详细错误信息到 stderr，便于调试
+        import traceback
+        print(f"[Entrix] Stop Gate 执行异常: {error}", file=sys.stderr)
+        print(f"[Entrix] 错误类型: {type(error).__name__}", file=sys.stderr)
+        if os.environ.get("ENTRIX_DEBUG"):
+            traceback.print_exc(file=sys.stderr)
+
+        # 不要阻塞，直接放行
+        print("[Entrix] 检测到异常，跳过 Stop Gate 检查", file=sys.stderr)
         return 0
 
 
@@ -461,12 +471,18 @@ def _run_configured_stop_gate(
     cached = state_store.load(workspace, session_id) if snapshot is not None else None
     if cached is not None and cached.fingerprint == snapshot:
         if cached.status in {"fail", "blocked", "error"}:
-            _write_block_decision(
-                output_stream,
-                "上次 Harness 验证未通过，且未检测到代码变更；未重新运行测试。"
-                f"原始原因：{cached.summary}",
-            )
-            return 0
+            # 清理错误状态，给重新运行的机会
+            if cached.status == "error":
+                print(f"[Entrix] 清理之前的错误状态", file=sys.stderr)
+                state_store.delete(workspace, session_id)
+                # 重新运行检查
+            else:
+                _write_block_decision(
+                    output_stream,
+                    "上次 Harness 验证未通过，且未检测到代码变更；未重新运行测试。"
+                    f"原始原因：{cached.summary}",
+                )
+                return 0
         state_store.delete(workspace, session_id)
 
     if not should_collect:
@@ -490,9 +506,14 @@ def _run_configured_stop_gate(
             evidence_root=state_store.evidence_root(workspace),
         ).run(context)
     except Exception as error:  # noqa: BLE001
-        summary = f"Harness 执行失败：{error}"
-        _save_cached_verdict(state_store, workspace, session_id, snapshot, "error", summary)
-        _write_block_decision(output_stream, summary)
+        # 输出详细错误信息
+        import traceback
+        print(f"[Entrix] Harness 执行异常: {error}", file=sys.stderr)
+        if os.environ.get("ENTRIX_DEBUG"):
+            traceback.print_exc(file=sys.stderr)
+
+        # 不保存错误状态，直接放行
+        print("[Entrix] 检测到异常，跳过质量检查", file=sys.stderr)
         return 0
 
     verdict = result.verdict

@@ -316,8 +316,8 @@ def _default_mcp_config() -> dict:
     return {
         "mcpServers": {
             "entrix": {
-                "command": "entrix",
-                "args": ["serve"],
+                "command": "python",
+                "args": ["-m", "entrix.cli", "serve"],
             }
         }
     }
@@ -333,10 +333,31 @@ def cmd_install(args: argparse.Namespace) -> int:
         print(config_text)
         return 0
 
+    # 写入配置
     mcp_path.write_text(config_text, encoding="utf-8")
-    print(f"已写入 Claude MCP 配置到 {mcp_path}")
-    print("运行 `entrix --help` 验证命令是否可用。")
-    print("更改 MCP 设置后请重启 Claude Code。")
+
+    # 验证 MCP 服务
+    print(f"✅ 已写入 Claude MCP 配置到 {mcp_path}")
+
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["python", "-m", "entrix.cli", "serve", "--help"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            print(f"✅ MCP 服务可用")
+        else:
+            print(f"⚠️  MCP 服务命令测试失败: {result.stderr.strip()}")
+    except Exception as e:
+        print(f"⚠️  无法验证 MCP 服务: {e}")
+
+    print(f"\n📝 下一步:")
+    print(f"   1. 重启 Claude Code 以加载 MCP 配置")
+    print(f"   2. 运行 'entrix --help' 验证命令可用性")
+
     return 0
 
 
@@ -367,12 +388,38 @@ def cmd_init(args: argparse.Namespace) -> int:
         print(harness_text, end="")
         return 0
 
+    # 写入配置文件
     mcp_path.write_text(mcp_text, encoding="utf-8")
     harness_path.write_text(harness_text, encoding="utf-8")
     write_phase(target, "init", one_shot=True)
 
-    # 输出详细的中文配置说明
-    print(f"\n已创建 {mcp_path.name} 和 {harness_path.name}；profile: {selected_profile}；未执行检查")
+    # 验证 MCP 服务是否可用
+    print(f"\n✅ 已创建配置文件:")
+    print(f"   - {mcp_path.name}")
+    print(f"   - {harness_path.name}")
+    print(f"   - Profile: {selected_profile}")
+
+    # 测试 MCP 服务
+    print(f"\n🔍 验证 MCP 服务...")
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["python", "-m", "entrix.cli", "serve", "--help"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            print(f"✅ MCP 服务可用 (python -m entrix.cli serve)")
+        else:
+            print(f"⚠️  MCP 服务命令测试失败: {result.stderr.strip()}")
+    except Exception as e:
+        print(f"⚠️  无法验证 MCP 服务: {e}")
+
+    print(f"\n📝 下一步:")
+    print(f"   1. 重启 Claude Code 以加载 MCP 配置")
+    print(f"   2. 运行 'entrix --help' 验证命令可用性")
+    print(f"   3. 运行 'entrix harness validate' 验证配置")
 
     return 0
 
