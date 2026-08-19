@@ -1,8 +1,10 @@
 """Producer protocol and context."""
 from dataclasses import dataclass
 from pathlib import Path
+
 from entrix.harness.conditions import WhenContext
 from entrix.harness.evidence import Evidence
+
 
 @dataclass
 class ProducerContext:

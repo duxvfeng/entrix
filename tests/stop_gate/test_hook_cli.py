@@ -14,8 +14,10 @@ from entrix.stop_gate.hook import (
     find_harness_config,
     read_hook_payload,
     run_stop_gate_hook,
-    main as stop_gate_main,
     workspace_fingerprint,
+)
+from entrix.stop_gate.hook import (
+    main as stop_gate_main,
 )
 from entrix.stop_gate.phase import write_phase
 from entrix.stop_gate.runner import RunResult
@@ -724,7 +726,7 @@ class TestRunStopGateHook:
         (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
 
         class Runner:
-            def __init__(self, _path):
+            def __init__(self, _path, **_kwargs):
                 pass
 
             def run(self, _context):

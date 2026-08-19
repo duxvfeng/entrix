@@ -7,11 +7,11 @@ from typing import Any
 
 import yaml
 
-from entrix.harness.gate.policy import GatePolicy, GateRule, Severity
-from entrix.harness.gate.dsl import validate_condition_syntax
-from entrix.harness.fitness import parse_dimensions
 from entrix.harness.conditions import validate_when_config
 from entrix.harness.evidence import EVIDENCE_STATUSES
+from entrix.harness.fitness import parse_dimensions
+from entrix.harness.gate.dsl import validate_condition_syntax
+from entrix.harness.gate.policy import GatePolicy, GateRule, Severity
 from entrix.model import Dimension
 from entrix.review_trigger import ReviewTriggerRule, parse_review_trigger_rules
 

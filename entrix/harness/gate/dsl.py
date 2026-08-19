@@ -1,7 +1,7 @@
 """Expression DSL for gate conditions."""
 import re
-from entrix.harness.evidence import Evidence
 
+from entrix.harness.evidence import Evidence
 
 # Simple expression parser for MVP
 # Supports: ==, !=, <, <=, >, >=, +, -, *, /, in, and, or, not, parentheses

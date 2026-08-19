@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from entrix.harness.evidence import Artifact, EVIDENCE_STATUSES
+from entrix.harness.evidence import EVIDENCE_STATUSES, Artifact
 from entrix.harness.parsers.base import (
     ParserContext,
     ParserResult,

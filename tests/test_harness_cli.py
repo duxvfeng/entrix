@@ -1,7 +1,7 @@
 """Harness CLI commands tests - integrated with existing CLI framework."""
 import json
-import subprocess
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path

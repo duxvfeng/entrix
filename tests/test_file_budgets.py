@@ -6,9 +6,9 @@ import argparse
 import json
 
 from entrix.file_budgets import (
-    _resolve_paths,
     BudgetOverride,
     FileBudgetConfig,
+    _resolve_paths,
     count_head_lines,
     evaluate_paths,
     is_tracked_source_file,

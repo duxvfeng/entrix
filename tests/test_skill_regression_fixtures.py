@@ -10,7 +10,6 @@ from shutil import copytree
 
 import pytest
 
-
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "skill_regression"
 ENTRIX_CMD = [sys.executable, "-m", "entrix"]
 

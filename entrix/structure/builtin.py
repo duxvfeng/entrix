@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import fnmatch
+import json
 import re
 import subprocess
 from collections import defaultdict, deque

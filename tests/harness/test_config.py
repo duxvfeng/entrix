@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+
 from entrix.harness.config import load_harness_config
 from entrix.harness.gate.policy import GatePolicy, GateRule, Severity
 

@@ -3,7 +3,11 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-from entrix.release_trigger import evaluate_release_triggers, load_release_manifest, load_release_triggers
+from entrix.release_trigger import (
+    evaluate_release_triggers,
+    load_release_manifest,
+    load_release_triggers,
+)
 
 
 def _write_release_trigger_config(tmp_path: Path) -> Path:

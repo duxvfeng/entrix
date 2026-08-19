@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from entrix.harness.conditions import evaluate_when, WhenContext, _changed_any
+from entrix.harness.conditions import WhenContext, _changed_any, evaluate_when
 
 
 def test_files_exist_predicate(tmp_path):

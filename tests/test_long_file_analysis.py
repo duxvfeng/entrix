@@ -10,7 +10,6 @@ import pytest
 
 from entrix.analysis.long_file import analyze_long_files
 
-
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("tree_sitter_language_pack") is None,
     reason="tree-sitter-language-pack is not installed",

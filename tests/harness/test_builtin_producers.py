@@ -1,14 +1,13 @@
 """Builtin producer tests."""
 import entrix.harness.producers.builtin as builtin_module
-
-from entrix.harness.producers.builtin import (
-    EntrixFitnessProducer,
-    EntrixReviewTriggerProducer,
-    DiffStatsProducer,
-)
+from entrix.harness.conditions import WhenContext
 from entrix.harness.config import EvidenceProducerConfig
 from entrix.harness.producers.base import ProducerContext
-from entrix.harness.conditions import WhenContext
+from entrix.harness.producers.builtin import (
+    DiffStatsProducer,
+    EntrixFitnessProducer,
+    EntrixReviewTriggerProducer,
+)
 from entrix.model import Dimension, FitnessReport, Metric
 from entrix.review_trigger import DiffStats, ReviewTriggerReport, ReviewTriggerRule, TriggerMatch
 

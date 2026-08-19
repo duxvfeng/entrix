@@ -8,7 +8,6 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 
-
 @dataclass(frozen=True)
 class DiffStats:
     """review-trigger 评估的聚合 diff 统计。"""

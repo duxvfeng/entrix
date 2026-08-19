@@ -5,7 +5,15 @@ from __future__ import annotations
 from importlib import import_module
 from typing import TextIO
 
-from entrix.model import Dimension, DimensionScore, FitnessReport, Gate, Metric, MetricResult, ResultState
+from entrix.model import (
+    Dimension,
+    DimensionScore,
+    FitnessReport,
+    Gate,
+    Metric,
+    MetricResult,
+    ResultState,
+)
 
 PASS_THRESHOLD = 90.0
 WARN_THRESHOLD = 80.0

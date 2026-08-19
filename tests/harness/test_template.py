@@ -1,7 +1,7 @@
 """Tests for the default single-file Harness template."""
 
-import yaml
 import pytest
+import yaml
 
 from entrix.harness.template import (
     default_harness_config,
@@ -71,11 +71,11 @@ def test_java_templates_limit_internal_parallelism():
 
 @pytest.mark.parametrize("profile", ["generic", "python", "node-typescript", "java-maven", "java-gradle", "go", "rust"])
 def test_profile_template_is_valid_harness_yaml(profile):
-    from entrix.harness.config import load_harness_config
-
     # The loader only needs a path; this test ensures every generated shape is accepted.
     import tempfile
     from pathlib import Path
+
+    from entrix.harness.config import load_harness_config
 
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory) / "harness.yaml"

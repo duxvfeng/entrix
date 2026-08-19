@@ -4,9 +4,9 @@ from pathlib import Path
 import pytest
 
 from entrix.harness.conditions import WhenContext
+from entrix.harness.evidence import Evidence, EvidenceBundle
 from entrix.harness.gate.arbiter import GateEngine, VerdictStatus
 from entrix.harness.gate.policy import GatePolicy, GateRule, Severity
-from entrix.harness.evidence import Evidence, EvidenceBundle
 
 
 def test_hard_gate_pass():

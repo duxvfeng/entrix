@@ -4,9 +4,9 @@ from threading import Event, Lock
 
 import pytest
 
-from entrix.harness.engine import EvidenceEngine, HarnessRunContext
-from entrix.harness.config import HarnessConfig, EvidenceProducerConfig
 from entrix.harness.conditions import WhenContext
+from entrix.harness.config import EvidenceProducerConfig, HarnessConfig
+from entrix.harness.engine import EvidenceEngine, HarnessRunContext
 from entrix.harness.store import EvidenceStore
 from entrix.model import Dimension, Metric
 from entrix.review_trigger import ReviewTriggerRule

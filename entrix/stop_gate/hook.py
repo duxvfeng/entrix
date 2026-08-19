@@ -30,8 +30,8 @@ from typing import IO, Any
 import yaml
 
 from entrix.stop_gate.feedback import format_block_feedback
-from entrix.stop_gate.revalidation import CachedVerdict, StopGateStateStore
 from entrix.stop_gate.phase import consume_phase, read_phase
+from entrix.stop_gate.revalidation import CachedVerdict, StopGateStateStore
 
 DEFAULT_TIMEOUT_SECONDS = 240
 
@@ -407,8 +407,52 @@ def run_stop_gate_hook(
         changed_files = detected_changed_files or []
         detection_failed = detected_changed_files is None
 
-        # 🎯 只有代码变更才触发 Stop Gate 检查
-        if not detection_failed and not has_code_change(changed_files):
+        # 提前计算session_id和branch，以便缓存检查
+        session_id = str(payload.get("session_id") or "unknown-session")
+        stop_reason = str(payload.get("reason") or "agent_completed")
+        try:
+            branch = str(payload.get("branch") or derive_current_branch(workspace))
+        except Exception as error:
+            # 分支检测失败时，输出 block 决策
+            print(f"[Entrix] 分支检测失败: {error}", file=sys.stderr)
+            _write_block_decision(output_stream, f"分支检测不可用：{error}")
+            return 0
+
+        # 计算fingerprint以便缓存检查
+        effective_base_ref = str(base_ref or "HEAD")
+        snapshot = _gate_fingerprint(
+            workspace_fingerprint(workspace),
+            branch,
+            effective_base_ref,
+            _when_environment_fingerprint(harness_config),
+        )
+        state_dir = state_dir or (workspace / ".stop-gate-state")
+        state_store = StopGateStateStore(state_dir)
+        try:
+            cached = state_store.load(workspace, session_id) if snapshot is not None else None
+        except Exception as error:
+            # 状态存储加载失败时，输出 block 决策
+            print(f"[Entrix] 状态存储加载失败: {error}", file=sys.stderr)
+            _write_block_decision(output_stream, f"状态存储不可用：{error}")
+            return 0
+        if cached is not None and cached.fingerprint == snapshot:
+            if cached.status in {"fail", "blocked", "error"}:
+                # 清理错误状态，给重新运行的机会
+                if cached.status == "error":
+                    print("[Entrix] 清理之前的错误状态", file=sys.stderr)
+                    state_store.delete(workspace, session_id)
+                    # 继续运行检查
+                else:
+                    _write_block_decision(
+                        output_stream,
+                        "上次 Harness 验证未通过，且未检测到代码变更；未重新运行测试。"
+                        f"原始原因：{cached.summary}",
+                    )
+                    return 0
+            state_store.delete(workspace, session_id)
+
+        # 🎯 只有代码变更才触发 Stop Gate 检查（除了 implementation 阶段）
+        if not detection_failed and not has_code_change(changed_files) and phase != "implementation":
             print(
                 f"[Entrix] 未检测到代码变更（仅: {', '.join(changed_files[:3]) if changed_files else '无变更'}{'...' if len(changed_files) > 3 else ''}），跳过 Stop Gate 检查",
                 file=sys.stderr,
@@ -416,10 +460,6 @@ def run_stop_gate_hook(
             return 0
 
         should_collect = phase == "implementation" or bool(changed_files) or detection_failed
-
-        session_id = str(payload.get("session_id") or "unknown-session")
-        stop_reason = str(payload.get("reason") or "agent_completed")
-        branch = str(payload.get("branch") or derive_current_branch(workspace))
 
         return _run_configured_stop_gate(
             workspace=workspace,
@@ -432,6 +472,8 @@ def run_stop_gate_hook(
             should_collect=should_collect,
             output_stream=output_stream,
             state_dir=state_dir,
+            snapshot=snapshot,
+            state_store=state_store,
         )
     except Exception as error:  # noqa: BLE001
         # 输出详细错误信息到 stderr，便于调试
@@ -458,33 +500,11 @@ def _run_configured_stop_gate(
     should_collect: bool,
     output_stream: IO[str],
     state_dir: Path | None,
+    snapshot: str,
+    state_store: Any,
 ) -> int:
     """Run the configured fail-closed path after Harness discovery."""
-    effective_base_ref = str(base_ref or "HEAD")
-    snapshot = _gate_fingerprint(
-        workspace_fingerprint(workspace),
-        branch,
-        effective_base_ref,
-        _when_environment_fingerprint(harness_config),
-    )
-    state_store = StopGateStateStore(state_dir)
-    cached = state_store.load(workspace, session_id) if snapshot is not None else None
-    if cached is not None and cached.fingerprint == snapshot:
-        if cached.status in {"fail", "blocked", "error"}:
-            # 清理错误状态，给重新运行的机会
-            if cached.status == "error":
-                print("[Entrix] 清理之前的错误状态", file=sys.stderr)
-                state_store.delete(workspace, session_id)
-                # 重新运行检查
-            else:
-                _write_block_decision(
-                    output_stream,
-                    "上次 Harness 验证未通过，且未检测到代码变更；未重新运行测试。"
-                    f"原始原因：{cached.summary}",
-                )
-                return 0
-        state_store.delete(workspace, session_id)
-
+    # 缓存检查已在主函数中完成，直接运行检查
     if not should_collect:
         return 0
 
@@ -512,8 +532,9 @@ def _run_configured_stop_gate(
         if os.environ.get("ENTRIX_DEBUG"):
             traceback.print_exc(file=sys.stderr)
 
-        # 不保存错误状态，直接放行
-        print("[Entrix] 检测到异常，跳过质量检查", file=sys.stderr)
+        # 异常时输出 block 决策
+        summary = f"Harness 执行失败：{error}"
+        _write_block_decision(output_stream, summary)
         return 0
 
     verdict = result.verdict

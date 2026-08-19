@@ -19,7 +19,6 @@ from entrix.file_budgets import (
 )
 from entrix.structure.builtin import BuiltinGraphAdapter
 
-
 _SUPPORTED_EXTENSIONS = {".go", ".java", ".py", ".rs", ".ts", ".tsx", ".js", ".jsx"}
 _CONTAINER_KINDS = {"Class", "Struct", "Trait", "Enum", "Interface"}
 _COMMENT_REVIEW_COMMIT_THRESHOLD = 5

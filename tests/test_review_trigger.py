@@ -13,6 +13,7 @@ from entrix.review_trigger import (
     parse_review_trigger_rules,
 )
 
+
 def _review_trigger_rules() -> list:
     raw = yaml.safe_load(
         textwrap.dedent(

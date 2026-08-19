@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from entrix.harness.evidence import Evidence, EvidenceBundle, Artifact
+from entrix.harness.evidence import Artifact, Evidence, EvidenceBundle
 
 
 def test_evidence_dataclass_creation():

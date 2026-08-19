@@ -5,17 +5,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from entrix.harness.config import HarnessConfig, EvidenceProducerConfig
 from entrix.harness.conditions import WhenContext, evaluate_when
-from entrix.harness.store import EvidenceStore
+from entrix.harness.config import EvidenceProducerConfig, HarnessConfig
 from entrix.harness.evidence import Evidence, EvidenceBundle
 from entrix.harness.producers.base import ProducerContext
-from entrix.harness.producers.command import CommandProducer
 from entrix.harness.producers.builtin import (
+    DiffStatsProducer,
     EntrixFitnessProducer,
     EntrixReviewTriggerProducer,
-    DiffStatsProducer,
 )
+from entrix.harness.producers.command import CommandProducer
+from entrix.harness.store import EvidenceStore
 
 
 @dataclass

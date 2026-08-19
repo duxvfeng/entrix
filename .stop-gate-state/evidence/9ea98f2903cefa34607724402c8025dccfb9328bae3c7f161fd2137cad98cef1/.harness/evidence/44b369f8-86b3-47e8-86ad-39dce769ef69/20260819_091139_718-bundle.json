@@ -1,0 +1,382 @@
+{
+  "schema_version": "evidence-bundle/v1",
+  "task_id": "44b369f8-86b3-47e8-86ad-39dce769ef69",
+  "attempt_id": "44b369f8-86b3-47e8-86ad-39dce769ef69",
+  "collected_at": "2026-08-19T09:11:39.718019Z",
+  "active": true,
+  "revision": "",
+  "workspace_fingerprint": "",
+  "evidence": [
+    {
+      "schema_version": "evidence/v1",
+      "id": "fitness",
+      "type": "fitness",
+      "name": "Entrix Fitness",
+      "status": "fail",
+      "producer": "entrix-fitness",
+      "task_id": "44b369f8-86b3-47e8-86ad-39dce769ef69",
+      "started_at": "2026-08-19T09:11:15.369919Z",
+      "duration_ms": 22693,
+      "summary": {
+        "score": 47.5,
+        "hard_gate_blocked": true,
+        "score_blocked": true
+      },
+      "artifacts": [],
+      "raw": {
+        "dimensions": [
+          {
+            "dimension": "code_quality",
+            "weight": 35,
+            "passed": 1,
+            "total": 1,
+            "score": 100.0,
+            "hard_gate_failures": [],
+            "results": [
+              {
+                "metric_name": "ruff_pass",
+                "passed": true,
+                "output": "warning: Encountered error: 拒绝访问。 (os error 5)\nAll checks passed!\n",
+                "tier": "fast",
+                "hard_gate": true,
+                "duration_ms": 55.404100014129654,
+                "state": "pass",
+                "returncode": 0
+              },
+              {
+                "metric_name": "no_new_debug_prints",
+                "passed": false,
+                "output": "ϵͳ�Ҳ���ָ����·����\n",
+                "tier": "fast",
+                "hard_gate": false,
+                "duration_ms": 16.803400008939207,
+                "state": "unknown",
+                "returncode": 255
+              }
+            ]
+          },
+          {
+            "dimension": "testability",
+            "weight": 40,
+            "passed": 0,
+            "total": 1,
+            "score": 0.0,
+            "hard_gate_failures": [
+              "pytest_pass"
+            ],
+            "results": [
+              {
+                "metric_name": "pytest_pass",
+                "passed": false,
+                "output": "============================= test session starts =============================\nplatform win32 -- Python 3.13.13, pytest-9.1.1, pluggy-1.6.0\nrootdir: D:\\python-project\\entrix\nconfigfile: pyproject.toml\nplugins: anyio-4.12.1, langsmith-0.10.4, asyncio-1.4.0, cov-7.1.0\nasyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function\ncollected 504 items\n\ntests\\harness\\test_arbiter.py ..............                             [  2%]\ntests\\harness\\test_builtin_producers.py .....                            [  3%]\ntests\\harness\\test_command_producer.py .......                           [  5%]\ntests\\harness\\test_conditions.py .................                       [  8%]\ntests\\harness\\test_config.py ....................................        [ 15%]\ntests\\harness\\test_engine.py ...........                                 [ 17%]\ntests\\harness\\test_evidence.py ......                                    [ 19%]\ntests\\harness\\test_gate_dsl.py .............                             [ 21%]\ntests\\harness\\test_parser_json.py ..............                         [ 24%]\ntests\\harness\\test_parser_junit.py .....                                 [ 25%]\ntests\\harness\\test_parser_process.py .....                               [ 26%]\ntests\\harness\\test_parser_sarif.py ...........                           [ 28%]\ntests\\harness\\test_profiles.py .........                                 [ 30%]\ntests\\harness\\test_store.py ...........                                  [ 32%]\ntests\\harness\\test_template.py ................                          [ 35%]\ntests\\stop_gate\\test_harness_integration.py .......                      [ 37%]\ntests\\stop_gate\\test_hook_cli.py ....................................... [ 44%]\n...                                                                      [ 45%]\ntests\\stop_gate\\test_model.py .........                                  [ 47%]\ntests\\stop_gate\\test_phase.py ........                                   [ 48%]\ntests\\test_builtin_graph.py ..............                               [ 51%]\ntests\\test_ci_configuration.py .....                                     [ 52%]\ntests\\test_cli.py F..F.F...........................................      [ 62%]\ntests\\test_cli_hints.py ...............F                                 [ 65%]\ntests\\test_doc_skip.py ............                                      [ 67%]\ntests\\test_engine.py ........                                            [ 69%]\ntests\\test_file_budgets.py .............                                 [ 72%]\ntests\\test_governance.py ..............                                  [ 74%]\ntests\\test_graph_runner.py .............                                 [ 77%]\ntests\\test_harness_cli.py ......                                         [ 78%]\ntests\\test_long_file_analysis.py ..........                              [ 80%]\ntests\\test_model.py ...........                                          [ 82%]\ntests\\test_plugin_binary_contract.py FF......                            [ 84%]\ntests\\test_presets.py ....                                               [ 85%]\ntests\\test_release_assets.py ......                                      [ 86%]\ntests\\test_release_trigger.py ..                                         [ 86%]\ntests\\test_review_trigger.py .........                                   [ 88%]\ntests\\test_sarif_runner.py ....                                          [ 89%]\ntests\\test_scoring.py ..........                                         [ 91%]\ntests\\test_serialization_fix.py ..                                       [ 91%]\ntests\\test_shell_runner.py ..........................                    [ 96%]\ntests\\test_skill_regression_fixtures.py .....                            [ 97%]\ntests\\test_stop_gate_fix.py F..                                          [ 98%]\ntests\\test_structure_adapter.py .                                        [ 98%]\ntests\\test_test_mapping.py ....                                      \n\n... [11561 characters omitted] ...\n\n--------------------- Captured stdout call -----------------------------\n[TEST 1] Invalid config\n   Exit code: 0\n============================== warnings summary ===============================\ntests/test_stop_gate_fix.py::test_stop_gate_with_invalid_config\n  C:\\Users\\39578\\miniconda3\\Lib\\site-packages\\_pytest\\threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-454 (_readerthread)\n  \n  Traceback (most recent call last):\n    File \"C:\\Users\\39578\\miniconda3\\Lib\\threading.py\", line 1044, in _bootstrap_inner\n      self.run()\n      ~~~~~~~~^^\n    File \"C:\\Users\\39578\\miniconda3\\Lib\\threading.py\", line 995, in run\n      self._target(*self._args, **self._kwargs)\n      ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    File \"C:\\Users\\39578\\miniconda3\\Lib\\subprocess.py\", line 1615, in _readerthread\n      buffer.append(fh.read())\n                    ~~~~~~~^^\n  UnicodeDecodeError: 'gbk' codec can't decode byte 0xa1 in position 21: illegal multibyte sequence\n  \n  Enable tracemalloc to get traceback where the object was allocated.\n  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.\n    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))\n\ntests/test_stop_gate_fix.py::test_stop_gate_with_invalid_config\n  C:\\Users\\39578\\miniconda3\\Lib\\site-packages\\_pytest\\threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-453 (_readerthread)\n  \n  Traceback (most recent call last):\n    File \"C:\\Users\\39578\\miniconda3\\Lib\\threading.py\", line 1044, in _bootstrap_inner\n      self.run()\n      ~~~~~~~~^^\n    File \"C:\\Users\\39578\\miniconda3\\Lib\\threading.py\", line 995, in run\n      self._target(*self._args, **self._kwargs)\n      ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    File \"C:\\Users\\39578\\miniconda3\\Lib\\subprocess.py\", line 1615, in _readerthread\n      buffer.append(fh.read())\n                    ~~~~~~~^^\n  UnicodeDecodeError: 'gbk' codec can't decode byte 0xa1 in position 45: illegal multibyte sequence\n  \n  Enable tracemalloc to get traceback where the object was allocated.\n  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.\n    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))\n\ntests/test_stop_gate_fix.py::test_stop_gate_no_config\n  C:\\Users\\39578\\miniconda3\\Lib\\site-packages\\_pytest\\python.py:171: PytestReturnNotNoneWarning: Test functions should return None, but tests/test_stop_gate_fix.py::test_stop_gate_no_config returned <class 'bool'>.\n  Did you mean to use `assert` instead of `return`?\n  See https://docs.pytest.org/en/stable/how-to/assert.html#return-not-none for more information.\n    warnings.warn(\n\ntests/test_stop_gate_fix.py::test_clear_cache_script\n  C:\\Users\\39578\\miniconda3\\Lib\\site-packages\\_pytest\\python.py:171: PytestReturnNotNoneWarning: Test functions should return None, but tests/test_stop_gate_fix.py::test_clear_cache_script returned <class 'bool'>.\n  Did you mean to use `assert` instead of `return`?\n  See https://docs.pytest.org/en/stable/how-to/assert.html#return-not-none for more information.\n    warnings.warn(\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ===========================\nFAILED tests/test_cli.py::test_default_mcp_config_uses_binary_command - Asser...\nFAILED tests/test_cli.py::test_init_auto_detects_python_profile - assert 'pro...\nFAILED tests/test_cli.py::test_init_explicit_profile_overrides_auto_detection\nFAILED tests/test_cli_hints.py::test_init_only_creates_configuration_without_check_guidance\nFAILED tests/test_plugin_binary_contract.py::test_unix_launcher_downloads_verifies_caches_and_forwards_args\nFAILED tests/test_plugin_binary_contract.py::test_unix_launcher_rejects_checksum_mismatch\nFAILED tests/test_stop_gate_fix.py::test_stop_gate_with_invalid_config - Type...\n================= 7 failed, 497 passed, 4 warnings in 21.07s ==================\n",
+                "tier": "normal",
+                "hard_gate": true,
+                "duration_ms": 22367.49229999259,
+                "state": "fail",
+                "returncode": 1
+              }
+            ]
+          },
+          {
+            "dimension": "release_readiness",
+            "weight": 25,
+            "passed": 1,
+            "total": 2,
+            "score": 50.0,
+            "hard_gate_failures": [],
+            "results": [
+              {
+                "metric_name": "cli_help_smoke",
+                "passed": true,
+                "output": "usage: entrix [-h]\n              {run,install,init,phase,serve,stop-gate,validate,review-trigger,release-trigger,harness,hook,analyze,graph} ...\n\nEntrix 可执行质量门禁\n\npositional arguments:\n  {run,install,init,phase,serve,stop-gate,validate,review-trigger,release-trigger,harness,hook,analyze,graph}\n    run                 Run guardrail checks\n    install             Generate `.mcp.json` for Claude Code MCP integration\n    init                初始化 .mcp.json 与 harness.yaml\n    phase               设置当前 Stop Gate 阶段而不运行检查\n    serve               Run Entrix MCP server over stdio.\n    stop-gate           Run the quality gate as a Claude Code Stop hook (reads\n                        hook payload from stdin)\n    validate            Check dimension weights sum to 100%\n    review-trigger      Detect risky changes that should trigger human review\n    release-trigger     Detect risky release-surface drift before publish\n    harness             Harness evidence collection and gate arbitration\n    hook                Reusable local hook helpers\n    analyze             Structured source analysis helpers\n    graph               Graph-backed impact and test-radius analysis\n\noptions:\n  -h, --help            show this help message and exit\n\n常用命令：\n  entrix init                 初始化 .mcp.json 与 harness.yaml\n  entrix phase planning      标记当前回合为规划阶段\n  entrix harness validate     检查 Harness 配置\n  entrix run                  执行 Fitness 指标\n  entrix harness run --json   收集 evidence 并执行门禁裁决\n  entrix review-trigger       识别需要人工审查的改动\n  entrix stop-gate            作为 Claude Code Stop Hook 执行\n  entrix serve                启动 MCP 服务\n\n命令提示：/entrix [init] [phase planning|implementation] [harness validate|run] [run] [stop-gate] [--repo <path>]\n",
+                "tier": "fast",
+                "hard_gate": true,
+                "duration_ms": 168.7093999935314,
+                "state": "pass",
+                "returncode": 0
+              },
+              {
+                "metric_name": "package_build_pass",
+                "passed": false,
+                "output": "C:\\Users\\39578\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe: No module named build\n",
+                "tier": "normal",
+                "hard_gate": false,
+                "duration_ms": 45.577899989439175,
+                "state": "fail",
+                "returncode": 1
+              }
+            ]
+          },
+          {
+            "dimension": "observability",
+            "weight": 0,
+            "passed": 1,
+            "total": 1,
+            "score": 100.0,
+            "hard_gate_failures": [],
+            "results": [
+              {
+                "metric_name": "tracing_signal_available",
+                "passed": false,
+                "output": "Unsupported probe command: ./scripts/obs/check-tracing-signal.sh 2>&1",
+                "tier": "deep",
+                "hard_gate": false,
+                "duration_ms": 0.0,
+                "state": "unknown",
+                "returncode": null
+              },
+              {
+                "metric_name": "tracing_signal_contract_declared",
+                "passed": true,
+                "output": "signal_contract: pending\n",
+                "tier": "normal",
+                "hard_gate": false,
+                "duration_ms": 38.239599991356954,
+                "state": "pass",
+                "returncode": 0
+              }
+            ]
+          },
+          {
+            "dimension": "performance",
+            "weight": 0,
+            "passed": 0,
+            "total": 0,
+            "score": 0.0,
+            "hard_gate_failures": [],
+            "results": [
+              {
+                "metric_name": "latency_budget_probe_defined",
+                "passed": false,
+                "output": "Unsupported probe command: printf 'latency_budget: pending\\n'",
+                "tier": "normal",
+                "hard_gate": false,
+                "duration_ms": 0.0,
+                "state": "unknown",
+                "returncode": null
+              },
+              {
+                "metric_name": "runtime_budget_signal_unavailable",
+                "passed": false,
+                "output": "Unsupported probe command: graph:runtime-budget",
+                "tier": "deep",
+                "hard_gate": false,
+                "duration_ms": 0.0,
+                "state": "unknown",
+                "returncode": null
+              }
+            ]
+          }
+        ],
+        "final_score": 47.5,
+        "hard_gate_blocked": true,
+        "score_blocked": true
+      }
+    },
+    {
+      "schema_version": "evidence/v1",
+      "id": "review-trigger",
+      "type": "review-trigger",
+      "name": "Review Trigger",
+      "status": "fail",
+      "producer": "entrix-review-trigger",
+      "task_id": "44b369f8-86b3-47e8-86ad-39dce769ef69",
+      "started_at": "2026-08-19T09:11:38.063059Z",
+      "duration_ms": 165,
+      "summary": {
+        "human_review_required": true,
+        "triggered_rules": [
+          "core_engine_change",
+          "packaging_or_workflow_change",
+          "sensitive_release_files",
+          "cross_boundary_engine_test_docs_change",
+          "oversized_change"
+        ]
+      },
+      "artifacts": [],
+      "raw": {
+        "human_review_required": true,
+        "base": "HEAD",
+        "changed_files": [
+          "entrix/analysis/long_file.py",
+          "entrix/cli.py",
+          "entrix/engine.py",
+          "entrix/harness/config.py",
+          "entrix/harness/engine.py",
+          "entrix/harness/gate/__init__.py",
+          "entrix/harness/gate/arbiter.py",
+          "entrix/harness/gate/dsl.py",
+          "entrix/harness/parsers/evidence_json.py",
+          "entrix/harness/parsers/json_report.py",
+          "entrix/harness/producers/__init__.py",
+          "entrix/harness/producers/base.py",
+          "entrix/harness/producers/command.py",
+          "entrix/reporters/visual.py",
+          "entrix/review_trigger.py",
+          "entrix/runners/shell.py",
+          "entrix/scoring.py",
+          "entrix/stop_gate/hook.py",
+          "entrix/structure/builtin.py",
+          "hooks/hooks.json",
+          "hooks/stop-gate.sh",
+          "pyproject.toml",
+          "tests/harness/test_arbiter.py",
+          "tests/harness/test_builtin_producers.py",
+          "tests/harness/test_command_producer.py",
+          "tests/harness/test_conditions.py",
+          "tests/harness/test_config.py",
+          "tests/harness/test_engine.py",
+          "tests/harness/test_evidence.py",
+          "tests/harness/test_gate_dsl.py",
+          "tests/harness/test_template.py",
+          "tests/stop_gate/test_harness_integration.py",
+          "tests/stop_gate/test_hook_cli.py",
+          "tests/test_builtin_graph.py",
+          "tests/test_ci_configuration.py",
+          "tests/test_cli.py",
+          "tests/test_file_budgets.py",
+          "tests/test_harness_cli.py",
+          "tests/test_long_file_analysis.py",
+          "tests/test_plugin_binary_contract.py",
+          "tests/test_release_trigger.py",
+          "tests/test_review_trigger.py",
+          "tests/test_serialization_fix.py",
+          "tests/test_shell_runner.py",
+          "tests/test_skill_regression_fixtures.py",
+          "tests/test_visual_reporter.py",
+          ".stop-gate-state/evidence/9ea98f2903cefa34607724402c8025dccfb9328bae3c7f161fd2137cad98cef1/.harness/evidence/unknown-session/20260819_090945_281-bundle.json",
+          ".stop-gate-state/sessions/9ea98f2903cefa34607724402c8025dccfb9328bae3c7f161fd2137cad98cef1/86a371a93617306970a2720816aa1367e4958d884011b1f132eede5f8c4bcef1.json",
+          "clear-stop-gate-cache.sh",
+          "hooks/stop-gate-fail-open.sh",
+          "test-hook-claude-env.sh",
+          "test-hook-env.sh",
+          "test-status-summary.sh"
+        ],
+        "diff_stats": {
+          "file_count": 46,
+          "added_lines": 195,
+          "deleted_lines": 128
+        },
+        "triggers": [
+          {
+            "name": "core_engine_change",
+            "severity": "high",
+            "action": "require_human_review",
+            "reasons": [
+              "changed path: entrix/cli.py",
+              "changed path: entrix/engine.py",
+              "changed path: entrix/review_trigger.py"
+            ]
+          },
+          {
+            "name": "packaging_or_workflow_change",
+            "severity": "medium",
+            "action": "require_human_review",
+            "reasons": [
+              "changed path: pyproject.toml"
+            ]
+          },
+          {
+            "name": "sensitive_release_files",
+            "severity": "high",
+            "action": "require_human_review",
+            "reasons": [
+              "sensitive file changed: entrix/review_trigger.py",
+              "sensitive file changed: pyproject.toml"
+            ]
+          },
+          {
+            "name": "cross_boundary_engine_test_docs_change",
+            "severity": "medium",
+            "action": "require_human_review",
+            "reasons": [
+              "changed boundary 'engine': entrix/analysis/long_file.py, entrix/cli.py, entrix/engine.py, entrix/harness/config.py, entrix/harness/engine.py, entrix/harness/gate/__init__.py, entrix/harness/gate/arbiter.py, entrix/harness/gate/dsl.py, entrix/harness/parsers/evidence_json.py, entrix/harness/parsers/json_report.py, entrix/harness/producers/__init__.py, entrix/harness/producers/base.py, entrix/harness/producers/command.py, entrix/reporters/visual.py, entrix/review_trigger.py, entrix/runners/shell.py, entrix/scoring.py, entrix/stop_gate/hook.py, entrix/structure/builtin.py",
+              "changed boundary 'tests': tests/harness/test_arbiter.py, tests/harness/test_builtin_producers.py, tests/harness/test_command_producer.py, tests/harness/test_conditions.py, tests/harness/test_config.py, tests/harness/test_engine.py, tests/harness/test_evidence.py, tests/harness/test_gate_dsl.py, tests/harness/test_template.py, tests/stop_gate/test_harness_integration.py, tests/stop_gate/test_hook_cli.py, tests/test_builtin_graph.py, tests/test_ci_configuration.py, tests/test_cli.py, tests/test_file_budgets.py, tests/test_harness_cli.py, tests/test_long_file_analysis.py, tests/test_plugin_binary_contract.py, tests/test_release_trigger.py, tests/test_review_trigger.py, tests/test_serialization_fix.py, tests/test_shell_runner.py, tests/test_skill_regression_fixtures.py, tests/test_visual_reporter.py"
+            ]
+          },
+          {
+            "name": "oversized_change",
+            "severity": "medium",
+            "action": "require_human_review",
+            "reasons": [
+              "diff touched 46 files (threshold: 10)"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "schema_version": "evidence/v1",
+      "id": "diff-stats",
+      "type": "diff",
+      "name": "Git Diff Statistics",
+      "status": "pass",
+      "producer": "diff-stats",
+      "task_id": "44b369f8-86b3-47e8-86ad-39dce769ef69",
+      "started_at": "2026-08-19T09:11:38.228635Z",
+      "duration_ms": 1489,
+      "summary": {
+        "added_lines": 195,
+        "deleted_lines": 128,
+        "changed_files": 52,
+        "files": [
+          "entrix/analysis/long_file.py",
+          "entrix/cli.py",
+          "entrix/engine.py",
+          "entrix/harness/config.py",
+          "entrix/harness/engine.py",
+          "entrix/harness/gate/__init__.py",
+          "entrix/harness/gate/arbiter.py",
+          "entrix/harness/gate/dsl.py",
+          "entrix/harness/parsers/evidence_json.py",
+          "entrix/harness/parsers/json_report.py",
+          "entrix/harness/producers/__init__.py",
+          "entrix/harness/producers/base.py",
+          "entrix/harness/producers/command.py",
+          "entrix/reporters/visual.py",
+          "entrix/review_trigger.py",
+          "entrix/runners/shell.py",
+          "entrix/scoring.py",
+          "entrix/stop_gate/hook.py",
+          "entrix/structure/builtin.py",
+          "hooks/hooks.json",
+          "hooks/stop-gate.sh",
+          "pyproject.toml",
+          "tests/harness/test_arbiter.py",
+          "tests/harness/test_builtin_producers.py",
+          "tests/harness/test_command_producer.py",
+          "tests/harness/test_conditions.py",
+          "tests/harness/test_config.py",
+          "tests/harness/test_engine.py",
+          "tests/harness/test_evidence.py",
+          "tests/harness/test_gate_dsl.py",
+          "tests/harness/test_template.py",
+          "tests/stop_gate/test_harness_integration.py",
+          "tests/stop_gate/test_hook_cli.py",
+          "tests/test_builtin_graph.py",
+          "tests/test_ci_configuration.py",
+          "tests/test_cli.py",
+          "tests/test_file_budgets.py",
+          "tests/test_harness_cli.py",
+          "tests/test_long_file_analysis.py",
+          "tests/test_plugin_binary_contract.py",
+          "tests/test_release_trigger.py",
+          "tests/test_review_trigger.py",
+          "tests/test_serialization_fix.py",
+          "tests/test_shell_runner.py",
+          "tests/test_skill_regression_fixtures.py",
+          "tests/test_visual_reporter.py",
+          ".stop-gate-state/",
+          "clear-stop-gate-cache.sh",
+          "hooks/stop-gate-fail-open.sh",
+          "test-hook-claude-env.sh",
+          "test-hook-env.sh",
+          "test-status-summary.sh"
+        ]
+      },
+      "artifacts": [],
+      "raw": {}
+    }
+  ],
+  "collection_errors": []
+}

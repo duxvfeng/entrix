@@ -1,14 +1,14 @@
 """Tests for entrix.runners.shell."""
 
-from datetime import date, timedelta
-from concurrent.futures import Future
-from pathlib import Path
 import subprocess
 import sys
+from concurrent.futures import Future
+from datetime import date, timedelta
+from pathlib import Path
 
-from entrix.model import Metric, ResultState, Waiver
-import entrix.runners.shell as shell_module
 import entrix.runners.process as process_module
+import entrix.runners.shell as shell_module
+from entrix.model import Metric, ResultState, Waiver
 from entrix.runners.shell import ShellRunner
 
 

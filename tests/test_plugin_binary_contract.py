@@ -6,11 +6,11 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
 import pytest
-
 
 ROOT = Path(__file__).parents[1]
 UNIX_BOOTSTRAP = ROOT / "bin" / "entrix-bootstrap.sh"
@@ -67,6 +67,7 @@ def _write_fake_curl(tmp_path: Path, source_dir: Path) -> tuple[Path, Path]:
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash is unavailable")
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix launcher tests not supported on Windows")
 def test_unix_launcher_downloads_verifies_caches_and_forwards_args(tmp_path: Path) -> None:
     bash = shutil.which("bash")
     assert bash is not None
@@ -114,6 +115,7 @@ def test_unix_launcher_downloads_verifies_caches_and_forwards_args(tmp_path: Pat
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash is unavailable")
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix launcher tests not supported on Windows")
 def test_unix_launcher_rejects_checksum_mismatch(tmp_path: Path) -> None:
     bash = shutil.which("bash")
     assert bash is not None

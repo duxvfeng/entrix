@@ -8,12 +8,19 @@ from pathlib import Path
 from typing import Callable
 
 from entrix.governance import GovernancePolicy, filter_dimensions
-from entrix.model import Dimension, EvidenceType, FitnessReport, Gate, Metric, MetricResult, ResultState
+from entrix.model import (
+    Dimension,
+    EvidenceType,
+    FitnessReport,
+    Gate,
+    Metric,
+    MetricResult,
+    ResultState,
+)
 from entrix.presets.base import ProjectPreset
 from entrix.runners.graph import GraphRunner
 from entrix.runners.sarif import SarifRunner
-from entrix.runners.shell import OutputCallback
-from entrix.runners.shell import ShellRunner
+from entrix.runners.shell import OutputCallback, ShellRunner
 from entrix.scoring import score_dimension, score_report
 
 ProgressCallback = Callable[[str, Metric, MetricResult | None], None]

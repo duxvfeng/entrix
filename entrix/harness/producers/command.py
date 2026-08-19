@@ -5,11 +5,11 @@ import subprocess
 import time
 from datetime import datetime, timezone
 
-from entrix.harness.producers.base import Producer, ProducerContext
 from entrix.harness.config import EvidenceProducerConfig
 from entrix.harness.evidence import Evidence
 from entrix.harness.parsers import get_parser
 from entrix.harness.parsers.base import ParserContext, collect_artifacts
+from entrix.harness.producers.base import Producer, ProducerContext
 from entrix.runners.process import process_group_kwargs, terminate_process_tree
 
 

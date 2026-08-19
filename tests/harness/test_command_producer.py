@@ -1,13 +1,13 @@
 """CommandProducer execution tests."""
-import sys
 import subprocess
-
+import sys
 from pathlib import Path
+
+import entrix.harness.producers.command as command_module
+from entrix.harness.conditions import WhenContext
+from entrix.harness.config import EvidenceProducerConfig
 from entrix.harness.producers.base import ProducerContext
 from entrix.harness.producers.command import CommandProducer
-from entrix.harness.config import EvidenceProducerConfig
-from entrix.harness.conditions import WhenContext
-import entrix.harness.producers.command as command_module
 
 
 def test_command_producer_exit_code_success():

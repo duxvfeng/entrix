@@ -13,17 +13,34 @@ from pathlib import Path
 from threading import RLock
 
 from entrix.analysis.long_file import analyze_long_files
+from entrix.cli_hints import (
+    HintingArgumentParser,
+    print_next_steps,
+    should_show_next_steps,
+)
 from entrix.engine import collect_changed_files, run_fitness_report
 from entrix.file_budgets import evaluate_paths, is_tracked_source_file, load_config
 from entrix.governance import GovernancePolicy, StreamOutputMode, enforce
-from entrix.model import ExecutionScope, FitnessReport, Gate, Metric, MetricResult, ResultState, Tier
-from entrix.presets import get_project_preset
-from entrix.reporting import report_to_dict, write_report_output
-from entrix.review_trigger import (
-    collect_changed_files as collect_review_changed_files,
-    collect_diff_stats,
-    evaluate_review_triggers,
+from entrix.harness.conditions import WhenContext
+
+# Harness system imports
+from entrix.harness.config import HarnessConfig, load_harness_config
+from entrix.harness.engine import EvidenceEngine, HarnessRunContext
+from entrix.harness.fitness import validate_weights
+from entrix.harness.gate.arbiter import GateEngine
+from entrix.harness.profiles import PROFILE_NAMES, ProfileDetectionError, resolve_profile
+from entrix.harness.store import EvidenceStore
+from entrix.harness.template import render_default_harness
+from entrix.model import (
+    ExecutionScope,
+    FitnessReport,
+    Gate,
+    Metric,
+    MetricResult,
+    ResultState,
+    Tier,
 )
+from entrix.presets import get_project_preset
 from entrix.release_trigger import (
     evaluate_release_triggers,
     load_release_manifest,
@@ -31,24 +48,17 @@ from entrix.release_trigger import (
 )
 from entrix.reporters.terminal import TerminalReporter
 from entrix.reporters.visual import AsciiReporter, RichLiveProgressReporter, RichReporter
-from entrix.runners.graph import GraphRunner
-from entrix.test_mapping import analyze_test_mappings
-
-# Harness system imports
-from entrix.harness.config import HarnessConfig, load_harness_config
-from entrix.harness.engine import EvidenceEngine, HarnessRunContext
-from entrix.harness.fitness import validate_weights
-from entrix.harness.gate.arbiter import GateEngine
-from entrix.harness.conditions import WhenContext
-from entrix.harness.store import EvidenceStore
-from entrix.harness.template import render_default_harness
-from entrix.harness.profiles import PROFILE_NAMES, ProfileDetectionError, resolve_profile
-from entrix.cli_hints import (
-    HintingArgumentParser,
-    print_next_steps,
-    should_show_next_steps,
+from entrix.reporting import report_to_dict, write_report_output
+from entrix.review_trigger import (
+    collect_changed_files as collect_review_changed_files,
 )
+from entrix.review_trigger import (
+    collect_diff_stats,
+    evaluate_review_triggers,
+)
+from entrix.runners.graph import GraphRunner
 from entrix.stop_gate.phase import write_phase
+from entrix.test_mapping import analyze_test_mappings
 
 
 class _ShellOutputController:

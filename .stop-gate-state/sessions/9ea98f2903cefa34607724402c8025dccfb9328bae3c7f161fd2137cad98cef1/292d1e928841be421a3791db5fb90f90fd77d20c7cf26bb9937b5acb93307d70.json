@@ -1,0 +1,1 @@
+{"schema_version": "stop-gate-state/v1", "fingerprint": "fbf53af4a73d14931fc905dff77dcbd3d41aecaef567b723960ee64e6ee37504", "status": "fail", "summary": "Hard gates failed: Fitness must pass"}

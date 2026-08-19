@@ -2,7 +2,7 @@
 import json
 
 from entrix.harness.producers.builtin import _serialize_for_json
-from entrix.model import Tier, MetricResult, DimensionScore, FitnessReport
+from entrix.model import DimensionScore, FitnessReport, MetricResult, Tier
 
 
 def test_serialize_tier_enum():

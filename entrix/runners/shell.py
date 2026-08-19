@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import os
 from os import environ
 from pathlib import Path
 from queue import Empty, Queue

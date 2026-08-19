@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from entrix.model import DimensionScore, FitnessReport, MetricResult, ResultState
 
-
 _SCORABLE_PASS_STATES = {ResultState.PASS, ResultState.WAIVED}
 _SCORABLE_TOTAL_STATES = {ResultState.PASS, ResultState.FAIL, ResultState.WAIVED}
 

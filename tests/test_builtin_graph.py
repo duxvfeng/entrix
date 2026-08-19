@@ -7,7 +7,6 @@ import pytest
 
 from entrix.structure.builtin import BuiltinGraphAdapter
 
-
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("tree_sitter_language_pack") is None,
     reason="tree-sitter-language-pack is not installed",

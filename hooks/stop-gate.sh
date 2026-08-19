@@ -24,8 +24,19 @@ block_unavailable() {
   exit 0
 }
 
+# 在 MINGW 环境下，插件版本可能不可用，直接使用系统 entrix
+current_os="$(uname -s 2>/dev/null || true)"
+case "$current_os" in
+  MINGW*|MSYS*|CYGWIN*)
+    # Windows Git 环境直接跳过插件版本，优先使用系统 entrix
+    if command -v entrix >/dev/null 2>&1; then
+      exec entrix stop-gate "$@"
+    fi
+    ;;
+esac
+
 if [ -n "$PLUGIN_ROOT" ] && [ -f "$PLUGIN_ROOT/bin/entrix" ]; then
-  plugin_os="$(uname -s 2>/dev/null || true)"
+  plugin_os="$current_os"
   case "$plugin_os" in
     MINGW*|MSYS*|CYGWIN*)
     if command -v powershell.exe >/dev/null 2>&1 && [ -f "$PLUGIN_ROOT/bin/entrix-bootstrap.ps1" ]; then

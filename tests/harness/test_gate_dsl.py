@@ -1,7 +1,8 @@
 """Gate DSL expression evaluator tests."""
 import pytest
-from entrix.harness.gate.dsl import evaluate_condition
+
 from entrix.harness.evidence import Evidence
+from entrix.harness.gate.dsl import evaluate_condition
 
 
 def test_simple_equality():

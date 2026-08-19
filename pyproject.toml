@@ -79,7 +79,7 @@ ignore = [
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib --basetemp=.pytest-sandbox"
-norecursedirs = ["tests/fixtures", ".pytest_*", ".pytest-*"]
+norecursedirs = ["tests/fixtures", ".pytest_*", ".pytest-*", ".tmp-check-*"]
 markers = [
     "integration: marks tests as integration tests (slow, may require external tools)",
 ]

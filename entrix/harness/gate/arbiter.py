@@ -4,9 +4,9 @@ from enum import Enum
 from typing import List
 
 from entrix.harness.conditions import WhenContext, evaluate_when
-from entrix.harness.gate.policy import GatePolicy, Severity
+from entrix.harness.evidence import Evidence, EvidenceBundle
 from entrix.harness.gate.dsl import evaluate_condition
-from entrix.harness.evidence import EvidenceBundle, Evidence
+from entrix.harness.gate.policy import GatePolicy, Severity
 
 
 class VerdictStatus(Enum):

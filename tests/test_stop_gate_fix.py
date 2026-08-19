@@ -22,6 +22,8 @@ def test_stop_gate_with_invalid_config():
         cwd=temp_dir,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=5,
     )
 

@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from entrix.model import Dimension, DimensionScore, FitnessReport, Metric, MetricResult, ResultState, Tier
+from entrix.model import (
+    Dimension,
+    DimensionScore,
+    FitnessReport,
+    Metric,
+    MetricResult,
+    ResultState,
+    Tier,
+)
 from entrix.reporters.visual import AsciiReporter, RichLiveProgressReporter, RichReporter
 
 
