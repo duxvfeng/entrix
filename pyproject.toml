@@ -8,7 +8,7 @@ version = "0.1.21"
 description = "A Harness Engineering tool for turning quality rules, architecture constraints, and validation steps into executable guardrails."
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "Phodal" },
 ]
@@ -18,7 +18,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Quality Assurance",
@@ -60,7 +59,7 @@ packages = ["entrix"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 extend-exclude = ["docs/multi_agent_system"]
 
 [tool.ruff.lint]
@@ -74,7 +73,7 @@ markers = [
 ]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 files = [
     "entrix/harness/config.py",
     "entrix/harness/engine.py",

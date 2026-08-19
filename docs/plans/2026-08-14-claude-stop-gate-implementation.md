@@ -6,7 +6,7 @@
 
 **架构：** 内嵌插件架构，包含 Stop Gate Adapter、Session State Manager、Evidence Collector、Gate Arbiter、Feedback Formatter 五个核心组件，采用混合状态管理（内存+文件系统）。
 
-**技术栈：** Python 3.10+、Claude Code 插件 API、Entrix 核心组件、JSON/Markdown 混合格式
+**技术栈：** Python 3.11+、Claude Code 插件 API、Entrix 核心组件、JSON/Markdown 混合格式
 
 ---
 

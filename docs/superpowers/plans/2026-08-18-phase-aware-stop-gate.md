@@ -6,7 +6,7 @@
 
 **架构：** 用工作区运行时的短期阶段标记表达 `planning`、`implementation` 和一次性 `init` 意图；Stop Hook 在现有 Harness 流程前先处理标记和变更检测。没有标记时，有变更仍走原有门禁，保持直接编辑兼容。
 
-**技术栈：** Python 3.10+、JSON、argparse、pytest、现有 Stop Hook 状态存储。
+**技术栈：** Python 3.11+、JSON、argparse、pytest、现有 Stop Hook 状态存储。
 
 ---
 

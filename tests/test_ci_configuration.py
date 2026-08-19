@@ -2,12 +2,23 @@
 
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
 import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_python_baseline_is_311_for_package_and_release_ci() -> None:
+    package = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert package["project"]["requires-python"] == ">=3.11"
+    assert package["tool"]["ruff"]["target-version"] == "py311"
+
+    for workflow_name in ("ci.yml", "test.yml", "build.yml"):
+        workflow = (ROOT / ".github" / "workflows" / workflow_name).read_text(encoding="utf-8")
+        assert "3.10" not in workflow
 
 
 def test_defense_workflow_uses_the_checked_out_entrix_package() -> None:

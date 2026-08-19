@@ -6,7 +6,7 @@
 
 **架构：** `load_harness_config()` 解析内联 Fitness dimensions 和 review trigger rules，返回领域对象。CLI、内置 producer 与 Stop Hook 共享该配置；`docs/fitness/`、manifest 和独立 review trigger 文件全部移除且不再读取。
 
-**技术栈：** Python 3.10+、dataclasses、PyYAML、argparse、pytest、Ruff、mypy、Hatchling。
+**技术栈：** Python 3.11+、dataclasses、PyYAML、argparse、pytest、Ruff、mypy、Hatchling。
 
 ---
 

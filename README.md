@@ -68,7 +68,7 @@ entrix --help
 entrix install --repo .
 ```
 
-需要 Python 3.10+。`uv` 仅用于 `uv` / `uvx` 工作流。
+需要 Python 3.11+。`uv` 仅用于 `uv` / `uvx` 工作流。
 
 Python 用户如果需要直接运行 MCP server，可选安装 `pip install entrix[mcp]`；这条路径不会
 影响 Claude 插件的无 Python 二进制发行版。
@@ -109,7 +109,7 @@ Entrix 使用**适应度（fitness）**的演进架构含义：适应度函数�
 
 ## 环境要求
 
-- Python 3.10+
+- Python 3.11+
 - 使用 `--base HEAD~1` 的命令需要在 Git 仓库上下文中运行
 
 可选：

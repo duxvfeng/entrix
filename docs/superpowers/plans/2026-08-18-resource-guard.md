@@ -6,7 +6,7 @@
 
 **架构：** Harness 配置定义 producer 并发硬上限，手工 CLI 显式请求并行后才会在该上限内启用线程池；Stop Hook 保持串行。Fitness CLI 将 `--max-workers` 传至 ShellRunner，但默认命令仍不并行。
 
-**技术栈：** Python 3.10+、argparse、dataclasses、pytest、Ruff、Mypy。
+**技术栈：** Python 3.11+、argparse、dataclasses、pytest、Ruff、Mypy。
 
 **实施状态（2026-08-18）：** 任务 0 至任务 5 已完成并通过针对性回归、类型检查和配置校验。
 任务 6 的全量 Ruff 仍被工作区中无关的 `tests/test_serialization_fix.py` 未使用导入阻断；本次

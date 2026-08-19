@@ -6,7 +6,7 @@
 
 **架构：** 保留 `HarnessRunner -> EvidenceEngine -> EvidenceStore -> GateEngine` 主链路，在 Harness 内新增受控 Parser Registry。Stop Hook 只负责生命周期、缓存和 fail-closed；Gate Engine 只消费标准 Evidence 与 WhenContext。
 
-**技术栈：** Python 3.10+、dataclasses、PyYAML、ElementTree、pytest、Ruff、Mypy、Hatchling。
+**技术栈：** Python 3.11+、dataclasses、PyYAML、ElementTree、pytest、Ruff、Mypy、Hatchling。
 
 ---
 

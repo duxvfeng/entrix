@@ -6,7 +6,7 @@
 
 **架构：** `profiles.py` 维护 marker 注册和冲突策略；`template.py` 按 profile 生成现有 `harness/v1` 字典；`cmd_init()` 解析 profile、生成 YAML 并报告最终选择。自动识别只负责选择，不参与 Evidence 或 Gate 执行。
 
-**技术栈：** Python 3.10+、`pathlib`、`dataclasses`、PyYAML、argparse、pytest。
+**技术栈：** Python 3.11+、`pathlib`、`dataclasses`、PyYAML、argparse、pytest。
 
 ---
 

@@ -4,7 +4,7 @@
 
 ## 前置条件
 
-- Python 3.10+
+- Python 3.11+
 - Claude Code 客户端
 - 当前仓库已创建 `.venv` 并安装依赖（见项目 README）
 

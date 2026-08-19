@@ -516,7 +516,7 @@ def stop_gate_check(
 **必需组件:**
 - Claude Code 插件 API (假设支持生命周期钩子)
 - Entrix 核心 (现有，复用)
-- Python 3.10+
+- Python 3.11+
 - 文件系统访问权限
 
 **可选组件:**

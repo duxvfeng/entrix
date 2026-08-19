@@ -6,7 +6,7 @@
 
 **架构：** 无 `harness.yaml` 时保留 legacy Stop Gate；存在配置时由 hook 直接运行 HarnessRunner。YAML 在加载边界转换为 `GatePolicy` 等领域对象，producer 通过现有 `engine`/`review_trigger` API 生成标准 evidence。
 
-**技术栈：** Python 3.10+, dataclasses, PyYAML, pytest, Ruff, mypy, Hatchling。
+**技术栈：** Python 3.11+, dataclasses, PyYAML, pytest, Ruff, mypy, Hatchling。
 
 ---
 
