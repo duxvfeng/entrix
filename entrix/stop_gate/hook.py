@@ -129,6 +129,66 @@ def derive_changed_files(workspace: Path) -> list[str] | None:
     return changed
 
 
+def has_code_change(changed_files: list[str]) -> bool:
+    """判断是否有代码变更（需要质量检查）。
+
+    规则：
+    1. 修改了源代码文件（src/, lib/, *.py, *.js 等）-> 需要检查
+    2. 修改了配置文件（pyproject.toml, package.json 等）-> 需要检查
+    3. 修改了测试文件 -> 需要检查
+    4. 只修改文档（docs/, README, CHANGELOG 等）-> 不检查
+
+    Args:
+        changed_files: 本次会话变更的文件列表
+
+    Returns:
+        True 如果有代码变更需要检查，False 如果只是文档变更
+    """
+    if not changed_files:
+        return False
+
+    # 源代码目录/后缀
+    SOURCE_PATTERNS = {
+        "src/", "lib/", "app/", "entrix/", "packages/",
+        ".py", ".js", ".ts", ".tsx", ".jsx",
+        ".java", ".go", ".rs", ".cpp", ".c", ".h",
+        ".sh", ".yml", ".yaml"
+    }
+
+    # 配置文件
+    CONFIG_FILES = {
+        "pyproject.toml", "package.json", "Cargo.toml",
+        "go.mod", "pom.xml", "build.gradle",
+        "harness.yaml", ".github", "Makefile",
+        "dockerfile", ".dockerignore"
+    }
+
+    # 测试目录
+    TEST_PATTERNS = {
+        "tests/", "test/", "__tests__", ".test."
+    }
+
+    for file_path in changed_files:
+        # 转小写便于匹配
+        path_lower = file_path.lower()
+
+        # 检查是否是配置文件
+        if any(config in file_path for config in CONFIG_FILES):
+            return True
+
+        # 检查是否是测试文件
+        if any(test in path_lower for test in TEST_PATTERNS):
+            return True
+
+        # 检查是否是源代码
+        if (any(src in path_lower for src in SOURCE_PATTERNS) or
+            any(file_path.endswith(ext) for ext in SOURCE_PATTERNS)):
+            return True
+
+    # 没有代码变更
+    return False
+
+
 def workspace_fingerprint(workspace: Path) -> str | None:
     """Return a content-aware snapshot of the Git worktree."""
     try:
@@ -345,6 +405,15 @@ def run_stop_gate_hook(
         detected_changed_files = derive_changed_files(workspace)
         changed_files = detected_changed_files or []
         detection_failed = detected_changed_files is None
+
+        # 🎯 只有代码变更才触发 Stop Gate 检查
+        if not detection_failed and not has_code_change(changed_files):
+            print(
+                f"[Entrix] 未检测到代码变更（仅: {', '.join(changed_files[:3]) if changed_files else '无变更'}{'...' if len(changed_files) > 3 else ''}），跳过 Stop Gate 检查",
+                file=sys.stderr,
+            )
+            return 0
+
         should_collect = phase == "implementation" or bool(changed_files) or detection_failed
 
         session_id = str(payload.get("session_id") or "unknown-session")
