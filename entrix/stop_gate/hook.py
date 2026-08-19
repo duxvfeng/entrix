@@ -87,6 +87,21 @@ def derive_changed_files(workspace: Path) -> list[str] | None:
     避免把无法确认变更状态误判为干净工作区。
     """
     try:
+        git_root = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if git_root.returncode != 0:
+            return None
+        discovered_root = Path(git_root.stdout.strip()).resolve()
+        # A pytest temporary directory nested inside this checkout is not the
+        # checkout itself. Do not mistake the clean parent status for its own.
+        if discovered_root != workspace.resolve():
+            return None
         result = subprocess.run(
             ["git", "status", "--porcelain"],
             cwd=workspace,

@@ -164,6 +164,12 @@ class TestDeriveChangedFiles:
         monkeypatch.setattr("entrix.stop_gate.hook.subprocess.run", lambda *args, **kwargs: Result())
         assert derive_changed_files(tmp_path) is None
 
+    def test_nested_workspace_does_not_use_parent_git_status(self, tmp_path: Path):
+        nested_workspace = tmp_path / "nested-workspace"
+        nested_workspace.mkdir()
+
+        assert derive_changed_files(nested_workspace) is None
+
     def test_parses_porcelain_entries(self, tmp_path: Path):
         import subprocess
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import fnmatch
+import ntpath
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -30,7 +31,8 @@ def _validated_pattern(pattern: object, context: WhenContext) -> str:
         raise ValueError("when 路径模式必须是非空字符串")
     relative_path = Path(pattern)
     root = context.repo_root.resolve()
-    if relative_path.is_absolute():
+    # Windows drive paths must remain invalid on POSIX runners too.
+    if relative_path.is_absolute() or ntpath.isabs(pattern):
         raise ValueError(f"when 路径必须位于工作区内：{pattern}")
     candidate = (root / relative_path).resolve()
     if not candidate.is_relative_to(root):
