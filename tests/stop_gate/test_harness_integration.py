@@ -281,7 +281,13 @@ gate_policies:
     assert (workspace / "run-count.txt").read_text(encoding="utf-8") == "3"
     bundles = list((state_dir / "evidence").rglob("*-bundle.json"))
     assert len(bundles) == 3
-    assert json.loads(bundles[-1].read_text(encoding="utf-8"))["evidence"][0]["status"] == "pass"
+    bundle_payloads = [json.loads(bundle.read_text(encoding="utf-8")) for bundle in bundles]
+    ordered_payloads = sorted(bundle_payloads, key=lambda payload: payload["collected_at"])
+    assert [payload["evidence"][0]["status"] for payload in ordered_payloads] == [
+        "fail",
+        "pass",
+        "pass",
+    ]
 
 
 def test_stop_hook_block_feedback_includes_gate_and_evidence_details(tmp_path: Path) -> None:
