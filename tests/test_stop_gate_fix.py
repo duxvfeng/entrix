@@ -1,8 +1,6 @@
 """测试 Stop Gate 异常处理"""
 
-import json
 import subprocess
-import sys
 from pathlib import Path
 
 

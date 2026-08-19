@@ -40,7 +40,7 @@ def cmd_clear_state(args: argparse.Namespace) -> int:
             print(f"    错误: {e}")
 
     if args.dry_run:
-        print(f"\n🔍 预览模式，不删除文件")
+        print("\n🔍 预览模式，不删除文件")
         return 0
 
     # 确认删除

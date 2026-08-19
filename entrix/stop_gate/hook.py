@@ -473,7 +473,7 @@ def _run_configured_stop_gate(
         if cached.status in {"fail", "blocked", "error"}:
             # 清理错误状态，给重新运行的机会
             if cached.status == "error":
-                print(f"[Entrix] 清理之前的错误状态", file=sys.stderr)
+                print("[Entrix] 清理之前的错误状态", file=sys.stderr)
                 state_store.delete(workspace, session_id)
                 # 重新运行检查
             else:
