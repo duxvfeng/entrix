@@ -18,11 +18,11 @@
   ],
   "mcpServers": {
     "entrix": {
-      "command": "uvx",
-      "args": [
-        "entrix",
-        "serve"
-      ]
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/entrix",
+      "args": ["serve"],
+      "env": {
+        "ENTRIX_BINARY_VERSION": "0.1.21"
+      }
     }
   }
 }

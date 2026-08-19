@@ -21,7 +21,7 @@ Modes:
 
 Path mode:
   1. Injects the bundled /entrix skill into the target repo as .claude/skills/entrix
-  2. Runs claude -p with /entrix to bootstrap or repair docs/fitness
+  2. Runs claude -p with /entrix to bootstrap or repair harness.yaml
   3. Verifies the result with entrix validate, entrix run --dry-run,
      entrix run --tier fast, and entrix run
 EOF
@@ -62,13 +62,11 @@ fi
 
 mkdir -p "$ARTIFACT_DIR"
 
-if command -v entrix >/dev/null 2>&1; then
-  ENTRIX_CMD=(entrix)
-elif command -v uvx >/dev/null 2>&1; then
-  ENTRIX_CMD=(uvx --from entrix entrix)
-else
-  ENTRIX_CMD=(python3 -m entrix)
-fi
+# Always exercise the checkout that contains this script. A globally installed
+# Entrix or a published uvx package may still carry the legacy file-based
+# loader and would validate a different configuration contract.
+export PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}"
+ENTRIX_CMD=(python3 -m entrix)
 
 if command -v claude >/dev/null 2>&1; then
   CLAUDE_CMD=(claude -p --permission-mode bypassPermissions)
@@ -169,14 +167,14 @@ run_forward_repo() {
     trap 'rm -f "$skill_link"' EXIT
 
     local prompt
-    prompt=$'Use /entrix in this repository to generate or repair docs/fitness.\nRequirements:\n- inspect real repository signals only\n- keep default local entrix run green\n- update every existing agent entry document among AGENTS.md and CLAUDE.md consistently\n- create only AGENTS.md if neither entry doc exists\n- model CI-only or provisioned-only checks with execution_scope: ci\n- iterate with entrix validate, entrix run --dry-run, entrix run --tier fast when available, and plain entrix run until the local result is executable'
+    prompt=$'Use /entrix in this repository to generate or repair harness.yaml.\nRequirements:\n- inspect real repository signals only\n- keep default local entrix run green\n- update every existing agent entry document among AGENTS.md and CLAUDE.md consistently\n- create only AGENTS.md if neither entry doc exists\n- model CI-only or provisioned-only checks with execution_scope: ci\n- iterate with entrix validate, entrix run --dry-run, entrix run --tier fast when available, and plain entrix run until the local result is executable'
 
     run_logged "claude /entrix $repo" "$repo_artifacts/claude.log" "$repo" "${CLAUDE_CMD[@]}" "$prompt"
     run_entrix_logged "validate $repo" "$repo_artifacts/validate.log" "$repo" validate
     run_entrix_logged "dry-run $repo" "$repo_artifacts/dry-run.log" "$repo" run --dry-run
     run_entrix_logged "fast tier $repo" "$repo_artifacts/fast.log" "$repo" run --tier fast
     run_entrix_logged "default run $repo" "$repo_artifacts/run.log" "$repo" run
-    run_logged "status $repo" "$repo_artifacts/status.log" "$repo" git status --short -- docs/fitness AGENTS.md CLAUDE.md
+    run_logged "status $repo" "$repo_artifacts/status.log" "$repo" git status --short -- harness.yaml AGENTS.md CLAUDE.md
   )
 }
 

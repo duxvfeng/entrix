@@ -1,4 +1,3 @@
 @echo off
-REM Entrix CLI launcher script for Windows
-
-python -m entrix %*
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0entrix-bootstrap.ps1" %*
+exit /b %ERRORLEVEL%

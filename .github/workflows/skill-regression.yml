@@ -9,7 +9,7 @@ on:
       - "tests/fixtures/skill_regression/**"
       - ".github/workflows/skill-regression.yml"
       - "README.md"
-      - "docs/fitness/README.md"
+      - "harness.yaml"
   push:
     branches:
       - main
@@ -20,7 +20,7 @@ on:
       - "tests/fixtures/skill_regression/**"
       - ".github/workflows/skill-regression.yml"
       - "README.md"
-      - "docs/fitness/README.md"
+      - "harness.yaml"
   workflow_dispatch:
 
 jobs:

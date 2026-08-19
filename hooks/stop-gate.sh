@@ -2,9 +2,9 @@
 # Entrix Stop Gate —— Claude Code Stop hook 包装器。
 #
 # 查找 entrix 的优先级：
-#   1. PATH 上的 entrix（pip install entrix / uv tool install entrix）
-#   2. uvx entrix（隔离环境，自动解析依赖）
-#   3. 插件根目录的源码检出（开发模式，要求依赖可用）
+#   1. 当前插件携带的无 Python 启动器（发布模式）
+#   2. PATH 上的 entrix（开发模式）
+#   3. uvx 或源码 Python（开发 fallback）
 # 全部不可用时按 fail-closed 输出阻断决策。
 #
 # 手动禁用：export ENTRIX_STOP_GATE_DISABLED=1
@@ -17,6 +17,38 @@ if [ -n "${ENTRIX_STOP_GATE_DISABLED:-}" ]; then
   exit 0
 fi
 
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
+block_unavailable() {
+  printf '%s\n' '{"decision":"block","reason":"Entrix Stop Gate 不可用，已按 fail-closed 阻断。"}'
+  echo "entrix stop-gate: 无法下载、校验或启动插件二进制。" >&2
+  exit 0
+}
+
+if [ -n "$PLUGIN_ROOT" ] && [ -f "$PLUGIN_ROOT/bin/entrix" ]; then
+  plugin_os="$(uname -s 2>/dev/null || true)"
+  case "$plugin_os" in
+    MINGW*|MSYS*|CYGWIN*)
+    if command -v powershell.exe >/dev/null 2>&1 && [ -f "$PLUGIN_ROOT/bin/entrix-bootstrap.ps1" ]; then
+      powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PLUGIN_ROOT/bin/entrix-bootstrap.ps1" stop-gate "$@"
+      plugin_rc=$?
+    else
+      block_unavailable
+    fi
+    ;;
+  *)
+    if [ -x "$PLUGIN_ROOT/bin/entrix" ]; then
+      "$PLUGIN_ROOT/bin/entrix" stop-gate "$@"
+      plugin_rc=$?
+    else
+      bash "$PLUGIN_ROOT/bin/entrix" stop-gate "$@"
+      plugin_rc=$?
+    fi
+    ;;
+  esac
+  [ "$plugin_rc" -eq 0 ] || block_unavailable
+  exit 0
+fi
+
 if command -v entrix >/dev/null 2>&1; then
   exec entrix stop-gate "$@"
 fi
@@ -25,7 +57,6 @@ if command -v uvx >/dev/null 2>&1; then
   exec uvx --quiet entrix stop-gate "$@"
 fi
 
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
 if [ -n "$PLUGIN_ROOT" ] && [ -f "$PLUGIN_ROOT/entrix/__init__.py" ] && command -v python3 >/dev/null 2>&1; then
   if PYTHONPATH="$PLUGIN_ROOT" python3 -c "import entrix, yaml" >/dev/null 2>&1; then
     exec env PYTHONPATH="$PLUGIN_ROOT" python3 -m entrix stop-gate "$@"

@@ -35,6 +35,23 @@
 
 安装插件后请重启 Claude Code。
 
+插件发行版内置无 Python 启动器。首次调用 MCP 或 Stop Gate 时，启动器会按当前平台从
+GitHub Release 下载固定版本的单文件 Entrix 二进制，校验 SHA-256 后缓存；后续调用直接使用
+缓存，因此安装插件和运行门禁不要求本机安装 Python、pip、uv 或 uvx。支持以下资产：
+
+```text
+entrix-<version>-windows-amd64.exe
+entrix-<version>-linux-amd64
+entrix-<version>-linux-arm64
+entrix-<version>-macos-amd64
+entrix-<version>-macos-arm64
+```
+
+Unix 缓存目录默认为 `~/.cache/entrix/bin/<version>/<target>/`，Windows 缓存目录为
+`%LOCALAPPDATA%\entrix\bin\<version>\<target>\`。开发者可以用 `ENTRIX_BINARY_PATH` 指定
+本地可执行文件，或用 `ENTRIX_RELEASE_REPOSITORY` / `ENTRIX_RELEASE_BASE_URL` 测试镜像。
+`ENTRIX_STOP_GATE_DISABLED=1` 是显式的开发/故障处理绕过开关，生产环境不应设置。
+
 ### 独立 CLI（`uv` 或 `pip`）
 
 ```bash
@@ -52,6 +69,9 @@ entrix install --repo .
 ```
 
 需要 Python 3.10+。`uv` 仅用于 `uv` / `uvx` 工作流。
+
+Python 用户如果需要直接运行 MCP server，可选安装 `pip install entrix[mcp]`；这条路径不会
+影响 Claude 插件的无 Python 二进制发行版。
 
 <details>
 <summary><strong>它能做什么</strong></summary>
@@ -401,7 +421,7 @@ entrix/stop_gate/
 ├── model.py         # 历史数据模型（保留，供下游使用）
 hooks/
 ├── hooks.json       # Claude Code 插件 hook 注册
-└── stop-gate.sh     # 查找 entrix/uvx/python3 的包装脚本
+└── stop-gate.sh     # 优先使用插件二进制，开发时 fallback 到 entrix/uvx/python3
 ```
 
 ### 在 Claude 中安装与使用

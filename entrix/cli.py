@@ -316,8 +316,8 @@ def _default_mcp_config() -> dict:
     return {
         "mcpServers": {
             "entrix": {
-                "command": "python",
-                "args": ["-m", "entrix.cli", "serve"],
+                "command": "entrix",
+                "args": ["serve"],
             }
         }
     }

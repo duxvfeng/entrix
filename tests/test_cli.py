@@ -8,6 +8,7 @@ import pytest
 
 from entrix.cli import (
     _ShellOutputController,
+    _default_mcp_config,
     _domains_from_files,
     _metric_domains,
     build_parser,
@@ -26,6 +27,14 @@ from entrix.harness.config import HarnessConfig, load_harness_config
 from entrix.harness.evidence import EvidenceBundle
 from entrix.stop_gate.phase import read_phase
 import entrix.cli as cli_module
+
+
+def test_default_mcp_config_uses_binary_command() -> None:
+    config = _default_mcp_config()
+    assert config["mcpServers"]["entrix"] == {
+        "command": "entrix",
+        "args": ["serve"],
+    }
 
 
 def test_parser_run_defaults():

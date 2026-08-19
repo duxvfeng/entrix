@@ -27,12 +27,8 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Install local verification tools
-        run: |
-          python -m pip install pytest ruff build hatchling
+      - name: Install the checked-out Entrix package
+        run: python -m pip install -e ".[dev]"
 
       - name: Resolve diff base
         id: base
@@ -54,22 +50,22 @@ jobs:
           echo "base=$base" >> "$GITHUB_OUTPUT"
           echo "ENTRIX_FITNESS_BASE=$base" >> "$GITHUB_ENV"
 
-      - name: Validate fitness spec with published entrix
-        run: uvx --from entrix entrix validate
+      - name: Validate harness configuration
+        run: python -m entrix validate
 
-      - name: Run fitness with published entrix
+      - name: Run fitness with checked-out entrix
         run: |
           mkdir -p .artifacts
-          uvx --from entrix entrix run \
+          python -m entrix run \
             --parallel \
             --tier normal \
             --scope ci \
             --min-score 0 \
             --output .artifacts/fitness-report.json
 
-      - name: Evaluate review triggers with published entrix
+      - name: Evaluate review triggers with checked-out entrix
         run: |
-          uvx --from entrix entrix review-trigger \
+          python -m entrix review-trigger \
             --base "${{ steps.base.outputs.base }}" \
             --json \
             > .artifacts/review-trigger-report.json

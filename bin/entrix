@@ -1,7 +1,5 @@
-#!/usr/bin/env python3
-# Entrix CLI launcher script - Unix/Linux/macOS
-import sys
-import subprocess
+#!/usr/bin/env bash
+set -u
 
-if __name__ == "__main__":
-    sys.exit(subprocess.run([sys.executable, "-m", "entrix"] + sys.argv[1:]).returncode)
+script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+exec bash "$script_dir/entrix-bootstrap.sh" "$@"

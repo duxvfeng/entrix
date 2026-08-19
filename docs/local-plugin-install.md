@@ -8,6 +8,10 @@
 - Claude Code 客户端
 - 当前仓库已创建 `.venv` 并安装依赖（见项目 README）
 
+> GitHub marketplace 的正式插件不需要以上 Python 前置条件。安装后首次调用会下载对应平台
+> 的 Entrix 二进制，完成 SHA-256 校验并缓存到用户目录；本节的 Python 环境仅用于源码调试、
+> 离线开发和手动 fallback。
+
 ```bash
 cd /Users/apple/entrix
 source .venv/bin/activate
@@ -24,6 +28,13 @@ entrix --help
 ```
 
 安装后重启 Claude Code。MCP + Stop Gate 同时生效。
+
+正式插件支持 Windows x64、Linux x64、Linux arm64、macOS x64 和 macOS arm64。启动器固定使用
+插件版本对应的 `entrix-<version>-<target>` Release 资产，不会自动切换到 PyPI 上的 `latest`。
+缓存命中后不需要网络；缓存目录为 Unix 的 `~/.cache/entrix/bin/` 或 Windows 的
+`%LOCALAPPDATA%\entrix\bin\`。开发时可以设置 `ENTRIX_BINARY_PATH` 指定本地二进制，设置
+`ENTRIX_RELEASE_REPOSITORY` / `ENTRIX_RELEASE_BASE_URL` 指向测试 Release；只有明确设置
+`ENTRIX_STOP_GATE_DISABLED=1` 才会绕过 Stop Gate。
 
 ---
 
@@ -72,7 +83,7 @@ cp -R README.md "$PLUGIN_DIR/"
 ```json
 {
   "name": "entrix-dev",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "mcpServers": {
     "entrix-dev": {
       "command": "/Users/apple/entrix/.venv/bin/python",
@@ -129,6 +140,9 @@ cat > .mcp.json << 'JSON'
 }
 JSON
 ```
+
+Python 用户也可以选择 `pip install entrix[mcp]` 后使用 `entrix serve`；这只适用于 Python
+开发路径，正式插件仍使用上面的版本化二进制启动器。
 
 ### 2. 配置 Claude Code Stop Gate Hook
 

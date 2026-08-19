@@ -1,0 +1,59 @@
+"""Regression checks for CI commands that exercise the current checkout."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import yaml
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_defense_workflow_uses_the_checked_out_entrix_package() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "defense.yml").read_text(encoding="utf-8")
+
+    assert 'python -m pip install -e ".[dev]"' in workflow
+    assert "docs/fitness" not in workflow
+    assert "uvx --from entrix entrix" not in workflow
+    assert "python -m entrix validate" in workflow
+    assert "python -m entrix run" in workflow
+    assert "python -m entrix review-trigger" in workflow
+
+
+def test_skill_regression_targets_harness_configuration() -> None:
+    script = (ROOT / "scripts" / "skill_regression.sh").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows" / "skill-regression.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "docs/fitness" not in script
+    assert "harness.yaml" in script
+    assert "ENTRIX_CMD=(python3 -m entrix)" in script
+    assert "docs/fitness" not in workflow
+    assert "harness.yaml" in workflow
+
+
+def test_release_workflow_builds_verified_five_platform_assets() -> None:
+    workflow_path = ROOT / ".github" / "workflows" / "build.yml"
+    workflow = workflow_path.read_text(encoding="utf-8")
+    payload = yaml.safe_load(workflow)
+    matrix = payload["jobs"]["build"]["strategy"]["matrix"]["include"]
+    runners = {entry["os"] for entry in matrix}
+
+    assert {
+        "windows-latest",
+        "ubuntu-latest",
+        "ubuntu-24.04-arm",
+        "macos-13",
+        "macos-14",
+    } <= runners
+    assert 'pip install -e ".[mcp]"' in workflow
+    assert "--onefile" in workflow
+    assert "--collect-all fastmcp" in workflow
+    assert "--collect-all tree_sitter_language_pack" in workflow
+    assert ".sha256" in workflow
+    assert "softprops/action-gh-release" in workflow
+
+    python_job = workflow.split("build-python-package:", 1)[1]
+    assert 'pip install -e ".[mcp]"' not in python_job

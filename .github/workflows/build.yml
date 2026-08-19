@@ -1,124 +1,189 @@
-name: Build Executables
+name: Build and Release
 
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   release:
     types: [created]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
+    name: Build ${{ matrix.target }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
-            name: windows
-            arch: amd64
-            binary_name: entrix.exe
-            platform: windows
+            target: windows-amd64
+            extension: .exe
+            data_separator: ";"
           - os: ubuntu-latest
-            name: linux
-            arch: amd64
-            binary_name: entrix
-            platform: linux
-          - os: macos-latest
-            name: macos
-            arch: amd64
-            binary_name: entrix
-            platform: macos
-
+            target: linux-amd64
+            extension: ""
+            data_separator: ":"
+          - os: ubuntu-24.04-arm
+            target: linux-arm64
+            extension: ""
+            data_separator: ":"
+          - os: macos-13
+            target: macos-amd64
+            extension: ""
+            data_separator: ":"
+          - os: macos-14
+            target: macos-arm64
+            extension: ""
+            data_separator: ":"
     runs-on: ${{ matrix.os }}
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-        cache: 'pip'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
 
-    - name: Install build dependencies
-      run: |
-        pip install pyinstaller
-        pip install -e .
-        pip install fastmcp
+      - name: Read package version
+        id: version
+        shell: bash
+        run: |
+          echo "version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")" >> "$GITHUB_OUTPUT"
 
-    - name: Build with PyInstaller (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        pyinstaller --onefile --name entrix --add-data "entrix;entrix" --hidden-import fastmcp --hidden-import yaml --hidden-import tree_sitter entrix/cli.py
+      - name: Install binary dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[mcp]"
+          pip install pyinstaller
 
-    - name: Build with PyInstaller (Linux/macOS)
-      if: matrix.os != 'windows-latest'
-      run: |
-        pyinstaller --onefile --name entrix --add-data "entrix:entrix" --hidden-import fastmcp --hidden-import yaml --hidden-import tree_sitter entrix/cli.py
+      - name: Build standalone binary
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          pyinstaller --onefile \
+            --name "entrix-${VERSION}-${{ matrix.target }}" \
+            --add-data "entrix${{ matrix.data_separator }}entrix" \
+            --collect-all fastmcp \
+            --collect-all tree_sitter_language_pack \
+            --hidden-import yaml \
+            --hidden-import tree_sitter \
+            entrix/cli.py
+          binary="entrix-${VERSION}-${{ matrix.target }}${{ matrix.extension }}"
+          test -f "dist/$binary"
+          "dist/$binary" --help
 
-    - name: Create package
-      shell: bash
-      run: |
-        cd dist
-        if [ "${{ matrix.platform }}" = "windows" ]; then
-          zip -r entrix-${{ matrix.platform }}-${{ matrix.arch }}.zip entrix.exe
-        else
-          tar -czf entrix-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz entrix
-        fi
+      - name: Package binary
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          binary="entrix-${VERSION}-${{ matrix.target }}${{ matrix.extension }}"
+          mkdir -p release
+          cp "dist/$binary" "release/$binary"
+          if [ "${{ matrix.target }}" = "windows-amd64" ]; then
+            python -c "import zipfile; z=zipfile.ZipFile('release/entrix-${VERSION}-${{ matrix.target }}.zip', 'w', zipfile.ZIP_DEFLATED); z.write('release/${binary}', arcname='${binary}'); z.close()"
+          else
+            tar -czf "release/entrix-${VERSION}-${{ matrix.target }}.tar.gz" -C release "$binary"
+          fi
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: entrix-${{ matrix.platform }}-${{ matrix.arch }}
-        path: |
-          dist/entrix*.zip
-          dist/entrix*.tar.gz
-        retention-days: 7
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: entrix-${{ matrix.target }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
 
-    - name: Upload to Release
-      if: github.event_name == 'release'
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          dist/entrix*.zip
-          dist/entrix*.tar.gz
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  release:
+    name: Publish release assets
+    needs: build
+    if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Read package version
+        id: version
+        shell: bash
+        run: |
+          echo "version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")" >> "$GITHUB_OUTPUT"
+
+      - name: Download platform assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: entrix-*
+          path: release
+          merge-multiple: true
+
+      - name: Generate checksums and release manifest
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          REPOSITORY: https://github.com/${{ github.repository }}
+        run: |
+          python scripts/build_release_assets.py \
+            --version "$VERSION" \
+            --repository "$REPOSITORY" \
+            --input-dir release \
+            --output release/release-manifest.json
+          find release -name '*.sha256' -type f -print
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-python-package:
+    name: Build Python package
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
-    - name: Install build dependencies
-      run: |
-        pip install build
-        pip install -e .
+      - name: Install build dependencies
+        run: |
+          pip install build
+          pip install -e .
 
-    - name: Build Python packages
-      run: |
-        python -m build
+      - name: Build Python packages
+        run: python -m build
 
-    - name: Upload Python packages
-      uses: actions/upload-artifact@v3
-      with:
-        name: python-packages
-        path: dist/
-        retention-days: 7
+      - name: Upload Python packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-packages
+          path: dist/
+          retention-days: 7
 
-    - name: Publish to PyPI
-      if: github.event_name == 'release' && startsWith(github.ref, 'refs/tags/')
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: |
-        pip install twine
-        twine upload dist/*
+      - name: Publish to PyPI
+        if: github.event_name == 'release' && startsWith(github.ref, 'refs/tags/')
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          pip install twine
+          twine upload dist/*
