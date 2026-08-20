@@ -18,8 +18,8 @@
   ],
   "mcpServers": {
     "entrix": {
-      "command": "python",
-      "args": ["-m", "entrix.cli", "serve"],
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/entrix",
+      "args": ["serve"],
       "env": {
         "ENTRIX_BINARY_VERSION": "0.1.21"
       }
@@ -32,8 +32,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python",
-            "args": ["-m", "entrix.cli", "stop-gate"],
+            "command": "${CLAUDE_PLUGIN_ROOT}/bin/entrix",
+            "args": ["stop-gate"],
             "timeout": 295,
             "env": {
               "ENTRIX_BINARY_VERSION": "0.1.21"

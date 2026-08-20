@@ -174,7 +174,25 @@ def test_plugin_manifest_uses_binary_launcher() -> None:
     server = manifest["mcpServers"]["entrix"]
     assert "uvx" not in server["command"]
     assert "python" not in server["command"]
+    assert server["command"] == "${CLAUDE_PLUGIN_ROOT}/bin/entrix"
     assert server["args"] == ["serve"]
+
+
+def test_plugin_stop_hooks_use_plugin_root_launcher() -> None:
+    manifest = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    hook_configs = [
+        manifest["hooks"],
+        json.loads((ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8")),
+        json.loads((ROOT / ".claude-plugin" / "hooks" / "hooks.json").read_text(encoding="utf-8")),
+    ]
+
+    for config in hook_configs:
+        stop_config = config if "Stop" in config else config["hooks"]
+        hook = stop_config["Stop"][0]["hooks"][0]
+        assert hook["command"] == "${CLAUDE_PLUGIN_ROOT}/bin/entrix"
+        assert hook["args"] == ["stop-gate"]
+        assert "stop-gate.sh" not in hook["command"]
+        assert "./hooks/" not in hook["command"]
 
 
 def test_plugin_versions_match_package_version() -> None:

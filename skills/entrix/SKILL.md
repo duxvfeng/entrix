@@ -69,6 +69,17 @@ manifest 或 review-trigger 文件。
 Entrix 使用演化架构语境中的 “fitness”：一种可执行检查，用于衡量代码库是否仍然
 满足某个质量或架构目标。面向用户的称呼是“质量护栏”。
 
+## Marketplace 插件的 Stop Hook
+
+Marketplace 安装时，Stop Hook 由插件 manifest 提供，并在目标仓库根目录执行。
+插件 hook 必须调用 `${CLAUDE_PLUGIN_ROOT}/bin/entrix`，参数为 `stop-gate`；不要使用
+`./hooks/stop-gate.sh`、`python -m entrix` 或其他相对项目目录的路径。`${CLAUDE_PLUGIN_ROOT}`
+指向已安装的插件目录，而不是当前项目目录。
+
+`entrix init` 只在目标仓库创建 `.mcp.json`、`harness.yaml` 和阶段标记，不注册项目级
+Stop Hook，也不加载项目中的 `hooks/stop-gate.sh`。使用 Marketplace 插件时，项目只需
+初始化 `harness.yaml`，Stop Hook 继续使用插件目录中的启动器。
+
 ## Skill 目录内容
 
 - `specs/README.md`：可用参考资料索引
@@ -209,6 +220,21 @@ Entrix 外层 producer 上限控制。
 
 如果入口文档已经存在，添加一条简短说明，指出规则位于 `harness.yaml`。不要把完整
 配置复制到入口文档中。
+
+#### 初始化必须保留 Lint 质量护栏
+
+初始化完成后，检查生成的 `harness.yaml` 中的 `fitness.dimensions`：
+
+- 如果仓库存在真实的 lint、格式化或静态分析命令，`code_quality` 必须至少包含一个
+  对应的 metric，并保留其真实命令、`tier` 和门禁语义。优先使用仓库 manifest、任务运行器、
+  CI 或已有配置中的命令，例如 `ruff check .`、`npm run lint`、`gofmt -l .`、
+  `cargo clippy`、Checkstyle 或 SpotBugs。
+- 如果生成模板没有包含已发现的 lint 命令，在初始化回合内补入 `harness.yaml`，不要只在
+  skill 或入口文档中描述它。
+- 如果仓库没有任何真实 lint 信号，不要凭空添加工具；可以保留格式检查、编译检查或其他
+  已确认的 `code_quality` 信号，并在结果中说明没有可初始化的 lint 命令。
+- lint 检查默认应放在 `fast` tier；只有仓库真实命令需要更重的资源时才使用其他 tier 或
+  `execution_scope: ci`。不要把不存在的可选工具放进默认本地门禁。
 
 ### 4. 校验前先询问
 
