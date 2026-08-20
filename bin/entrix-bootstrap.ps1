@@ -72,8 +72,8 @@ if ([string]::IsNullOrWhiteSpace($version)) {
 
 # RuntimeInformation.ProcessArchitecture selects the host binary target.
 $architecture = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
-if ($architecture -eq [System.Runtime.InteropServices.Architecture]::Amd64) {
-    # Architecture::Amd64 is the supported Windows target.
+if ($architecture -eq [System.Runtime.InteropServices.Architecture]::X64) {
+    # Architecture::X64 is the supported Windows target.
     $target = "windows-amd64"
 } else {
     Fail "unsupported release architecture: $architecture"
