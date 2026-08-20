@@ -1,0 +1,17 @@
+{
+  "description": "Entrix Stop Gate：在 Claude 请求结束任务时独立收集证据并裁决是否放行（仅在配置了 harness.yaml 的仓库激活）",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"./hooks/stop-gate.sh\"",
+            "timeout": 295
+          }
+        ]
+      }
+    ]
+  }
+}
