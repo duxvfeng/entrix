@@ -21,3 +21,4 @@ venv/
 .claude/stop-gate/
 .harness/evidence/
 .harness/runtime/
+.stop-gate-state/
