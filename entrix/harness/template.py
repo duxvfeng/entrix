@@ -8,6 +8,11 @@ from typing import Any
 
 import yaml
 
+from entrix.harness.lint_config import (
+    generate_metrics_from_lint_config,
+    get_dimension_weights,
+    should_use_configured_lints,
+)
 from entrix.harness.profiles import marker_for_profile
 
 
@@ -247,8 +252,28 @@ def default_harness_config() -> dict[str, Any]:
     }
 
 
-def _language_dimensions(profile: str) -> list[dict[str, Any]]:
+def _language_dimensions(profile: str, repo_root: Path | None = None) -> list[dict[str, Any]]:
     """Return the three weighted dimensions for a language profile."""
+    # 检查是否使用配置的 lint 工具
+    use_configured_lints = should_use_configured_lints(repo_root)
+
+    if use_configured_lints:
+        # 使用配置的 lint 工具
+        configured_dimensions = generate_metrics_from_lint_config(profile, repo_root)
+
+        if configured_dimensions:
+            # 有配置的 lint 工具，使用配置
+            return configured_dimensions
+        else:
+            # 没有配置的 lint 工具，使用默认的
+            return _default_dimensions_for_profile(profile)
+    else:
+        # 使用传统硬编码的维度
+        return _default_dimensions_for_profile(profile)
+
+
+def _default_dimensions_for_profile(profile: str) -> list[dict[str, Any]]:
+    """返回默认的硬编码维度配置（向后兼容）"""
     commands: dict[str, tuple[tuple[str, str, str], ...]] = {
         "python": (
             ("ruff_pass", "ruff check . 2>&1", "Ruff must pass with no lint errors."),
@@ -368,7 +393,7 @@ def profile_harness_config(profile: str, repo_root: Path | None = None) -> dict[
         raise ValueError(f"未知 profile：{profile}")
 
     config = deepcopy(default_harness_config())
-    config["fitness"]["dimensions"] = _language_dimensions(profile)
+    config["fitness"]["dimensions"] = _language_dimensions(profile, repo_root)
     config["review_triggers"]["rules"] = _profile_review_rules(profile)
     config["when"] = {
         "files_exist": [marker],

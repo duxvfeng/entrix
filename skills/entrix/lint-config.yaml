@@ -1,0 +1,239 @@
+# 语言相关的 Lint 配置
+# 这个文件让用户可以自定义不同语言的 lint 检查项
+
+version: "1.0"
+
+languages:
+  python:
+    code_quality:
+      - name: ruff_lint
+        command: ruff check . 2>&1
+        description: Ruff linting must pass with no errors
+        tier: fast
+        enabled: true
+        required: false
+
+      - name: mypy_check
+        command: mypy . 2>&1
+        description: Type checking with mypy
+        tier: normal
+        enabled: false
+        required: false
+
+      - name: black_format_check
+        command: black --check . 2>&1
+        description: Code formatting must comply with black standards
+        tier: fast
+        enabled: false
+        required: false
+
+      - name: flake8_check
+        command: flake8 . 2>&1
+        description: Flake8 code quality checking
+        tier: normal
+        enabled: false
+        required: false
+
+      - name: pylint_check
+        command: pylint **/*.py 2>&1
+        description: Deep code analysis with pylint
+        tier: normal
+        enabled: false
+        required: false
+
+    testability:
+      - name: pytest_pass
+        command: python -m pytest 2>&1
+        description: The Python test suite must pass
+        tier: normal
+        enabled: true
+        required: true
+
+    release_readiness:
+      - name: package_build_pass
+        command: python -m build --no-isolation 2>&1
+        description: The Python package must build
+        tier: normal
+        enabled: true
+        required: false
+
+  node-typescript:
+    code_quality:
+      - name: eslint_lint
+        command: npm run lint --if-present 2>&1
+        description: ESLint must pass with no lint errors
+        tier: fast
+        enabled: true
+        required: false
+
+      - name: typescript_check
+        command: npx tsc --noEmit 2>&1
+        description: TypeScript type checking must pass
+        tier: normal
+        enabled: true
+        required: false
+
+      - name: vue_lint
+        command: npm run lint:vue --if-present 2>&1
+        description: Vue SFC linting must pass when present
+        tier: normal
+        enabled: false
+        required: false
+
+      - name: prettier_check
+        command: npm run format:check --if-present 2>&1
+        description: Code formatting with Prettier
+        tier: fast
+        enabled: false
+        required: false
+
+    testability:
+      - name: vitest_tests
+        command: npm run test --if-present 2>&1
+        description: Vitest test suite must pass
+        tier: normal
+        enabled: true
+        required: true
+
+    release_readiness:
+      - name: build_pass
+        command: npm run build --if-present 2>&1
+        description: The Node build script must pass when present
+        tier: normal
+        enabled: true
+        required: false
+
+  java-maven:
+    code_quality:
+      - name: spotbugs_check
+        command: mvn -B spotbugs:check 2>&1
+        description: SpotBugs static analysis must pass
+        tier: normal
+        enabled: false
+        required: false
+
+      - name: checkstyle
+        command: mvn -B checkstyle:check 2>&1
+        description: CheckStyle must pass with no violations
+        tier: normal
+        enabled: false
+        required: false
+
+      - name: pmd
+        command: mvn -B pmd:check 2>&1
+        description: PMD static analysis
+        tier: normal
+        enabled: false
+        required: false
+
+  java-gradle:
+    code_quality:
+      - name: spotbugs_check
+        command: gradlew --no-daemon spotbugsCheck 2>&1
+        description: SpotBugs analysis must pass
+        tier: normal
+        enabled: false
+        required: false
+
+      - name: checkstyle
+        command: gradlew --no-daemon checkstyleMain checkstyleTest 2>&1
+        description: CheckStyle must pass
+        tier: normal
+        enabled: false
+        required: false
+
+      - name: detekt
+        command: gradlew --no-daemon detekt 2>&1
+        description: Detekt Kotlin analysis must pass
+        tier: normal
+        enabled: false
+        required: false
+
+  go:
+    code_quality:
+      - name: gofmt_check
+        command: gofmt -l . 2>&1
+        description: Go code must be properly formatted
+        tier: fast
+        enabled: true
+        required: false
+
+      - name: go_vet
+        command: go vet ./... 2>&1
+        description: Go vet analysis must pass
+        tier: fast
+        enabled: true
+        required: false
+
+      - name: golangci_lint
+        command: golangci-lint run 2>&1
+        description: GoLint must pass with no issues
+        tier: normal
+        enabled: false
+        required: false
+
+      - name: staticcheck
+        command: staticcheck ./... 2>&1
+        description: Go static analysis
+        tier: normal
+        enabled: false
+        required: false
+
+    testability:
+      - name: go_test
+        command: go test ./... 2>&1
+        description: Go tests must pass
+        tier: normal
+        enabled: true
+        required: true
+
+    release_readiness:
+      - name: go_build
+        command: go build ./... 2>&1
+        description: Go packages must build
+        tier: normal
+        enabled: true
+        required: false
+
+  rust:
+    code_quality:
+      - name: cargo_fmt_check
+        command: cargo fmt --all -- --check 2>&1
+        description: Rust formatting must be clean
+        tier: fast
+        enabled: true
+        required: false
+
+      - name: cargo_clippy
+        command: cargo clippy -- -D warnings 2>&1
+        description: Clippy lints must pass
+        tier: normal
+        enabled: true
+        required: false
+
+    testability:
+      - name: cargo_test
+        command: cargo test --workspace 2>&1
+        description: Rust workspace tests must pass
+        tier: normal
+        enabled: true
+        required: true
+
+    release_readiness:
+      - name: cargo_build
+        command: cargo build --workspace 2>&1
+        description: Rust workspace must build
+        tier: normal
+        enabled: true
+        required: false
+
+# 维度权重配置
+dimension_weights:
+  code_quality: 40
+  testability: 35
+  release_readiness: 25
+
+# 默认启用策略
+defaults:
+  enable_first_lint_only: true  # 只启用每个维度的第一个 lint 工具
+  require_all_enabled: false     # 是否要求所有启用的检查项都必须通过
