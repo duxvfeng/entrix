@@ -7,8 +7,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/entrix",
-            "args": ["stop-gate"],
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/bin/entrix-bootstrap.mjs", "stop-gate"],
             "timeout": 295
           }
         ]

@@ -98,3 +98,12 @@ def test_release_upload_resolves_a_tag_for_every_trigger() -> None:
     assert "git describe --tags --abbrev=0 HEAD" in workflow
     assert "Manual release runs require an existing tag reachable from HEAD" in workflow
     assert not any(step.get("uses") == "actions/create-release@v1" for step in release_steps)
+
+
+def test_release_workflow_rejects_tag_and_manifest_version_mismatch() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+
+    assert "Validate release version" in workflow
+    assert "release_tag != f\"v{version}\"" in workflow
+    assert ".claude-plugin/plugin.json" in workflow
+    assert ".claude-plugin/marketplace.json" in workflow

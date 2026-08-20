@@ -1,7 +1,7 @@
 {
   "name": "entrix",
   "description": "Harness Engineering plugin exposing executable fitness functions for architecture quality, change-aware validation, and MCP-powered review context.",
-  "version": "0.1.21",
+  "version": "0.1.22",
   "author": {
     "name": "duxvfeng"
   },
@@ -18,10 +18,10 @@
   ],
   "mcpServers": {
     "entrix": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/bin/entrix",
-      "args": ["serve"],
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/bin/entrix-bootstrap.mjs", "serve"],
       "env": {
-        "ENTRIX_BINARY_VERSION": "0.1.21"
+        "ENTRIX_BINARY_VERSION": "0.1.22"
       }
     }
   },
@@ -32,11 +32,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/entrix",
-            "args": ["stop-gate"],
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/bin/entrix-bootstrap.mjs", "stop-gate"],
             "timeout": 295,
             "env": {
-              "ENTRIX_BINARY_VERSION": "0.1.21"
+              "ENTRIX_BINARY_VERSION": "0.1.22"
             }
           }
         ]

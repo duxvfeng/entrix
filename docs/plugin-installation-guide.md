@@ -110,8 +110,8 @@ python -m entrix run --tier fast
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/bin/entrix",
-            "args": ["stop-gate"],
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/bin/entrix-bootstrap.mjs", "stop-gate"],
             "timeout": 295
           }
         ]
@@ -132,10 +132,10 @@ python -m entrix run --tier fast
 {
   "mcpServers": {
     "entrix": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/bin/entrix",
-      "args": ["serve"],
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/bin/entrix-bootstrap.mjs", "serve"],
       "env": {
-        "ENTRIX_BINARY_VERSION": "0.1.21"
+        "ENTRIX_BINARY_VERSION": "0.1.22"
       }
     }
   }

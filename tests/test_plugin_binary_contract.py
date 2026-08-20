@@ -7,6 +7,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import tomllib
 from pathlib import Path
 
@@ -17,6 +18,7 @@ UNIX_BOOTSTRAP = ROOT / "bin" / "entrix-bootstrap.sh"
 UNIX_ENTRYPOINT = ROOT / "bin" / "entrix"
 WINDOWS_BOOTSTRAP = ROOT / "bin" / "entrix-bootstrap.ps1"
 WINDOWS_ENTRYPOINT = ROOT / "bin" / "entrix.bat"
+NODE_ENTRYPOINT = ROOT / "bin" / "entrix-bootstrap.mjs"
 STOP_HOOK = ROOT / "hooks" / "stop-gate.sh"
 
 
@@ -153,6 +155,14 @@ def test_unix_entrypoint_is_python_free() -> None:
     assert "entrix-bootstrap.sh" in content
 
 
+def test_node_entrypoint_is_platform_dispatcher() -> None:
+    content = NODE_ENTRYPOINT.read_text(encoding="utf-8")
+    assert 'process.platform === "win32"' in content
+    assert "entrix-bootstrap.ps1" in content
+    assert "entrix-bootstrap.sh" in content
+    assert "spawnSync" in content
+
+
 def test_windows_launcher_contract() -> None:
     bootstrap = WINDOWS_BOOTSTRAP.read_text(encoding="utf-8")
     entrypoint = WINDOWS_ENTRYPOINT.read_text(encoding="utf-8")
@@ -169,13 +179,37 @@ def test_windows_launcher_contract() -> None:
     assert "entrix-bootstrap.ps1" in entrypoint
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows launcher smoke test")
+def test_node_entrypoint_starts_windows_bootstrap_and_forwards_args() -> None:
+    node = shutil.which("node")
+    assert node is not None
+    with tempfile.TemporaryDirectory() as temp_dir:
+        fake_binary = Path(temp_dir) / "fake-entrix.cmd"
+        fake_binary.write_text(
+            "@echo off\n"
+            "echo fake-binary:%*\n",
+            encoding="utf-8",
+        )
+        environment = os.environ.copy()
+        environment["ENTRIX_BINARY_PATH"] = str(fake_binary)
+
+        result = subprocess.run(
+            [node, str(NODE_ENTRYPOINT), "stop-gate", "payload"],
+            capture_output=True,
+            text=True,
+            env=environment,
+            check=False,
+        )
+
+        assert result.returncode == 0
+        assert result.stdout.strip() == "fake-binary:stop-gate payload"
+
+
 def test_plugin_manifest_uses_binary_launcher() -> None:
     manifest = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
     server = manifest["mcpServers"]["entrix"]
-    assert "uvx" not in server["command"]
-    assert "python" not in server["command"]
-    assert server["command"] == "${CLAUDE_PLUGIN_ROOT}/bin/entrix"
-    assert server["args"] == ["serve"]
+    assert server["command"] == "node"
+    assert server["args"] == ["${CLAUDE_PLUGIN_ROOT}/bin/entrix-bootstrap.mjs", "serve"]
 
 
 def test_plugin_stop_hooks_use_plugin_root_launcher() -> None:
@@ -189,8 +223,11 @@ def test_plugin_stop_hooks_use_plugin_root_launcher() -> None:
     for config in hook_configs:
         stop_config = config if "Stop" in config else config["hooks"]
         hook = stop_config["Stop"][0]["hooks"][0]
-        assert hook["command"] == "${CLAUDE_PLUGIN_ROOT}/bin/entrix"
-        assert hook["args"] == ["stop-gate"]
+        assert hook["command"] == "node"
+        assert hook["args"] == [
+            "${CLAUDE_PLUGIN_ROOT}/bin/entrix-bootstrap.mjs",
+            "stop-gate",
+        ]
         assert "stop-gate.sh" not in hook["command"]
         assert "./hooks/" not in hook["command"]
 
@@ -203,8 +240,12 @@ def test_plugin_versions_match_package_version() -> None:
     marketplace = json.loads(
         (ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8")
     )
+    assert package_version == "0.1.22"
     assert plugin["version"] == package_version
     assert marketplace["plugins"][0]["version"] == package_version
+    assert plugin["mcpServers"]["entrix"]["env"]["ENTRIX_BINARY_VERSION"] == package_version
+    assert plugin["hooks"]["Stop"][0]["hooks"][0]["env"]["ENTRIX_BINARY_VERSION"] == package_version
+    assert marketplace["plugins"][0]["release"]["asset_prefix"] == f"entrix-{package_version}-"
 
 
 def test_stop_hook_prefers_plugin_binary_and_fails_closed() -> None:
