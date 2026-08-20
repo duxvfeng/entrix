@@ -2,118 +2,56 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Git: 推送到所有远程仓库",
+      "label": "Git: 推送 GitHub（不带 tag）",
       "type": "shell",
       "command": "git",
-      "args": [
-        "push",
-        "origin",
-        "main"
-      ],
+      "args": ["push", "github", "HEAD"],
       "problemMatcher": [],
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared",
-        "showReuseMessage": true,
-        "clear": true
-      },
-      "detail": "推送代码到 origin (GitHub)"
+      "detail": "只推送当前分支到 GitHub"
     },
     {
-      "label": "Git: 推送到 GitHub Fork",
+      "label": "Git: 推送 Gitee（不带 tag）",
       "type": "shell",
       "command": "git",
-      "args": [
-        "push",
-        "github",
-        "main"
-      ],
+      "args": ["push", "dxf", "HEAD"],
       "problemMatcher": [],
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared",
-        "showReuseMessage": false,
-        "clear": false
-      },
-      "detail": "推送代码到 github (phodal/entrix)"
+      "detail": "只推送当前分支到 Gitee"
     },
     {
-      "label": "Git: 推送到 Gitee",
-      "type": "shell",
-      "command": "git",
-      "args": [
-        "push",
-        "dxf",
-        "main"
-      ],
-      "problemMatcher": [],
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared",
-        "showReuseMessage": false,
-        "clear": false
-      },
-      "detail": "推送代码到 Gitee (duxvfeng/entrix)"
-    },
-    {
-      "label": "Git: 推送到所有远程仓库（并行）",
-      "dependsOn": [
-        "Git: 推送到 GitHub Fork",
-        "Git: 推送到 Gitee"
-      ],
-      "problemMatcher": [],
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "dedicated",
-        "showReuseMessage": false,
-        "clear": true
-      },
-      "detail": "同时推送到 GitHub 和 Gitee"
-    },
-    {
-      "label": "Git: 推送到所有远程仓库（串行）",
+      "label": "Git: 一键推送 GitHub + Gitee（不带 tag）",
       "dependsOrder": "sequence",
       "dependsOn": [
-        "Git: 推送到 GitHub Fork",
-        "Git: 推送到 Gitee"
+        "Git: 推送 GitHub（不带 tag）",
+        "Git: 推送 Gitee（不带 tag）"
       ],
       "problemMatcher": [],
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "dedicated",
-        "showReuseMessage": false,
-        "clear": true
-      },
-      "detail": "依次推送到 GitHub 和 Gitee"
+      "detail": "依次推送当前分支到 GitHub 和 Gitee"
     },
     {
-      "label": "Git: 推送所有分支到所有远程",
+      "label": "Git: 推送当前 tag 到 GitHub",
       "type": "shell",
-      "command": "git",
-      "args": [
-        "remote",
-        "update"
+      "command": "python",
+      "args": ["scripts/push_current_tag.py", "--remote", "github"],
+      "problemMatcher": [],
+      "detail": "只推送指向当前 HEAD 的已有 tag 到 GitHub"
+    },
+    {
+      "label": "Git: 推送当前 tag 到 Gitee",
+      "type": "shell",
+      "command": "python",
+      "args": ["scripts/push_current_tag.py", "--remote", "dxf"],
+      "problemMatcher": [],
+      "detail": "只推送指向当前 HEAD 的已有 tag 到 Gitee"
+    },
+    {
+      "label": "Git: 一键推送当前 tag 到 GitHub + Gitee",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Git: 推送当前 tag 到 GitHub",
+        "Git: 推送当前 tag 到 Gitee"
       ],
       "problemMatcher": [],
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "dedicated",
-        "showReuseMessage": true,
-        "clear": true
-      },
-      "detail": "更新所有远程仓库信息"
+      "detail": "依次推送当前 HEAD 的已有 tag 到 GitHub 和 Gitee"
     }
   ]
 }

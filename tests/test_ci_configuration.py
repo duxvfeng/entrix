@@ -77,3 +77,19 @@ def test_release_workflow_builds_verified_five_platform_assets() -> None:
 
     python_job = workflow.split("build-python-package:", 1)[1]
     assert 'pip install -e ".[mcp]"' not in python_job
+
+
+def test_release_upload_resolves_a_tag_for_every_trigger() -> None:
+    workflow_path = ROOT / ".github" / "workflows" / "build.yml"
+    workflow = workflow_path.read_text(encoding="utf-8")
+    payload = yaml.safe_load(workflow)
+    release_steps = payload["jobs"]["release"]["steps"]
+    upload_step = next(step for step in release_steps if step.get("uses") == "softprops/action-gh-release@v2")
+
+    assert upload_step["with"]["tag_name"] == "${{ steps.release_tag.outputs.tag }}"
+    assert upload_step["with"]["target_commitish"] == "${{ github.sha }}"
+    assert "Resolve release tag" in workflow
+    assert "github.event_name == 'workflow_dispatch'" not in payload["jobs"]["release"]["if"]
+    assert "github.ref_type" in workflow
+    assert 'tag="v$VERSION"' not in workflow
+    assert not any(step.get("uses") == "actions/create-release@v1" for step in release_steps)
