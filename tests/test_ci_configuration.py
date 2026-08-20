@@ -88,8 +88,13 @@ def test_release_upload_resolves_a_tag_for_every_trigger() -> None:
 
     assert upload_step["with"]["tag_name"] == "${{ steps.release_tag.outputs.tag }}"
     assert upload_step["with"]["target_commitish"] == "${{ github.sha }}"
+    assert upload_step["with"]["overwrite_files"] is True
     assert "Resolve release tag" in workflow
-    assert "github.event_name == 'workflow_dispatch'" not in payload["jobs"]["release"]["if"]
-    assert "github.ref_type" in workflow
-    assert 'tag="v$VERSION"' not in workflow
+    assert payload["jobs"]["release"]["if"] == (
+        "github.event_name == 'release' || github.event_name == 'workflow_dispatch' "
+        "|| startsWith(github.ref, 'refs/tags/v')"
+    )
+    assert "fetch-depth: 0" in workflow
+    assert "git describe --tags --abbrev=0 HEAD" in workflow
+    assert "Manual release runs require an existing tag reachable from HEAD" in workflow
     assert not any(step.get("uses") == "actions/create-release@v1" for step in release_steps)

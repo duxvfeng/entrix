@@ -8,7 +8,7 @@ GitHub、Gitee 或两个 remote，并让 release workflow 不创建新 tag。
 
 **架构：** VS Code task 只负责选择 remote 和编排单 remote 任务；Python 辅助脚本负责
 跨平台读取 `HEAD` 可追溯到的最近已有 tag 并执行精确 tag push。GitHub Actions 只接受 release 事件
-或已有 tag ref，softprops 使用解析出的当前 tag。
+、已有 tag ref 或手动构建，softprops 使用解析出的当前已有 tag 并覆盖同名 Release 附件。
 
 **技术栈：** VS Code Tasks JSON、Python 标准库 `argparse`/`subprocess`、GitHub Actions YAML、pytest。
 
@@ -80,20 +80,20 @@ remote 任务，先推送代码，再推送 tag。
 
 - [x] **步骤 1：补充失败断言**
 
-断言 workflow_dispatch 的 release job 仅在当前 ref 是 tag 时运行，tag 解析使用
-`github.ref_name` 或 release event 的 tag，不再从 package version 生成 tag。
+断言 workflow_dispatch 的 release job 运行，tag 解析使用当前提交可追溯的已有 tag，
+上传动作开启同名附件覆盖，不从 package version 创建新 tag。
 
 - [x] **步骤 2：运行测试确认失败**
 
 运行：`python -m pytest tests/test_ci_configuration.py -q`
 
-预期：当前 workflow_dispatch 分支会回退到 `v<version>`，断言失败。
+预期：当前 workflow_dispatch 分支会跳过 release job，且上传动作不会覆盖同名附件，断言失败。
 
 - [x] **步骤 3：修改 workflow**
 
-release job 条件只保留 release 事件和 `refs/tags/v*`；Resolve release tag 对手动触发只
-接受 `github.ref_type == tag` 的 `github.ref_name`；softprops 继续使用解析出的 tag，
-不添加任何创建 tag 的步骤。
+release job 条件加入 `workflow_dispatch`；release job 使用 `fetch-depth: 0` 和
+`git describe --tags --abbrev=0 HEAD` 解析已有 tag；softprops 设置
+`overwrite_files: true`，不添加任何创建或移动 tag 的步骤。
 
 - [x] **步骤 4：运行验证**
 

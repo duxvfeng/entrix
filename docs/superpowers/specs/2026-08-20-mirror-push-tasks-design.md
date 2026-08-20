@@ -17,13 +17,15 @@ tag，不创建新 tag。
 - 双 remote 任务通过 `dependsOn` 顺序复用对应的单 remote 任务，避免复制推送逻辑。
 - “一键推送代码 + 当前 tag 到 GitHub + Gitee”先依赖双 remote 代码任务，再依赖双 remote tag
   任务，确保代码先于 tag 推送。
-- `.github/workflows/build.yml` 的 release job 只允许 release 事件或 tag ref 运行；手动
-  运行时只有选择已有 tag 才会发布，分支运行不会创建 tag 或 Release。
+- `.github/workflows/build.yml` 的 release job 支持 release 事件、tag push 和手动运行。
+  手动运行时使用当前提交可追溯的最近已有 `v*` tag 更新 Release，并覆盖同名附件；
+  不创建或移动 tag。
 
 ## 错误处理
 
 - 未配置 `github` 或 `dxf` remote 时由 Git 返回错误。
 - 当前 `HEAD` 没有可追溯的已有 tag 时，tag 推送任务在本地失败并显示原因，不产生远端变更。
+- 手动构建时当前提交没有可追溯的已有 `v*` tag，release job 明确失败，不创建新 tag。
 - 任一 remote 推送失败时，双 remote 任务按顺序停止，不掩盖失败。
 
 ## 验证
