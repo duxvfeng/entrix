@@ -6,7 +6,7 @@
 
 ```bash
 # 添加 GitHub 远程仓库
-git remote add github https://github.com/phodal/entrix.git
+git remote add github https://github.com/duxvfeng/entrix.git
 
 # 推送到 GitHub
 git push github main
@@ -99,8 +99,8 @@ v0.1.22/
 在 README.md 中添加状态徽章：
 
 ```markdown
-[![Build Status](https://github.com/phodal/entrix/actions/workflows/build.yml/badge.svg)]
-[![Test Status](https://github.com/phodal/entrix/actions/workflows/test.yml/badge.svg)]
+[![Build Status](https://github.com/duxvfeng/entrix/actions/workflows/build.yml/badge.svg)]
+[![Test Status](https://github.com/duxvfeng/entrix/actions/workflows/test.yml/badge.svg)]
 ```
 
 ## 🔐 安全

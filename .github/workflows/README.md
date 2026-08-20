@@ -26,7 +26,7 @@
 ### 1. 推送代码到 GitHub
 
 ```bash
-git remote add github https://github.com/phodal/entrix.git
+git remote add github https://github.com/duxvfeng/entrix.git
 git push github main
 ```
 
