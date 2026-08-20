@@ -1,4 +1,4 @@
-"""Tests for pushing the tag that already points at HEAD."""
+"""Tests for pushing the latest existing tag reachable from HEAD."""
 
 from __future__ import annotations
 
@@ -9,12 +9,14 @@ import pytest
 import scripts.push_current_tag as push_current_tag
 
 
-def test_push_current_tag_uses_only_the_unique_tag_on_head(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_push_current_tag_uses_latest_reachable_existing_tag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     commands: list[list[str]] = []
 
     def fake_git(args: list[str]) -> CompletedProcess[str]:
         commands.append(args)
-        if args == ["tag", "--points-at", "HEAD"]:
+        if args == ["describe", "--tags", "--abbrev=0", "HEAD"]:
             return CompletedProcess(args, 0, stdout="v0.1.21\n", stderr="")
         return CompletedProcess(args, 0, stdout="", stderr="")
 
@@ -22,22 +24,24 @@ def test_push_current_tag_uses_only_the_unique_tag_on_head(monkeypatch: pytest.M
 
     assert push_current_tag.push_current_tag("github") == "v0.1.21"
     assert commands == [
-        ["tag", "--points-at", "HEAD"],
+        ["describe", "--tags", "--abbrev=0", "HEAD"],
         ["push", "github", "refs/tags/v0.1.21:refs/tags/v0.1.21"],
     ]
 
 
-@pytest.mark.parametrize("tag_output", ["", "v0.1.20\nv0.1.21\n"])
-def test_push_current_tag_rejects_missing_or_ambiguous_tag(
-    monkeypatch: pytest.MonkeyPatch, tag_output: str
-) -> None:
+def test_push_current_tag_rejects_missing_reachable_tag(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         push_current_tag,
         "_run_git",
-        lambda args: CompletedProcess(args, 0, stdout=tag_output, stderr=""),
+        lambda args: CompletedProcess(
+            args,
+            128,
+            stdout="",
+            stderr="fatal: No names found, cannot describe anything.\n",
+        ),
     )
 
-    with pytest.raises(ValueError, match="exactly one tag"):
+    with pytest.raises(ValueError, match="no existing tag"):
         push_current_tag.push_current_tag("dxf")
 
 

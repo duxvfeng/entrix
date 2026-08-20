@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Push the unique tag that already points at the current HEAD."""
+"""Push the latest existing tag reachable from the current HEAD."""
 
 from __future__ import annotations
 
@@ -20,25 +20,25 @@ def _run_git(args: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _current_tags() -> tuple[str, ...]:
-    result = _run_git(["tag", "--points-at", "HEAD"])
+def _current_tag() -> str:
+    result = _run_git(["describe", "--tags", "--abbrev=0", "HEAD"])
     if result.returncode != 0:
-        detail = result.stderr.strip() or "git tag failed"
-        raise RuntimeError(detail)
-    return tuple(line.strip() for line in result.stdout.splitlines() if line.strip())
+        detail = result.stderr.strip()
+        suffix = f": {detail}" if detail else ""
+        raise ValueError(f"no existing tag reachable from HEAD{suffix}")
+
+    tag = result.stdout.strip()
+    if not tag:
+        raise ValueError("no existing tag reachable from HEAD")
+    return tag
 
 
 def push_current_tag(remote: str) -> str:
-    """Push the only local tag pointing at HEAD without creating a tag."""
+    """Push the latest existing tag reachable from HEAD without creating one."""
     if remote not in SUPPORTED_REMOTES:
         raise ValueError(f"unsupported remote: {remote}")
 
-    tags = _current_tags()
-    if len(tags) != 1:
-        found = ", ".join(tags) if tags else "none"
-        raise ValueError(f"HEAD must have exactly one tag; found: {found}")
-
-    tag = tags[0]
+    tag = _current_tag()
     result = _run_git(["push", remote, f"refs/tags/{tag}:refs/tags/{tag}"])
     if result.returncode != 0:
         detail = result.stderr.strip() or "git push failed"

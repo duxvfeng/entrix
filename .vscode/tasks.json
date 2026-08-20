@@ -33,7 +33,7 @@
       "command": "python",
       "args": ["scripts/push_current_tag.py", "--remote", "github"],
       "problemMatcher": [],
-      "detail": "只推送指向当前 HEAD 的已有 tag 到 GitHub"
+      "detail": "只推送 HEAD 可追溯到的最近已有 tag 到 GitHub"
     },
     {
       "label": "Git: 推送当前 tag 到 Gitee",
@@ -41,7 +41,7 @@
       "command": "python",
       "args": ["scripts/push_current_tag.py", "--remote", "dxf"],
       "problemMatcher": [],
-      "detail": "只推送指向当前 HEAD 的已有 tag 到 Gitee"
+      "detail": "只推送 HEAD 可追溯到的最近已有 tag 到 Gitee"
     },
     {
       "label": "Git: 一键推送当前 tag 到 GitHub + Gitee",
@@ -51,7 +51,7 @@
         "Git: 推送当前 tag 到 Gitee"
       ],
       "problemMatcher": [],
-      "detail": "依次推送当前 HEAD 的已有 tag 到 GitHub 和 Gitee"
+      "detail": "依次推送 HEAD 可追溯到的最近已有 tag 到 GitHub 和 Gitee"
     }
   ]
 }

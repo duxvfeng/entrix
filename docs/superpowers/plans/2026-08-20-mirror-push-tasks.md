@@ -7,7 +7,7 @@
 GitHub、Gitee 或两个 remote，并让 release workflow 不创建新 tag。
 
 **架构：** VS Code task 只负责选择 remote 和编排单 remote 任务；Python 辅助脚本负责
-跨平台读取 `HEAD` 上的唯一 tag 并执行精确 tag push。GitHub Actions 只接受 release 事件
+跨平台读取 `HEAD` 可追溯到的最近已有 tag 并执行精确 tag push。GitHub Actions 只接受 release 事件
 或已有 tag ref，softprops 使用解析出的当前 tag。
 
 **技术栈：** VS Code Tasks JSON、Python 标准库 `argparse`/`subprocess`、GitHub Actions YAML、pytest。
@@ -22,8 +22,8 @@ GitHub、Gitee 或两个 remote，并让 release workflow 不创建新 tag。
 
 - [x] **步骤 1：编写失败测试**
 
-覆盖以下行为：唯一 tag 时调用 `git push <remote> refs/tags/<tag>:refs/tags/<tag>`；无 tag
-和多个 tag 时返回非零并说明原因；非法 remote 参数被拒绝。
+覆盖以下行为：找到最近可追溯 tag 时调用 `git push <remote> refs/tags/<tag>:refs/tags/<tag>`；
+无可追溯 tag 时返回非零并说明原因；非法 remote 参数被拒绝。
 
 - [x] **步骤 2：运行测试确认失败**
 
@@ -33,7 +33,7 @@ GitHub、Gitee 或两个 remote，并让 release workflow 不创建新 tag。
 
 - [x] **步骤 3：实现最少脚本**
 
-脚本使用 `git tag --points-at HEAD` 获取候选 tag，要求恰好一个；使用
+脚本使用 `git describe --tags --abbrev=0 HEAD` 获取最近可追溯 tag；使用
 `subprocess.run` 执行精确 tag refspec，不执行 `git tag` 或创建 tag。
 
 - [x] **步骤 4：运行测试确认通过**
