@@ -167,7 +167,8 @@ def test_windows_launcher_contract() -> None:
     bootstrap = WINDOWS_BOOTSTRAP.read_text(encoding="utf-8")
     entrypoint = WINDOWS_ENTRYPOINT.read_text(encoding="utf-8")
     assert "RuntimeInformation.ProcessArchitecture" in bootstrap
-    assert "Architecture::Amd64" in bootstrap
+    assert "Architecture::X64" in bootstrap
+    assert "Architecture::Amd64" not in bootstrap
     assert "LOCALAPPDATA" in bootstrap
     assert "entrix\\bin" in bootstrap
     assert "Invoke-WebRequest" in bootstrap
@@ -240,7 +241,7 @@ def test_plugin_versions_match_package_version() -> None:
     marketplace = json.loads(
         (ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8")
     )
-    assert package_version == "0.1.22"
+    assert package_version == "0.1.23"
     assert plugin["version"] == package_version
     assert marketplace["plugins"][0]["version"] == package_version
     assert plugin["mcpServers"]["entrix"]["env"]["ENTRIX_BINARY_VERSION"] == package_version

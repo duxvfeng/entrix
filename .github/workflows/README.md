@@ -35,7 +35,7 @@ git push github main
 在 GitHub 上：
 1. 进入 "Releases" 页面
 2. 点击 "Draft a new release"
-3. 选择标签（如 `v0.1.22`）
+3. 选择标签（如 `v0.1.23`）
 4. 标题填写版本号
 5. 发布
 
@@ -58,23 +58,23 @@ GitHub Actions 会自动：
 每个版本会包含：
 
 ```
-Release v0.1.22/
-├── entrix-0.1.22-windows-amd64.exe
-├── entrix-0.1.22-windows-amd64.exe.sha256
-├── entrix-0.1.22-linux-amd64
-├── entrix-0.1.22-linux-amd64.sha256
-├── entrix-0.1.22-linux-arm64
-├── entrix-0.1.22-linux-arm64.sha256
-├── entrix-0.1.22-macos-amd64
-├── entrix-0.1.22-macos-arm64
+Release v0.1.23/
+├── entrix-0.1.23-windows-amd64.exe
+├── entrix-0.1.23-windows-amd64.exe.sha256
+├── entrix-0.1.23-linux-amd64
+├── entrix-0.1.23-linux-amd64.sha256
+├── entrix-0.1.23-linux-arm64
+├── entrix-0.1.23-linux-arm64.sha256
+├── entrix-0.1.23-macos-amd64
+├── entrix-0.1.23-macos-arm64
 ├── release-manifest.json
-├── entrix-0.1.22-windows-amd64.zip
-├── entrix-0.1.22-linux-amd64.tar.gz
-├── entrix-0.1.22-linux-arm64.tar.gz
-├── entrix-0.1.22-macos-amd64.tar.gz
-├── entrix-0.1.22-macos-arm64.tar.gz
-├── entrix-0.1.22-py3-none-any.whl  # Python Wheel
-└── entrix-0.1.22.tar.gz            # 源码包
+├── entrix-0.1.23-windows-amd64.zip
+├── entrix-0.1.23-linux-amd64.tar.gz
+├── entrix-0.1.23-linux-arm64.tar.gz
+├── entrix-0.1.23-macos-amd64.tar.gz
+├── entrix-0.1.23-macos-arm64.tar.gz
+├── entrix-0.1.23-py3-none-any.whl  # Python Wheel
+└── entrix-0.1.23.tar.gz            # 源码包
 ```
 
 ## 🎯 手动触发构建
@@ -117,7 +117,7 @@ pyinstaller --onefile --name entrix entrix/cli.py
 
 使用语义化版本号（Semantic Versioning）：
 
-- `v0.1.22` - 补丁版本（bug 修复）
+- `v0.1.23` - 补丁版本（Windows x64 架构识别修复）
 - `v0.2.0` - 次版本（新功能）
 - `v1.0.0` - 主版本（重大变更）
 
