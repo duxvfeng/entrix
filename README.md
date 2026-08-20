@@ -35,6 +35,21 @@
 
 安装后请重启 Claude Code。
 
+当前正式插件版本为 [`v0.1.24`](https://github.com/duxvfeng/entrix/releases/tag/v0.1.24)。
+插件会固定使用与该版本匹配的二进制，不会把最新源码和旧版本二进制混用。
+
+#### 默认对话语言
+
+从 `v0.1.24` 开始，Entrix Skill 默认要求 Claude：
+
+- 使用简体中文回答用户；
+- 使用中文提供解释、结论、错误说明和建议；
+- 保留代码、命令、路径、标识符、JSON 字段名和原始工具输出；
+- 用户明确要求英文时再使用英文回答。
+
+这项约定控制 Claude 的自然语言回复，不会翻译 MCP/Stop Gate 协议字段或底层二进制的原始 stdout/stderr。
+已经安装旧版本的电脑需要更新或重新安装 `entrix` 插件；旧插件缓存不会自动包含新的 Skill 规则。
+
 插件内置无 Python 启动器。首次调用 MCP 或 Stop Gate 时，启动器会按当前平台从 GitHub Release 下载固定版本的单文件 Entrix 二进制，校验 SHA-256 后缓存；后续调用直接使用缓存。因此安装插件和运行门禁**不要求本机安装 Python、pip、uv 或 uvx**。
 
 支持的平台资产：
