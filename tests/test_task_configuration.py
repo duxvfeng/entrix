@@ -24,6 +24,7 @@ def test_tasks_only_define_current_branch_and_tag_pushes() -> None:
         "Git: 推送当前 tag 到 GitHub",
         "Git: 推送当前 tag 到 Gitee",
         "Git: 一键推送当前 tag 到 GitHub + Gitee",
+        "Git: 一键推送代码 + 当前 tag 到 GitHub + Gitee",
     }
     assert all("origin" not in json.dumps(task, ensure_ascii=False) for task in tasks)
     assert all("所有分支" not in task["label"] for task in tasks)
@@ -58,4 +59,9 @@ def test_combined_tasks_run_single_remote_tasks_in_sequence() -> None:
     assert tasks["Git: 一键推送当前 tag 到 GitHub + Gitee"]["dependsOn"] == [
         "Git: 推送当前 tag 到 GitHub",
         "Git: 推送当前 tag 到 Gitee",
+    ]
+    assert tasks["Git: 一键推送代码 + 当前 tag 到 GitHub + Gitee"]["dependsOrder"] == "sequence"
+    assert tasks["Git: 一键推送代码 + 当前 tag 到 GitHub + Gitee"]["dependsOn"] == [
+        "Git: 一键推送 GitHub + Gitee（不带 tag）",
+        "Git: 一键推送当前 tag 到 GitHub + Gitee",
     ]

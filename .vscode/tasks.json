@@ -52,6 +52,16 @@
       ],
       "problemMatcher": [],
       "detail": "依次推送 HEAD 可追溯到的最近已有 tag 到 GitHub 和 Gitee"
+    },
+    {
+      "label": "Git: 一键推送代码 + 当前 tag 到 GitHub + Gitee",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Git: 一键推送 GitHub + Gitee（不带 tag）",
+        "Git: 一键推送当前 tag 到 GitHub + Gitee"
+      ],
+      "problemMatcher": [],
+      "detail": "依次推送当前分支和 HEAD 可追溯到的最近已有 tag 到 GitHub 和 Gitee"
     }
   ]
 }

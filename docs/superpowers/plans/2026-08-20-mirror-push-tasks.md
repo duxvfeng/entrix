@@ -50,8 +50,8 @@ GitHub、Gitee 或两个 remote，并让 release workflow 不创建新 tag。
 
 - [x] **步骤 1：编写失败测试**
 
-断言只存在 6 个任务：GitHub/Gitee/双 remote 的不带 tag和当前 tag任务；双 remote 任务按
-顺序依赖单 remote 任务；不保留 `origin`、所有分支、并行重复任务。
+断言只存在 7 个任务：GitHub/Gitee/双 remote 的只推送代码和只推送当前 tag 任务，以及
+双 remote 的代码 + tag 顺序任务；不保留 `origin`、所有分支、并行重复任务。
 
 - [x] **步骤 2：运行测试确认失败**
 
@@ -63,7 +63,8 @@ GitHub、Gitee 或两个 remote，并让 release workflow 不创建新 tag。
 
 不带 tag 任务执行 `git push github HEAD` 或 `git push dxf HEAD`；带 tag 任务调用
 `python scripts/push_current_tag.py --remote <remote>`；双 remote 任务通过
-`dependsOrder: sequence` 编排对应单 remote 任务。
+`dependsOrder: sequence` 编排对应单 remote 任务；新增代码 + tag 任务按顺序依赖两个双
+remote 任务，先推送代码，再推送 tag。
 
 - [x] **步骤 4：运行测试确认通过**
 

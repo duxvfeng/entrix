@@ -8,13 +8,15 @@ tag，不创建新 tag。
 
 ## 方案
 
-- 新建 `.vscode/tasks.json`，只保留 6 个任务：GitHub/Gitee/双 remote 的不带 tag 推送，
-  以及 GitHub/Gitee/双 remote 的当前 tag 推送。
+- `.vscode/tasks.json` 提供 7 个任务：GitHub/Gitee/双 remote 的只推送代码任务，
+  GitHub/Gitee/双 remote 的只推送当前 tag 任务，以及一个按顺序推送代码和 tag 的双 remote 任务。
 - 不带 tag 的任务执行 `git push <remote> HEAD`，只推送当前分支提交。
 - 带 tag 的任务调用 `scripts/push_current_tag.py`。脚本使用
   `git describe --tags --abbrev=0 HEAD` 读取 `HEAD` 可追溯到的最近已有 tag；没有可追溯
   的 tag 时失败；它只推送已有 tag，不执行 `git tag`。
 - 双 remote 任务通过 `dependsOn` 顺序复用对应的单 remote 任务，避免复制推送逻辑。
+- “一键推送代码 + 当前 tag 到 GitHub + Gitee”先依赖双 remote 代码任务，再依赖双 remote tag
+  任务，确保代码先于 tag 推送。
 - `.github/workflows/build.yml` 的 release job 只允许 release 事件或 tag ref 运行；手动
   运行时只有选择已有 tag 才会发布，分支运行不会创建 tag 或 Release。
 
