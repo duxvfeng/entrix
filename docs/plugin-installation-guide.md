@@ -135,7 +135,7 @@ python -m entrix run --tier fast
       "command": "node",
       "args": ["${CLAUDE_PLUGIN_ROOT}/bin/entrix-bootstrap.mjs", "serve"],
       "env": {
-        "ENTRIX_BINARY_VERSION": "0.1.23"
+        "ENTRIX_BINARY_VERSION": "0.1.24"
       }
     }
   }

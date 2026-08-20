@@ -6,6 +6,13 @@ license: MIT
 
 # Entrix Skill（技能说明）
 
+## 对话语言
+
+- 默认使用简体中文回答用户。
+- 面向用户的解释、结论、错误说明和建议使用中文。
+- 代码、命令、路径、标识符、JSON 字段名和原始工具输出保持原样。
+- 用户明确要求英文时，再使用英文回答。
+
 ## 命令提示
 
 **基础命令：**
@@ -72,9 +79,10 @@ Entrix 使用演化架构语境中的 “fitness”：一种可执行检查，�
 ## Marketplace 插件的 Stop Hook
 
 Marketplace 安装时，Stop Hook 由插件 manifest 提供，并在目标仓库根目录执行。
-插件 hook 必须调用 `${CLAUDE_PLUGIN_ROOT}/bin/entrix`，参数为 `stop-gate`；不要使用
-`./hooks/stop-gate.sh`、`python -m entrix` 或其他相对项目目录的路径。`${CLAUDE_PLUGIN_ROOT}`
-指向已安装的插件目录，而不是当前项目目录。
+插件 hook 必须调用 Node.js 启动器 `${CLAUDE_PLUGIN_ROOT}/bin/entrix-bootstrap.mjs`，并传入
+`stop-gate` 参数；不要使用 `${CLAUDE_PLUGIN_ROOT}/bin/entrix`、`./hooks/stop-gate.sh`、
+`python -m entrix` 或其他相对项目目录的路径。`${CLAUDE_PLUGIN_ROOT}` 指向已安装的插件目录，
+而不是当前项目目录。启动器会按当前平台下载、校验并缓存对应的 Entrix 二进制。
 
 `entrix init` 只在目标仓库创建 `.mcp.json`、`harness.yaml` 和阶段标记，不注册项目级
 Stop Hook，也不加载项目中的 `hooks/stop-gate.sh`。使用 Marketplace 插件时，项目只需

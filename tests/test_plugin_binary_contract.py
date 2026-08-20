@@ -233,6 +233,15 @@ def test_plugin_stop_hooks_use_plugin_root_launcher() -> None:
         assert "./hooks/" not in hook["command"]
 
 
+def test_entrix_skill_defaults_to_simplified_chinese() -> None:
+    skill = (ROOT / "skills" / "entrix" / "SKILL.md").read_text(encoding="utf-8")
+
+    assert "默认使用简体中文回答用户" in skill
+    assert "面向用户的解释、结论、错误说明和建议使用中文" in skill
+    assert "代码、命令、路径、标识符、JSON 字段名和原始工具输出保持原样" in skill
+    assert "用户明确要求英文时，再使用英文回答" in skill
+
+
 def test_plugin_versions_match_package_version() -> None:
     package_version = tomllib.loads(
         (ROOT / "pyproject.toml").read_text(encoding="utf-8")
@@ -241,7 +250,7 @@ def test_plugin_versions_match_package_version() -> None:
     marketplace = json.loads(
         (ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8")
     )
-    assert package_version == "0.1.23"
+    assert package_version == "0.1.24"
     assert plugin["version"] == package_version
     assert marketplace["plugins"][0]["version"] == package_version
     assert plugin["mcpServers"]["entrix"]["env"]["ENTRIX_BINARY_VERSION"] == package_version

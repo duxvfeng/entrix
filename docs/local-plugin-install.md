@@ -83,7 +83,7 @@ cp -R README.md "$PLUGIN_DIR/"
 ```json
 {
   "name": "entrix-dev",
-  "version": "0.1.23",
+  "version": "0.1.24",
   "mcpServers": {
     "entrix-dev": {
       "command": "/Users/apple/entrix/.venv/bin/python",
