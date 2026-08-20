@@ -1879,6 +1879,107 @@ def build_parser() -> HintingArgumentParser:
     return parser
 
 
+def print_command_overview() -> None:
+    """Print a comprehensive overview of all available commands."""
+    print("🚀 Entrix 可执行质量门禁系统")
+    print("=" * 60)
+    print()
+
+    # 基础命令
+    print("📋 基础命令:")
+    print("  /entrix init")
+    print("      初始化 .mcp.json 与 harness.yaml 配置文件")
+    print("      示例: /entrix init --profile python")
+
+    print("  /entrix run")
+    print("      运行质量检查（快速检查）")
+    print("      示例: /entrix run --tier fast")
+
+    print("  /entrix harness validate")
+    print("      验证 harness.yaml 配置文件正确性")
+    print("      示例: /entrix harness validate")
+
+    print("  /entrix harness run")
+    print("      执行完整的 Harness 检查和门禁裁决")
+    print("      示例: /entrix harness run --json")
+
+    print()
+
+    # 阶段管理
+    print("🔄 阶段管理:")
+    print("  /entrix phase planning")
+    print("      标记当前回合为规划阶段")
+    print("      用于头脑风暴和架构设计阶段")
+
+    print("  /entrix phase implementation")
+    print("      标记当前回合为实现阶段")
+    print("      用于代码实现和测试阶段")
+
+    print()
+
+    # 分析和审查
+    print("🔍 分析和审查:")
+    print("  /entrix review-trigger")
+    print("      识别需要人工审查的变更")
+    print("      检查核心文件修改和大规模变更")
+
+    print("  /entrix release-trigger")
+    print("      检查发布表面的风险变更")
+    print("      在发布前验证关键组件状态")
+
+    print()
+
+    # Stop Gate
+    print("🛡️  Stop Gate:")
+    print("  /entrix stop-gate")
+    print("      作为 Claude Code Stop Hook 执行")
+    print("      自动阻止不符合质量标准的提交")
+
+    print()
+
+    # 开发者工具
+    print("🔧 开发者工具:")
+    print("  /entrix serve")
+    print("      启动 MCP 服务用于集成")
+
+    print("  /entrix graph build")
+    print("      构建代码影响分析图")
+
+    print("  /entrix analyze long-file")
+    print("      分析长文件的影响和建议")
+
+    print()
+
+    # 配置选项
+    print("⚙️  常用选项:")
+    print("  --repo <path>        指定仓库路径")
+    print("  --profile <name>     语言配置 (python|node-typescript|java-maven|go|rust)")
+    print("  --tier fast|normal    执行层级")
+    print("  --json               JSON 格式输出")
+
+    print()
+
+    # 可配置 Lint 系统
+    print("🎯 可配置 Lint 系统:")
+    print("  Entrix 现在支持通过 YAML 配置自定义 lint 工具")
+    print("  配置文件: .claude/lint-config.yaml")
+    print("  支持语言: Python, TypeScript, Java, Go, Rust")
+
+    print()
+
+    # 快速开始
+    print("🚀 快速开始:")
+    print("  首次使用:   /entrix init --profile auto")
+    print("  日常检查:   /entrix run --tier fast")
+    print("  完整检查:   /entrix run")
+    print("  查看配置:   vim .claude/lint-config.yaml")
+
+    print()
+    print("=" * 60)
+    print("💡 提示: 使用 --help 查看每个命令的详细选项")
+    print("📖 详细文档: docs/command-reference.md")
+
+
 def run_cli(argv: list[str] | None = None) -> int:
     """Run Entrix CLI with consistent help and post-success guidance."""
     _configure_utf8_streams()
@@ -1886,7 +1987,7 @@ def run_cli(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if not getattr(args, "func", None):
-        getattr(args, "_help_parser", parser).print_help()
+        print_command_overview()
         return 0
 
     args.command_path = _command_path(args)
