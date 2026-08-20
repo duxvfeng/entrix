@@ -1904,8 +1904,19 @@ def print_command_overview() -> None:
     print("      示例: /entrix harness run --json")
 
     print()
+    print("常用命令：")
+    print("  entrix init                 初始化 .mcp.json 与 harness.yaml")
+    print("  entrix phase planning      标记当前回合为规划阶段")
+    print("  entrix harness validate     检查 Harness 配置")
+    print("  entrix run                  执行 Fitness 指标")
+    print("  entrix harness run --json   收集 evidence 并执行门禁裁决")
+    print("  entrix review-trigger       识别需要人工审查的改动")
+    print("  entrix stop-gate            作为 Claude Code Stop Hook 执行")
+    print("  entrix serve                启动 MCP 服务")
 
-    # 阶段管理
+    print()
+
+    # 其他命令组的帮助
     print("🔄 阶段管理:")
     print("  /entrix phase planning")
     print("      标记当前回合为规划阶段")
@@ -1916,9 +1927,8 @@ def print_command_overview() -> None:
     print("      用于代码实现和测试阶段")
 
     print()
-
-    # 分析和审查
     print("🔍 分析和审查:")
+
     print("  /entrix review-trigger")
     print("      识别需要人工审查的变更")
     print("      检查核心文件修改和大规模变更")
@@ -1928,16 +1938,12 @@ def print_command_overview() -> None:
     print("      在发布前验证关键组件状态")
 
     print()
-
-    # Stop Gate
     print("🛡️  Stop Gate:")
     print("  /entrix stop-gate")
     print("      作为 Claude Code Stop Hook 执行")
     print("      自动阻止不符合质量标准的提交")
 
     print()
-
-    # 开发者工具
     print("🔧 开发者工具:")
     print("  /entrix serve")
     print("      启动 MCP 服务用于集成")
@@ -1949,8 +1955,6 @@ def print_command_overview() -> None:
     print("      分析长文件的影响和建议")
 
     print()
-
-    # 配置选项
     print("⚙️  常用选项:")
     print("  --repo <path>        指定仓库路径")
     print("  --profile <name>     语言配置 (python|node-typescript|java-maven|go|rust)")
@@ -1958,16 +1962,12 @@ def print_command_overview() -> None:
     print("  --json               JSON 格式输出")
 
     print()
-
-    # 可配置 Lint 系统
     print("🎯 可配置 Lint 系统:")
     print("  Entrix 现在支持通过 YAML 配置自定义 lint 工具")
     print("  配置文件: .claude/lint-config.yaml")
     print("  支持语言: Python, TypeScript, Java, Go, Rust")
 
     print()
-
-    # 快速开始
     print("🚀 快速开始:")
     print("  首次使用:   /entrix init --profile auto")
     print("  日常检查:   /entrix run --tier fast")
@@ -1980,6 +1980,50 @@ def print_command_overview() -> None:
     print("📖 详细文档: docs/command-reference.md")
 
 
+def show_subgroup_help(subgroup: str) -> None:
+    """显示子命令组的帮助信息"""
+    if subgroup == "harness":
+        print("🔧 Harness 子命令:")
+        print("  validate     检查 Harness 配置正确性")
+        print("  run          执行完整的 Harness 检查")
+        print()
+        print("示例:")
+        print("  entrix harness validate")
+        print("  entrix harness run --json")
+
+    elif subgroup == "graph":
+        print("📊 Graph 子命令:")
+        print("  build        构建代码影响分析图")
+        print("  stats        显示图统计信息")
+        print("  impact        分析变更影响范围 (impact)")
+        print("  test-radius  分析测试覆盖率")
+        print("  test-mapping 分析测试映射关系")
+        print("  query        运行图查询")
+        print("  history      分析提交历史")
+        print("  review-context 分析审查上下文")
+        print()
+        print("示例:")
+        print("  entrix graph build")
+        print("  entrix graph impact <file>")
+
+    elif subgroup == "hook":
+        print("🔧 Hook 子命令:")
+        print("  file-length  检查文件长度")
+        print()
+        print("示例:")
+        print("  entrix hook file-length <file>")
+
+    elif subgroup == "analyze":
+        print("🔍 Analyze 子命令:")
+        print("  long-file    分析长文件")
+        print()
+        print("示例:")
+        print("  entrix analyze long-file <file>")
+
+    else:
+        print(f"未知子命令组: {subgroup}")
+
+
 def run_cli(argv: list[str] | None = None) -> int:
     """Run Entrix CLI with consistent help and post-success guidance."""
     _configure_utf8_streams()
@@ -1987,7 +2031,11 @@ def run_cli(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if not getattr(args, "func", None):
-        print_command_overview()
+        # 检查是否是子命令组，如果是则显示该组的子命令帮助
+        if len(argv) == 1 and argv[0] in ["harness", "graph", "hook", "analyze"]:
+            show_subgroup_help(argv[0])
+        else:
+            print_command_overview()
         return 0
 
     args.command_path = _command_path(args)
