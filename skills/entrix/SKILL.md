@@ -6,8 +6,61 @@ license: MIT
 
 # Entrix Skill（技能说明）
 
-命令提示：`/entrix [init] [phase planning|implementation] [harness validate|run]
-[run] [stop-gate] [--repo <path>] [--profile <name>]`
+## 命令提示
+
+**基础命令：**
+```
+/entrix init                    # 初始化配置文件
+/entrix run                     # 运行质量检查  
+/entrix harness validate         # 验证配置正确性
+/entrix harness run             # 执行完整的 Harness 检查
+```
+
+**高级命令：**
+```
+/entrix phase planning          # 标记为规划阶段
+/entrix phase implementation     # 标记为实现阶段
+/entrix review-trigger          # 检查需要人工审查的变更
+/entrix stop-gate              # 作为 Stop Hook 执行
+```
+
+**选项参数：**
+```
+--repo <path>                   # 指定仓库路径
+--profile <name>               # 指定语言配置 (python|node-typescript|java-maven|java-gradle|go|rust)
+--tier fast|normal|deep        # 执行层级
+--json                         # 输出 JSON 格式
+```
+
+## 可配置 Lint 系统
+
+Entrix 现在支持通过 YAML 配置文件自定义 lint 工具，而不是硬编码：
+
+**配置文件位置：**
+- `.claude/lint-config.yaml` (项目级别，推荐)
+- `skills/entrix/lint-config.yaml` (默认配置)
+
+**支持的语言和工具：**
+- 🐍 **Python**: ruff, mypy, black, flake8, pylint
+- 📦 **Node/TypeScript**: eslint, typescript, vue lint, prettier  
+- ☕ **Java Maven**: spotbugs, checkstyle, pmd
+- 🏗️ **Java Gradle**: spotbugs, checkstyle, detekt
+- 🔵 **Go**: gofmt, go vet, golangci-lint, staticcheck
+- 🦀 **Rust**: cargo fmt, cargo clippy
+
+**自定义配置示例：**
+```yaml
+# .claude/lint-config.yaml
+languages:
+  python:
+    code_quality:
+      - name: ruff_lint
+        enabled: true
+        required: true
+      - name: mypy_check
+        enabled: true
+        required: false
+```
 
 确保目标仓库最终只有一个可用的 `harness.yaml`。它是 Fitness 维度、审查触发器、
 证据生产者和门禁策略的唯一事实来源。不要创建或读取独立的 Fitness 目录、
