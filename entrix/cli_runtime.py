@@ -17,7 +17,9 @@ def runtime_marker(project_root: Path) -> str:
 
 
 def runtime_root(project_root: Path) -> Path:
-    return Path(tempfile.gettempdir()) / "harness-monitor" / "runtime" / runtime_marker(project_root)
+    return (
+        Path(tempfile.gettempdir()) / "harness-monitor" / "runtime" / runtime_marker(project_root)
+    )
 
 
 def runtime_event_path(project_root: Path) -> Path:
@@ -40,7 +42,9 @@ def _runtime_dir(
 
 
 def runtime_mode(tier: str | None) -> str:
-    return "full" if tier in (None, "", "normal") else tier
+    if tier is None or tier == "" or tier == "normal":
+        return "full"
+    return tier
 
 
 def load_runtime_coverage_summary(project_root: Path) -> dict:
