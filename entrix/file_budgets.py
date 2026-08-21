@@ -106,6 +106,8 @@ def count_head_lines(repo_root: Path, relative_path: str) -> int | None:
         cwd=repo_root,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     if result.returncode != 0:
@@ -132,6 +134,8 @@ def list_changed_files(repo_root: Path, base: str = "HEAD", staged_only: bool = 
         cwd=repo_root,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     if result.returncode != 0:

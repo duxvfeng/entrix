@@ -410,7 +410,7 @@ jobs:
   entrix:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -424,7 +424,7 @@ jobs:
         run: entrix run --tier fast --output report.json
 
       - name: Upload report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: entrix-report
           path: report.json
@@ -652,8 +652,9 @@ Entrix 在 [`examples/`](./examples/) 下提供了可复制的示例：
 
 ## 更多资源
 
-- **架构决策**：[`tools/entrix/docs/adr/README.md`](./tools/entrix/docs/adr/README.md) — Entrix 架构决策与原理
+- **架构决策**：[`docs/adr/README.md`](./docs/adr/README.md) — Entrix 架构决策与原理
 - **本地插件调试**：[`docs/local-plugin-install.md`](./docs/local-plugin-install.md) — 本地源码插件和离线调试详细步骤
+- **发布清单**：[`docs/release-checklist.md`](./docs/release-checklist.md) — 版本发布到双远程的完整时序与验证步骤
 - **贡献指南**：[CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 开发者验证

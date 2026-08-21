@@ -79,6 +79,9 @@ ignore = [
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib --basetemp=.pytest-sandbox"
+# 裸 pytest 下 cwd 不在 sys.path，`scripts.*` 会误从主仓库的 editable 安装解析；
+# 显式把 rootdir 加入 sys.path，保证测试始终导入当前 checkout 的模块
+pythonpath = ["."]
 norecursedirs = ["tests/fixtures", ".pytest_*", ".pytest-*", ".tmp-check-*"]
 markers = [
     "integration: marks tests as integration tests (slow, may require external tools)",

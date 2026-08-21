@@ -1,33 +1,21 @@
 {
   "default_max_lines": 1000,
-  "include_roots": ["src", "apps", "crates"],
-  "extensions": [".ts", ".tsx", ".rs"],
+  "include_roots": ["entrix", "scripts"],
+  "extensions": [".py"],
   "extension_max_lines": {
-    ".rs": 800,
-    ".ts": 1000,
-    ".tsx": 1000
+    ".py": 1000
   },
-  "excluded_parts": ["/node_modules/", "/target/", "/.next/", "/_next/", "/bundled/"],
+  "excluded_parts": ["/__pycache__/", "/.venv/", "/site-packages/"],
   "overrides": [
     {
-      "path": "crates/routa-server/src/api/acp_routes.rs",
-      "max_lines": 873,
-      "reason": "legacy hotspot frozen at current baseline; pending API route split"
+      "path": "entrix/cli.py",
+      "max_lines": 2053,
+      "reason": "legacy hotspot frozen at current baseline; CLI subcommand split planned in follow-up refactor"
     },
     {
-      "path": "crates/routa-core/src/acp/claude_code_process.rs",
-      "max_lines": 808,
-      "reason": "legacy hotspot frozen at current baseline; split planned in follow-up refactor"
-    },
-    {
-      "path": "crates/routa-core/src/git.rs",
-      "max_lines": 1649,
-      "reason": "legacy hotspot frozen at current baseline; git utility split planned in follow-up refactor"
-    },
-    {
-      "path": "crates/routa-server/src/api/tasks.rs",
-      "max_lines": 1485,
-      "reason": "legacy hotspot frozen at current baseline; task route workflow split planned in follow-up refactor"
+      "path": "entrix/structure/builtin.py",
+      "max_lines": 1662,
+      "reason": "legacy hotspot frozen at current baseline; structure adapter split planned in follow-up refactor"
     }
   ]
 }

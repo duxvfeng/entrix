@@ -2,7 +2,15 @@
 
 import argparse
 import json
+import sys
 from pathlib import Path
+
+# 保证脚本使用所在 checkout 的 entrix，而不是全局安装的旧版本
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Windows 控制台默认 GBK，无法编码 emoji 输出
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from entrix.stop_gate.revalidation import StopGateStateStore
 
@@ -13,7 +21,7 @@ def cmd_clear_state(args: argparse.Namespace) -> int:
     state_store = StopGateStateStore(args.state_dir)
 
     # 列出所有缓存的状态
-    state_dir = state_store._state_dir(workspace)
+    state_dir = state_store.sessions_dir(workspace)
     if not state_dir.exists():
         print(f"✅ 没有缓存状态: {state_dir}")
         return 0

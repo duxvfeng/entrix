@@ -1,22 +1,20 @@
 """测试 Stop Gate 异常处理"""
 
+from __future__ import annotations
+
 import subprocess
+import tempfile
 from pathlib import Path
 
+from entrix.stop_gate.revalidation import CachedVerdict, StopGateStateStore
 
-def test_stop_gate_with_invalid_config():
-    """测试 Stop Gate 处理无效配置"""
-    print("[TEST 1] Invalid config")
 
-    # 创建临时目录
-    import tempfile
+def test_stop_gate_with_invalid_config() -> None:
+    """测试 Stop Gate 处理无效配置：应放行（返回 0）而不是阻塞"""
     temp_dir = Path(tempfile.mkdtemp())
-
-    # 创建无效的 harness.yaml
     invalid_config = temp_dir / "harness.yaml"
     invalid_config.write_text("invalid: yaml: content: [", encoding="utf-8")
 
-    # 运行 stop-gate
     result = subprocess.run(
         ["python", "-m", "entrix.cli", "stop-gate"],
         cwd=temp_dir,
@@ -27,23 +25,11 @@ def test_stop_gate_with_invalid_config():
         timeout=5,
     )
 
-    print(f"   Exit code: {result.returncode}")
-    print(f"   stderr: {result.stderr[:200]}")
-
-    # 应该返回 0（放行），而不是阻塞
-    if result.returncode == 0:
-        print("   PASS: Exception handled correctly\n")
-        return True
-    else:
-        print("   FAIL: Should pass on exception\n")
-        return False
+    assert result.returncode == 0
 
 
-def test_stop_gate_no_config():
-    """测试 Stop Gate 处理没有配置的情况"""
-    print("[TEST 2] No config file")
-
-    import tempfile
+def test_stop_gate_no_config() -> None:
+    """测试 Stop Gate 处理没有配置的情况：应放行"""
     temp_dir = Path(tempfile.mkdtemp())
 
     result = subprocess.run(
@@ -51,63 +37,42 @@ def test_stop_gate_no_config():
         cwd=temp_dir,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=5,
     )
 
-    print(f"   Exit code: {result.returncode}")
-
-    if result.returncode == 0:
-        print("   PASS: No config handled correctly\n")
-        return True
-    else:
-        print("   FAIL: Should pass with no config\n")
-        return False
+    assert result.returncode == 0
 
 
-def test_clear_cache_script():
-    """测试缓存清理脚本"""
-    print("[TEST 3] Cache clear script")
+def test_clear_cache_script(tmp_path: Path) -> None:
+    """测试缓存清理脚本：dry-run 应打印预览且不删除缓存"""
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    state_store = StopGateStateStore(tmp_path / "state")
+    state_store.save(
+        workspace,
+        "session-1",
+        CachedVerdict(fingerprint="f" * 64, status="fail", summary="cached verdict"),
+    )
 
     result = subprocess.run(
-        ["python", "scripts/clear_stop_gate_cache.py", "--dry-run"],
+        [
+            "python",
+            "scripts/clear_stop_gate_cache.py",
+            "--repo",
+            str(workspace),
+            "--state-dir",
+            str(tmp_path / "state"),
+            "--dry-run",
+        ],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=5,
     )
 
-    print(f"   Exit code: {result.returncode}")
-    print(f"   stdout: {result.stdout[:200]}")
-
-    if "--dry-run" in result.stdout:
-        print("   PASS: Clear script works\n")
-        return True
-    else:
-        print("   FAIL: Clear script output abnormal\n")
-        return False
-
-
-def main():
-    print("=" * 60)
-    print("Stop Gate Exception Handling Tests")
-    print("=" * 60 + "\n")
-
-    results = []
-
-    results.append(test_stop_gate_no_config())
-    results.append(test_stop_gate_with_invalid_config())
-    results.append(test_clear_cache_script())
-
-    print("=" * 60)
-    print(f"Results: {sum(results)}/{len(results)} passed")
-    print("=" * 60)
-
-    if all(results):
-        print("\n[PASS] All tests passed!")
-        return 0
-    else:
-        print("\n[FAIL] Some tests failed")
-        return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    assert result.returncode == 0
+    assert "预览模式" in result.stdout
+    assert state_store.load(workspace, "session-1") is not None

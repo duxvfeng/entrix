@@ -218,7 +218,6 @@ def test_plugin_stop_hooks_use_plugin_root_launcher() -> None:
     hook_configs = [
         manifest["hooks"],
         json.loads((ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8")),
-        json.loads((ROOT / ".claude-plugin" / "hooks" / "hooks.json").read_text(encoding="utf-8")),
     ]
 
     for config in hook_configs:

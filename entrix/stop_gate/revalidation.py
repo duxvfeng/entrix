@@ -23,7 +23,12 @@ class StopGateStateStore:
     """Persist the last verdict for each Claude session outside the workspace."""
 
     def __init__(self, state_dir: Path | None = None) -> None:
-        self.state_dir = state_dir or Path(tempfile.gettempdir()) / "harness-monitor" / "stop-gate"
+        # 容忍 argparse 等来源传入的 str 路径
+        self.state_dir = (
+            Path(state_dir)
+            if state_dir
+            else Path(tempfile.gettempdir()) / "harness-monitor" / "stop-gate"
+        )
 
     def load(self, workspace: Path, session_id: str) -> CachedVerdict | None:
         """Return the last valid verdict for a workspace and Claude session."""
@@ -67,6 +72,10 @@ class StopGateStateStore:
         root = self.state_dir / "evidence" / self._workspace_marker(workspace)
         root.mkdir(parents=True, exist_ok=True)
         return root
+
+    def sessions_dir(self, workspace: Path) -> Path:
+        """Return the directory holding cached verdicts for a workspace."""
+        return self.state_dir / "sessions" / self._workspace_marker(workspace)
 
     def _path(self, workspace: Path, session_id: str) -> Path:
         session_marker = hashlib.sha256(session_id.encode("utf-8")).hexdigest()

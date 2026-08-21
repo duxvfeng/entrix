@@ -22,6 +22,13 @@ fitness:
           pattern: "new_debug_prints: 0"
           tier: fast
           description: Production code should not grow accidental debug prints.
+        - name: file_budget_pass
+          command: python -m entrix analyze long-file --config file_budgets.json --json 2>&1
+          pattern: '"status": "ok"'
+          tier: fast
+          execution_scope: ci
+          hard_gate: true
+          description: Python sources must stay within file_budgets.json line budgets.
     - dimension: testability
       weight: 40
       threshold: {pass: 100, warn: 90}
