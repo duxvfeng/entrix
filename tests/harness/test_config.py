@@ -135,7 +135,7 @@ gate_policies:
       condition: status == "pass"
 """
     config_path = tmp_path / "test_harness.yaml"
-    config_path.write_text(yaml_content)
+    config_path.write_text(yaml_content, encoding="utf-8")
 
     config = load_harness_config(config_path)
 
@@ -179,7 +179,7 @@ gate_policies:
     rule: {evidence_id: test, condition: 'status == "pass"'}
 """
     config_path = tmp_path / "test_harness_with_when.yaml"
-    config_path.write_text(yaml_content)
+    config_path.write_text(yaml_content, encoding="utf-8")
 
     config = load_harness_config(config_path)
 
@@ -199,7 +199,7 @@ evidence_producers: []
 gate_policies: []
 """
     config_path = tmp_path / "test_invalid_version.yaml"
-    config_path.write_text(yaml_content)
+    config_path.write_text(yaml_content, encoding="utf-8")
 
     with pytest.raises(ValueError, match="不支持的 harness 版本"):
         load_harness_config(config_path)
@@ -222,7 +222,7 @@ gate_policies:
     rule: {evidence_id: diff-stats, condition: 'status == "pass"'}
 """
     config_path = tmp_path / "test_builtin.yaml"
-    config_path.write_text(yaml_content)
+    config_path.write_text(yaml_content, encoding="utf-8")
 
     config = load_harness_config(config_path)
 
@@ -251,7 +251,7 @@ gate_policies:
     rule: {evidence_id: unit-test, condition: 'status == "pass"'}
 """
     config_path = tmp_path / "test_regex_parser.yaml"
-    config_path.write_text(yaml_content)
+    config_path.write_text(yaml_content, encoding="utf-8")
 
     config = load_harness_config(config_path)
 
@@ -475,7 +475,8 @@ def test_invalid_producer_config_is_rejected(tmp_path, producer, error):
 evidence_producers:
 {producer}
 gate_policies: []
-'''
+''',
+        encoding="utf-8",
     )
 
     with pytest.raises(ValueError, match=error):
@@ -502,7 +503,8 @@ gate_policies:
     severity: hard
     rule:
       {rule}
-'''
+''',
+        encoding="utf-8",
     )
 
     with pytest.raises(ValueError, match=error):
@@ -521,7 +523,8 @@ gate_policies:
     rule:
       evidence_id: check
       condition: {condition}
-'''
+''',
+        encoding="utf-8",
     )
 
     with pytest.raises(ValueError, match="无效的 gate condition"):
@@ -554,7 +557,8 @@ gate_policies:
   - name: Fitness passes
     severity: hard
     rule: {evidence_id: fitness, condition: 'status == "pass"'}
-'''
+''',
+        encoding="utf-8",
     )
 
     config = load_harness_config(config_path)
@@ -578,7 +582,8 @@ fitness:
           tier: instant
 evidence_producers: []
 gate_policies: []
-'''
+''',
+        encoding="utf-8",
     )
 
     with pytest.raises(ValueError, match="tier"):

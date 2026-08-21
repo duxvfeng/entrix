@@ -35,7 +35,7 @@ gate_policies:
       condition: int(summary.failed) == 0
 """
     config_path = tmp_path / "harness.yaml"
-    config_path.write_text(harness_yaml)
+    config_path.write_text(harness_yaml, encoding="utf-8")
     context = {
         "task_id": "task-1",
         "workspace": tmp_path,
@@ -67,7 +67,8 @@ gate_policies:
     rule:
       evidence_id: test-1
       condition: status == "pass"
-'''
+''',
+        encoding="utf-8",
     )
     evidence_root = tmp_path.parent / "stop-gate-runtime"
 
@@ -102,7 +103,8 @@ gate_policies:
     rule:
       evidence_id: test-1
       condition: status == "pass"
-'''
+''',
+        encoding="utf-8",
     )
 
     monkeypatch.setattr(

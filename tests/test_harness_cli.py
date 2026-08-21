@@ -43,7 +43,7 @@ gate_policies:
 """
     with tempfile.TemporaryDirectory() as tmpdir:
         config_path = Path(tmpdir) / "harness.yaml"
-        config_path.write_text(harness_yaml)
+        config_path.write_text(harness_yaml, encoding="utf-8")
 
         result = _run_cli("harness", "validate", str(config_path))
 
@@ -61,7 +61,7 @@ gate_policies: []
 """
     with tempfile.TemporaryDirectory() as tmpdir:
         config_path = Path(tmpdir) / "harness.yaml"
-        config_path.write_text(invalid_yaml)
+        config_path.write_text(invalid_yaml, encoding="utf-8")
 
         result = _run_cli("harness", "validate", str(config_path))
 
@@ -93,7 +93,7 @@ gate_policies:
 """
     with tempfile.TemporaryDirectory() as tmpdir:
         config_path = Path(tmpdir) / "harness.yaml"
-        config_path.write_text(harness_yaml)
+        config_path.write_text(harness_yaml, encoding="utf-8")
 
         result = _run_cli("harness", "run", "--config", str(config_path), cwd=Path(tmpdir))
 
@@ -123,7 +123,7 @@ gate_policies:
 """
     with tempfile.TemporaryDirectory() as tmpdir:
         config_path = Path(tmpdir) / "harness.yaml"
-        config_path.write_text(harness_yaml)
+        config_path.write_text(harness_yaml, encoding="utf-8")
 
         result = _run_cli("harness", "run", "--config", str(config_path), "--json", cwd=Path(tmpdir))
 

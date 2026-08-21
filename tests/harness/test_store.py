@@ -124,7 +124,7 @@ def test_load_missing_file_returns_none(tmp_path: Path) -> None:
 def test_load_corrupt_json_returns_none(tmp_path: Path) -> None:
     """Loading a malformed JSON file returns None."""
     bad_file = tmp_path / "bad-bundle.json"
-    bad_file.write_text("not json")
+    bad_file.write_text("not json", encoding="utf-8")
 
     store = EvidenceStore(root_dir=tmp_path)
     result = store.load(bad_file)

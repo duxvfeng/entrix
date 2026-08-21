@@ -202,7 +202,7 @@ def load_harness_config(config_path: Path) -> HarnessConfig:
     if not config_path.exists():
         raise FileNotFoundError(f"未找到 Harness 配置：{config_path}")
 
-    data = yaml.safe_load(config_path.read_text()) or {}
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     data = _require_mapping(data, "harness 配置")
     version = data.get("version", "")
     if version not in SUPPORTED_VERSIONS:

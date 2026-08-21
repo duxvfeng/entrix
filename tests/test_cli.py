@@ -823,7 +823,7 @@ def test_report_to_dict_includes_result_state():
 def test_cmd_run_defaults_scope_to_local(tmp_path, monkeypatch):
     captured = {}
 
-    monkeypatch.setattr("entrix.cli._find_project_root", lambda: Path("/tmp"))
+    monkeypatch.setattr("entrix.cli._find_project_root", lambda: tmp_path)
     monkeypatch.setattr("entrix.cli._runtime_root", lambda _project_root: tmp_path / "runtime")
     monkeypatch.setattr(
         "entrix.cli._load_project_harness",

@@ -26,8 +26,8 @@ def test_run_uses_current_platform_shell(tmp_path):
     assert result.state == ResultState.FAIL
 
 
-def test_dry_run():
-    runner = ShellRunner(Path("/tmp"))
+def test_dry_run(tmp_path):
+    runner = ShellRunner(tmp_path)
     m = Metric(name="test", command="echo hello")
     result = runner.run(m, dry_run=True)
     assert result.passed is True
@@ -35,45 +35,45 @@ def test_dry_run():
     assert result.metric_name == "test"
 
 
-def test_run_success_exit_code():
-    runner = ShellRunner(Path("/tmp"))
+def test_run_success_exit_code(tmp_path):
+    runner = ShellRunner(tmp_path)
     m = Metric(name="echo_test", command="echo ok")
     result = runner.run(m)
     assert result.passed is True
     assert "ok" in result.output
 
 
-def test_run_failure_exit_code():
-    runner = ShellRunner(Path("/tmp"))
+def test_run_failure_exit_code(tmp_path):
+    runner = ShellRunner(tmp_path)
     m = Metric(name="fail_test", command="exit 1")
     result = runner.run(m)
     assert result.passed is False
 
 
-def test_run_pattern_match():
-    runner = ShellRunner(Path("/tmp"))
+def test_run_pattern_match(tmp_path):
+    runner = ShellRunner(tmp_path)
     m = Metric(name="pattern_test", command="echo 'Tests 42 passed'", pattern=r"Tests\s+\d+\s+passed")
     result = runner.run(m)
     assert result.passed is True
 
 
-def test_run_pattern_no_match():
-    runner = ShellRunner(Path("/tmp"))
+def test_run_pattern_no_match(tmp_path):
+    runner = ShellRunner(tmp_path)
     m = Metric(name="pattern_fail", command="echo 'Tests 0 failed'", pattern=r"Tests\s+\d+\s+passed")
     result = runner.run(m)
     assert result.passed is False
 
 
-def test_run_timeout():
-    runner = ShellRunner(Path("/tmp"), timeout=1)
+def test_run_timeout(tmp_path):
+    runner = ShellRunner(tmp_path, timeout=1)
     m = Metric(name="slow", command=f'"{sys.executable}" -c "import time; time.sleep(10)"')
     result = runner.run(m)
     assert result.passed is False
     assert "TIMEOUT" in result.output
 
 
-def test_run_metric_specific_timeout():
-    runner = ShellRunner(Path("/tmp"), timeout=5)
+def test_run_metric_specific_timeout(tmp_path):
+    runner = ShellRunner(tmp_path, timeout=5)
     m = Metric(
         name="slow",
         command=f'"{sys.executable}" -c "import time; time.sleep(2)"',
@@ -136,15 +136,15 @@ def test_process_tree_termination_targets_group_after_parent_exits(monkeypatch):
     assert terminated[0][0] == process.pid
 
 
-def test_run_hard_gate_preserved():
-    runner = ShellRunner(Path("/tmp"))
+def test_run_hard_gate_preserved(tmp_path):
+    runner = ShellRunner(tmp_path)
     m = Metric(name="gate", command="echo ok", hard_gate=True)
     result = runner.run(m)
     assert result.hard_gate is True
 
 
-def test_run_batch_serial():
-    runner = ShellRunner(Path("/tmp"))
+def test_run_batch_serial(tmp_path):
+    runner = ShellRunner(tmp_path)
     metrics = [
         Metric(name="a", command="echo a"),
         Metric(name="b", command="echo b"),
@@ -155,8 +155,8 @@ def test_run_batch_serial():
     assert results[1].metric_name == "b"
 
 
-def test_run_batch_parallel():
-    runner = ShellRunner(Path("/tmp"))
+def test_run_batch_parallel(tmp_path):
+    runner = ShellRunner(tmp_path)
     metrics = [
         Metric(name="a", command="echo a"),
         Metric(name="b", command="echo b"),
@@ -168,7 +168,7 @@ def test_run_batch_parallel():
     assert results[1].metric_name == "b"
 
 
-def test_run_batch_parallel_uses_requested_worker_limit(monkeypatch):
+def test_run_batch_parallel_uses_requested_worker_limit(tmp_path, monkeypatch):
     captured: list[int] = []
 
     class CapturingExecutor:
@@ -187,7 +187,7 @@ def test_run_batch_parallel_uses_requested_worker_limit(monkeypatch):
             return future
 
     monkeypatch.setattr(shell_module, "ThreadPoolExecutor", CapturingExecutor)
-    runner = ShellRunner(Path("/tmp"))
+    runner = ShellRunner(tmp_path)
     metrics = [Metric(name="a", command="echo a"), Metric(name="b", command="echo b")]
 
     results = runner.run_batch(metrics, parallel=True, max_workers=2)
@@ -196,16 +196,16 @@ def test_run_batch_parallel_uses_requested_worker_limit(monkeypatch):
     assert captured == [2]
 
 
-def test_run_batch_dry_run():
-    runner = ShellRunner(Path("/tmp"))
+def test_run_batch_dry_run(tmp_path):
+    runner = ShellRunner(tmp_path)
     metrics = [Metric(name="x", command="rm -rf /")]
     results = runner.run_batch(metrics, dry_run=True)
     assert results[0].passed is True
     assert "[DRY-RUN]" in results[0].output
 
 
-def test_run_batch_emits_progress_events():
-    runner = ShellRunner(Path("/tmp"))
+def test_run_batch_emits_progress_events(tmp_path):
+    runner = ShellRunner(tmp_path)
     metrics = [Metric(name="a", command="echo a"), Metric(name="b", command="echo b")]
     events: list[tuple[str, str, str | None]] = []
 
@@ -222,10 +222,10 @@ def test_run_batch_emits_progress_events():
     ]
 
 
-def test_run_streams_output_lines_to_callback():
+def test_run_streams_output_lines_to_callback(tmp_path):
     emitted: list[tuple[str, str, str]] = []
     runner = ShellRunner(
-        Path("/tmp"),
+        tmp_path,
         stream_output=True,
         output_callback=lambda metric, source, line: emitted.append((metric.name, source, line.strip())),
     )
@@ -260,8 +260,8 @@ def test_streaming_runner_decodes_utf8_output_on_windows(tmp_path):
     assert "Entrix 可执行质量门禁" in result.output
 
 
-def test_run_waived_metric():
-    runner = ShellRunner(Path("/tmp"))
+def test_run_waived_metric(tmp_path):
+    runner = ShellRunner(tmp_path)
     metric = Metric(
         name="waived",
         command="exit 1",
@@ -273,9 +273,9 @@ def test_run_waived_metric():
 
 # === Fix 1: ANSI escape codes don't cause false failures ===
 
-def test_run_pattern_match_with_ansi_codes():
+def test_run_pattern_match_with_ansi_codes(tmp_path):
     """Pattern matching should work correctly even when output contains ANSI color codes."""
-    runner = ShellRunner(Path("/tmp"))
+    runner = ShellRunner(tmp_path)
     m = Metric(
         name="ansi_test",
         command=(
@@ -291,9 +291,9 @@ def test_run_pattern_match_with_ansi_codes():
 
 # === Fix 1: Exit-code-first hybrid judgment ===
 
-def test_run_pattern_exit_code_nonzero_overrides_pattern():
+def test_run_pattern_exit_code_nonzero_overrides_pattern(tmp_path):
     """Even if the pattern is found, a non-zero exit code means failure."""
-    runner = ShellRunner(Path("/tmp"))
+    runner = ShellRunner(tmp_path)
     m = Metric(
         name="exit_override",
         command="echo 'Tests 42 passed' && exit 1",
@@ -305,9 +305,9 @@ def test_run_pattern_exit_code_nonzero_overrides_pattern():
 
 # === Fix 2: Output stored with ANSI stripped ===
 
-def test_output_is_ansi_stripped():
+def test_output_is_ansi_stripped(tmp_path):
     """Stored output should have ANSI codes removed for clean display."""
-    runner = ShellRunner(Path("/tmp"))
+    runner = ShellRunner(tmp_path)
     m = Metric(
         name="ansi_strip",
         command=f'"{sys.executable}" -c "print(chr(27)+\'[31mred text\'+chr(27)+\'[0m\', end=\'\')"',
@@ -319,9 +319,9 @@ def test_output_is_ansi_stripped():
 
 # === Fix 2: Smart truncation keeps head and tail ===
 
-def test_output_smart_truncation_preserves_tail():
+def test_output_smart_truncation_preserves_tail(tmp_path):
     """Long output should keep both head and tail, not just first N chars."""
-    runner = ShellRunner(Path("/tmp"))
+    runner = ShellRunner(tmp_path)
     # Generate output with a distinctive marker at the end
     m = Metric(
         name="truncation_test",
@@ -337,9 +337,9 @@ def test_output_smart_truncation_preserves_tail():
 
 # === Fix 5: returncode is stored on MetricResult ===
 
-def test_result_stores_returncode():
+def test_result_stores_returncode(tmp_path):
     """MetricResult should store the process exit code."""
-    runner = ShellRunner(Path("/tmp"))
+    runner = ShellRunner(tmp_path)
     m = Metric(name="rc_test", command="exit 42")
     result = runner.run(m)
     assert result.returncode == 42
@@ -348,9 +348,9 @@ def test_result_stores_returncode():
 
 # === Fix 6: Distinguish checker infra errors ===
 
-def test_infra_error_when_both_exit_and_pattern_fail():
+def test_infra_error_when_both_exit_and_pattern_fail(tmp_path):
     """When exit code != 0 AND pattern not found, result should be UNKNOWN (infra error)."""
-    runner = ShellRunner(Path("/tmp"))
+    runner = ShellRunner(tmp_path)
     m = Metric(
         name="infra_fail",
         command="echo 'ENOENT: no such file' && exit 1",
@@ -362,9 +362,9 @@ def test_infra_error_when_both_exit_and_pattern_fail():
     assert result.is_infra_error is True
 
 
-def test_product_failure_when_exit_ok_but_pattern_fails():
+def test_product_failure_when_exit_ok_but_pattern_fails(tmp_path):
     """When exit code is 0 but pattern not found, it's a real failure (not infra)."""
-    runner = ShellRunner(Path("/tmp"))
+    runner = ShellRunner(tmp_path)
     m = Metric(
         name="product_fail",
         command="echo 'Tests 0 failed'",

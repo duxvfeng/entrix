@@ -143,16 +143,16 @@ class TestHarnessConfigDiscovery:
     def test_prefers_root_harness_config(self, tmp_path: Path):
         root_config = tmp_path / "harness.yaml"
         nested_config = tmp_path / ".harness" / "harness.yaml"
-        root_config.write_text("version: harness/v1\n")
+        root_config.write_text("version: harness/v1\n", encoding="utf-8")
         nested_config.parent.mkdir()
-        nested_config.write_text("version: harness/v1\n")
+        nested_config.write_text("version: harness/v1\n", encoding="utf-8")
 
         assert find_harness_config(tmp_path) == root_config
 
     def test_uses_nested_harness_config(self, tmp_path: Path):
         nested_config = tmp_path / ".harness" / "harness.yaml"
         nested_config.parent.mkdir()
-        nested_config.write_text("version: harness/v1\n")
+        nested_config.write_text("version: harness/v1\n", encoding="utf-8")
 
         assert find_harness_config(tmp_path) == nested_config
 
@@ -183,11 +183,11 @@ class TestDeriveChangedFiles:
         git("init")
         git("config", "user.email", "test@test.com")
         git("config", "user.name", "Test")
-        (tmp_path / "a.py").write_text("a = 1\n")
+        (tmp_path / "a.py").write_text("a = 1\n", encoding="utf-8")
         git("add", "a.py")
         git("commit", "-m", "initial")
-        (tmp_path / "a.py").write_text("a = 2\n")
-        (tmp_path / "b.py").write_text("b = 1\n")
+        (tmp_path / "a.py").write_text("a = 2\n", encoding="utf-8")
+        (tmp_path / "b.py").write_text("b = 1\n", encoding="utf-8")
 
         changed = derive_changed_files(tmp_path)
         assert "a.py" in changed
@@ -218,7 +218,7 @@ class TestRunStopGateHook:
 
     def test_routes_root_harness_config_to_runner(self, tmp_path: Path, monkeypatch):
         config_path = tmp_path / "harness.yaml"
-        config_path.write_text("version: harness/v1\n")
+        config_path.write_text("version: harness/v1\n", encoding="utf-8")
         calls = {}
         monkeypatch.setattr(
             "entrix.stop_gate.hook.derive_changed_files",
@@ -243,7 +243,7 @@ class TestRunStopGateHook:
         assert calls["context"]["workspace"] == tmp_path
 
     def test_skips_unmodified_workspace_before_runner(self, tmp_path: Path, monkeypatch):
-        (tmp_path / "harness.yaml").write_text("version: harness/v1\n")
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
         calls = []
 
         class Runner:
@@ -260,7 +260,7 @@ class TestRunStopGateHook:
         assert calls == []
 
     def test_runs_runner_when_change_detection_fails(self, tmp_path: Path, monkeypatch):
-        (tmp_path / "harness.yaml").write_text("version: harness/v1\n")
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
         calls = []
 
         class Runner:
@@ -281,7 +281,7 @@ class TestRunStopGateHook:
         assert calls == ["constructed", "run"]
 
     def test_planning_phase_skips_even_with_workspace_changes(self, tmp_path: Path, monkeypatch):
-        (tmp_path / "harness.yaml").write_text("version: harness/v1\n")
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
         write_phase(tmp_path, "planning")
         calls = []
 
@@ -302,7 +302,7 @@ class TestRunStopGateHook:
         assert calls == []
 
     def test_implementation_phase_runs_without_workspace_changes(self, tmp_path: Path, monkeypatch):
-        (tmp_path / "harness.yaml").write_text("version: harness/v1\n")
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
         write_phase(tmp_path, "implementation")
         calls = []
 
@@ -324,7 +324,7 @@ class TestRunStopGateHook:
         assert calls == ["constructed", "run"]
 
     def test_init_phase_is_consumed_without_running_runner(self, tmp_path: Path, monkeypatch):
-        (tmp_path / "harness.yaml").write_text("version: harness/v1\n")
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
         write_phase(tmp_path, "init", one_shot=True)
         calls = []
 
@@ -342,7 +342,7 @@ class TestRunStopGateHook:
         assert not (tmp_path / ".harness" / "runtime" / "phase.json").exists()
 
     def test_passes_branch_and_base_ref_to_harness_runner(self, tmp_path: Path, monkeypatch):
-        (tmp_path / "harness.yaml").write_text("version: harness/v1\n")
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
         calls = {}
 
         class Runner:
@@ -371,7 +371,7 @@ class TestRunStopGateHook:
     def test_routes_nested_harness_config_to_runner(self, tmp_path: Path, monkeypatch):
         config_path = tmp_path / ".harness" / "harness.yaml"
         config_path.parent.mkdir()
-        config_path.write_text("version: harness/v1\n")
+        config_path.write_text("version: harness/v1\n", encoding="utf-8")
 
         class Runner:
             def __init__(self, path, **_kwargs):
@@ -391,7 +391,7 @@ class TestRunStopGateHook:
     def test_harness_error_blocks_stop(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure_stage: str
     ) -> None:
-        (tmp_path / "harness.yaml").write_text("version: harness/v1\n")
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
 
         class Runner:
             def __init__(self, _path, **_kwargs):
@@ -411,7 +411,7 @@ class TestRunStopGateHook:
     def test_state_store_error_blocks_configured_workspace(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        (tmp_path / "harness.yaml").write_text("version: harness/v1\n")
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
         monkeypatch.setattr(
             "entrix.stop_gate.hook.StopGateStateStore.load",
             lambda *_args: (_ for _ in ()).throw(RuntimeError("state unavailable")),
@@ -428,7 +428,7 @@ class TestRunStopGateHook:
     def test_branch_detection_error_blocks_configured_workspace(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        (tmp_path / "harness.yaml").write_text("version: harness/v1\n")
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
         monkeypatch.setattr(
             "entrix.stop_gate.hook.derive_current_branch",
             lambda _workspace: (_ for _ in ()).throw(RuntimeError("git unavailable")),

@@ -8,7 +8,7 @@ from entrix.harness.conditions import WhenContext, _changed_any, evaluate_when
 def test_files_exist_predicate(tmp_path):
     """测试 files_exist 谓词"""
     test_file = tmp_path / "test_exists.txt"
-    test_file.write_text("内容")
+    test_file.write_text("内容", encoding="utf-8")
 
     when = {"files_exist": ["test_exists.txt"]}
     context = WhenContext(repo_root=tmp_path)
@@ -104,7 +104,7 @@ def test_multiple_predicates_and_semantics(tmp_path, monkeypatch):
     """测试 when 块中的多个谓词（AND 语义）"""
     monkeypatch.setenv("CI", "true")
     test_file = tmp_path / "test_and.txt"
-    test_file.write_text("内容")
+    test_file.write_text("内容", encoding="utf-8")
 
     when = {
         "files_exist": ["test_and.txt"],

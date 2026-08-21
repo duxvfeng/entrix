@@ -48,7 +48,7 @@ def test_collect_with_global_when_filter(tmp_path):
     """测试带有全局 when 条件的证据收集"""
     # 创建存在的临时文件
     temp_file = tmp_path / "test_marker.txt"
-    temp_file.write_text("marker")
+    temp_file.write_text("marker", encoding="utf-8")
 
     config = HarnessConfig(
         version="harness/v1",
