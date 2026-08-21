@@ -23,13 +23,12 @@ def _mapping_source_preview(
     status: str,
     limit: int = 5,
 ) -> str:
-    paths = list(
-        dict.fromkeys(
-            item.get("source_file")
-            for item in mappings
-            if item.get("status") == status and isinstance(item.get("source_file"), str)
-        )
-    )
+    paths: list[str] = []
+    for item in mappings:
+        source_file = item.get("source_file")
+        if item.get("status") == status and isinstance(source_file, str):
+            paths.append(source_file)
+    paths = list(dict.fromkeys(paths))
     if not paths:
         return "-"
     preview = ", ".join(paths[:limit])

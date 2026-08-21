@@ -3,21 +3,21 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
-import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
 
+from entrix import cli_runtime as _cli_runtime
 from entrix.analysis.long_file import analyze_long_files
 from entrix.cli_hints import (
     HintingArgumentParser,
     print_next_steps,
     should_show_next_steps,
 )
+from entrix.cli_overview import print_command_overview, show_subgroup_help
 from entrix.engine import collect_changed_files, run_fitness_report
 from entrix.file_budgets import evaluate_paths, is_tracked_source_file, load_config
 from entrix.governance import GovernancePolicy, StreamOutputMode, enforce
@@ -33,7 +33,6 @@ from entrix.harness.store import EvidenceStore
 from entrix.harness.template import render_default_harness
 from entrix.model import (
     ExecutionScope,
-    FitnessReport,
     Gate,
     Metric,
     MetricResult,
@@ -116,10 +115,6 @@ def _find_project_root() -> Path:
     return cwd
 
 
-def _runtime_marker(project_root: Path) -> str:
-    return hashlib.sha256(str(project_root).encode("utf-8")).hexdigest()
-
-
 def _configure_utf8_streams() -> None:
     """Keep CLI status output encodable when launched from Windows subprocesses."""
     for stream in (sys.stdout, sys.stderr):
@@ -143,7 +138,8 @@ def _positive_int(value: str) -> int:
 
 
 def _runtime_root(project_root: Path) -> Path:
-    return Path(tempfile.gettempdir()) / "harness-monitor" / "runtime" / _runtime_marker(project_root)
+    """Compatibility seam for callers that isolate CLI runtime files in tests."""
+    return _cli_runtime.runtime_root(project_root)
 
 
 def _runtime_event_path(project_root: Path) -> Path:
@@ -159,167 +155,43 @@ def _runtime_fitness_mailbox_dir(project_root: Path) -> Path:
 
 
 def _runtime_mode(tier: str | None) -> str:
-    return "full" if tier in (None, "", "normal") else tier
+    return _cli_runtime.runtime_mode(tier)
 
 
 def _load_runtime_coverage_summary(project_root: Path) -> dict:
-    summary_path = project_root / "target" / "coverage" / "fitness-summary.json"
-    if not summary_path.is_file():
-        return {"generated_at_ms": None, "typescript": {}, "rust": {}}
-    try:
-        payload = json.loads(summary_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {"generated_at_ms": None, "typescript": {}, "rust": {}}
-    sources = payload.get("sources", {})
-    return {
-        "generated_at_ms": payload.get("generated_at_ms"),
-        "typescript": sources.get("typescript", {}) or {},
-        "rust": sources.get("rust", {}) or {},
-    }
+    return _cli_runtime.load_runtime_coverage_summary(project_root)
 
 
 def _summarize_metric_output(output: str) -> str | None:
-    lines = [line.strip() for line in output.splitlines() if line.strip()][:3]
-    if not lines:
-        return None
-    excerpt = " | ".join(lines)
-    if len(excerpt) > 180:
-        excerpt = excerpt[:177] + "..."
-    return excerpt
+    return _cli_runtime.summarize_metric_output(output)
 
 
-def _build_runtime_fitness_snapshot(
-    project_root: Path,
-    *,
-    tier: str | None,
-    report: FitnessReport,
-    duration_ms: float,
-    artifact_path: str,
-    observed_at_ms: int,
-    producer: str,
-    base_ref: str | None,
-    changed_files: list[str],
-) -> dict:
-    dimensions = []
-    slowest_metrics = []
-    failing_metrics = []
-    coverage_metric_available = False
+def _build_runtime_fitness_snapshot(project_root: Path, **kwargs: object) -> dict:
+    return _cli_runtime.build_runtime_fitness_snapshot(project_root, **kwargs)
 
-    for dimension_score in report.dimensions:
-        metrics = []
-        for result in dimension_score.results:
-            metric_summary = {
-                "name": result.metric_name,
-                "passed": result.passed,
-                "state": result.state.value if result.state is not None else "unknown",
-                "hard_gate": result.hard_gate,
-                "duration_ms": result.duration_ms,
-                "output_excerpt": _summarize_metric_output(result.output),
-            }
-            metrics.append(metric_summary)
-            slowest_metrics.append(metric_summary)
-            if metric_summary["state"] not in ("pass", "waived"):
-                failing_metrics.append(metric_summary)
-            coverage_metric_available = coverage_metric_available or (
-                "coverage" in result.metric_name.lower() or "cover" in result.metric_name.lower()
-            )
-        dimensions.append(
-            {
-                "name": dimension_score.dimension,
-                "weight": dimension_score.weight,
-                "score": dimension_score.score,
-                "passed": dimension_score.passed,
-                "total": dimension_score.total,
-                "hard_gate_failures": dimension_score.hard_gate_failures,
-                "metrics": metrics,
-            }
-        )
 
-    slowest_metrics.sort(key=lambda metric: metric["duration_ms"], reverse=True)
-    failing_metrics.sort(
-        key=lambda metric: (
-            not metric["hard_gate"],
-            -metric["duration_ms"],
-            metric["name"],
-        )
+def _write_runtime_fitness_artifacts(project_root: Path, **kwargs: object) -> str:
+    return _cli_runtime.write_runtime_fitness_artifacts(
+        project_root,
+        runtime_root_resolver=_runtime_root,
+        **kwargs,
     )
-    return {
-        "mode": _runtime_mode(tier),
-        "final_score": report.final_score,
-        "hard_gate_blocked": report.hard_gate_blocked,
-        "score_blocked": report.score_blocked,
-        "duration_ms": duration_ms,
-        "metric_count": sum(len(ds.results) for ds in report.dimensions),
-        "coverage_metric_available": coverage_metric_available,
-        "coverage_summary": _load_runtime_coverage_summary(project_root),
-        "dimensions": dimensions,
-        "slowest_metrics": slowest_metrics[:5],
-        "artifact_path": artifact_path,
-        "producer": producer,
-        "generated_at_ms": observed_at_ms,
-        "base_ref": base_ref,
-        "changed_file_count": len(changed_files),
-        "changed_files_preview": changed_files[:8],
-        "failing_metrics": failing_metrics[:5],
-    }
-
-
-def _write_runtime_fitness_artifacts(
-    project_root: Path,
-    *,
-    tier: str | None,
-    snapshot: dict,
-    observed_at_ms: int,
-) -> str:
-    mode = _runtime_mode(tier)
-    artifact_dir = _runtime_fitness_artifact_dir(project_root)
-    artifact_dir.mkdir(parents=True, exist_ok=True)
-    artifact_path = artifact_dir / f"{observed_at_ms}-{mode}.json"
-    latest_path = artifact_dir / f"latest-{mode}.json"
-    serialized = json.dumps(snapshot, indent=2, ensure_ascii=False) + "\n"
-    artifact_path.write_text(serialized, encoding="utf-8")
-    latest_path.write_text(serialized, encoding="utf-8")
-    return str(artifact_path)
 
 
 def _write_runtime_fitness_mailbox_message(project_root: Path, *, payload: dict) -> None:
-    mailbox_dir = _runtime_fitness_mailbox_dir(project_root)
-    mailbox_dir.mkdir(parents=True, exist_ok=True)
-    mailbox_path = mailbox_dir / f"{payload['observed_at_ms']}-{payload['mode']}.json"
-    mailbox_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    _cli_runtime.write_runtime_fitness_mailbox_message(
+        project_root,
+        payload=payload,
+        runtime_root_resolver=_runtime_root,
+    )
 
 
-def _emit_runtime_fitness_event(
-    project_root: Path,
-    *,
-    status: str,
-    tier: str | None,
-    report: FitnessReport | None,
-    metric_count: int | None,
-    duration_ms: float | None,
-    artifact_path: str | None,
-) -> None:
-    mode = _runtime_mode(tier)
-    event_path = _runtime_event_path(project_root)
-    event_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "type": "fitness",
-        "repo_root": str(project_root),
-        "observed_at_ms": int(datetime.now(timezone.utc).timestamp() * 1000),
-        "mode": mode,
-        "status": status,
-        "final_score": None if report is None else report.final_score,
-        "hard_gate_blocked": None if report is None else report.hard_gate_blocked,
-        "score_blocked": None if report is None else report.score_blocked,
-        "duration_ms": duration_ms,
-        "dimension_count": None if report is None else len(report.dimensions),
-        "metric_count": metric_count,
-        "artifact_path": artifact_path,
-    }
-    with event_path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, ensure_ascii=True))
-        handle.write("\n")
-    _write_runtime_fitness_mailbox_message(project_root, payload=payload)
+def _emit_runtime_fitness_event(project_root: Path, **kwargs: object) -> None:
+    _cli_runtime.emit_runtime_fitness_event(
+        project_root,
+        runtime_root_resolver=_runtime_root,
+        **kwargs,
+    )
 
 
 def _default_mcp_config() -> dict:
@@ -963,7 +835,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 0
 
     if output_format == "text":
-        for dim, ds in zip(dimensions, report.dimensions):
+        for dim, ds in zip(dimensions, report.dimensions, strict=True):
             print(f"\n## {dim.name.upper()} (weight: {dim.weight}%)")
             print(f"   Source: {dim.source_file}")
 
@@ -1877,151 +1749,6 @@ def build_parser() -> HintingArgumentParser:
     graph_review_context.set_defaults(func=cmd_graph_review_context)
 
     return parser
-
-
-def print_command_overview() -> None:
-    """Print a comprehensive overview of all available commands."""
-    print("🚀 Entrix 可执行质量门禁系统")
-    print("=" * 60)
-    print()
-
-    # 基础命令
-    print("📋 基础命令:")
-    print("  /entrix init")
-    print("      初始化 .mcp.json 与 harness.yaml 配置文件")
-    print("      示例: /entrix init --profile python")
-
-    print("  /entrix run")
-    print("      运行质量检查（快速检查）")
-    print("      示例: /entrix run --tier fast")
-
-    print("  /entrix harness validate")
-    print("      验证 harness.yaml 配置文件正确性")
-    print("      示例: /entrix harness validate")
-
-    print("  /entrix harness run")
-    print("      执行完整的 Harness 检查和门禁裁决")
-    print("      示例: /entrix harness run --json")
-
-    print()
-    print("常用命令：")
-    print("  entrix init                 初始化 .mcp.json 与 harness.yaml")
-    print("  entrix phase planning      标记当前回合为规划阶段")
-    print("  entrix harness validate     检查 Harness 配置")
-    print("  entrix run                  执行 Fitness 指标")
-    print("  entrix harness run --json   收集 evidence 并执行门禁裁决")
-    print("  entrix review-trigger       识别需要人工审查的改动")
-    print("  entrix stop-gate            作为 Claude Code Stop Hook 执行")
-    print("  entrix serve                启动 MCP 服务")
-
-    print()
-
-    # 其他命令组的帮助
-    print("🔄 阶段管理:")
-    print("  /entrix phase planning")
-    print("      标记当前回合为规划阶段")
-    print("      用于头脑风暴和架构设计阶段")
-
-    print("  /entrix phase implementation")
-    print("      标记当前回合为实现阶段")
-    print("      用于代码实现和测试阶段")
-
-    print()
-    print("🔍 分析和审查:")
-
-    print("  /entrix review-trigger")
-    print("      识别需要人工审查的变更")
-    print("      检查核心文件修改和大规模变更")
-
-    print("  /entrix release-trigger")
-    print("      检查发布表面的风险变更")
-    print("      在发布前验证关键组件状态")
-
-    print()
-    print("🛡️  Stop Gate:")
-    print("  /entrix stop-gate")
-    print("      作为 Claude Code Stop Hook 执行")
-    print("      自动阻止不符合质量标准的提交")
-
-    print()
-    print("🔧 开发者工具:")
-    print("  /entrix serve")
-    print("      启动 MCP 服务用于集成")
-
-    print("  /entrix graph build")
-    print("      构建代码影响分析图")
-
-    print("  /entrix analyze long-file")
-    print("      分析长文件的影响和建议")
-
-    print()
-    print("⚙️  常用选项:")
-    print("  --repo <path>        指定仓库路径")
-    print("  --profile <name>     语言配置 (python|node-typescript|java-maven|go|rust)")
-    print("  --tier fast|normal    执行层级")
-    print("  --json               JSON 格式输出")
-
-    print()
-    print("🎯 可配置 Lint 系统:")
-    print("  Entrix 现在支持通过 YAML 配置自定义 lint 工具")
-    print("  配置文件: .claude/lint-config.yaml")
-    print("  支持语言: Python, TypeScript, Java, Go, Rust")
-
-    print()
-    print("🚀 快速开始:")
-    print("  首次使用:   /entrix init --profile auto")
-    print("  日常检查:   /entrix run --tier fast")
-    print("  完整检查:   /entrix run")
-    print("  查看配置:   vim .claude/lint-config.yaml")
-
-    print()
-    print("=" * 60)
-    print("💡 提示: 使用 --help 查看每个命令的详细选项")
-    print("📖 详细文档: docs/command-reference.md")
-
-
-def show_subgroup_help(subgroup: str) -> None:
-    """显示子命令组的帮助信息"""
-    if subgroup == "harness":
-        print("🔧 Harness 子命令:")
-        print("  validate     检查 Harness 配置正确性")
-        print("  run          执行完整的 Harness 检查")
-        print()
-        print("示例:")
-        print("  entrix harness validate")
-        print("  entrix harness run --json")
-
-    elif subgroup == "graph":
-        print("📊 Graph 子命令:")
-        print("  build        构建代码影响分析图")
-        print("  stats        显示图统计信息")
-        print("  impact        分析变更影响范围 (impact)")
-        print("  test-radius  分析测试覆盖率")
-        print("  test-mapping 分析测试映射关系")
-        print("  query        运行图查询")
-        print("  history      分析提交历史")
-        print("  review-context 分析审查上下文")
-        print()
-        print("示例:")
-        print("  entrix graph build")
-        print("  entrix graph impact <file>")
-
-    elif subgroup == "hook":
-        print("🔧 Hook 子命令:")
-        print("  file-length  检查文件长度")
-        print()
-        print("示例:")
-        print("  entrix hook file-length <file>")
-
-    elif subgroup == "analyze":
-        print("🔍 Analyze 子命令:")
-        print("  long-file    分析长文件")
-        print()
-        print("示例:")
-        print("  entrix analyze long-file <file>")
-
-    else:
-        print(f"未知子命令组: {subgroup}")
 
 
 def run_cli(argv: list[str] | None = None) -> int:

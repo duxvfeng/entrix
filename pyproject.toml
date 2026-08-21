@@ -44,6 +44,7 @@ dev = [
     "build>=1.2,<2",
     "mypy>=1.10,<2",
     "pytest>=8.0,<9",
+    "pytest-cov>=5.0,<8",
     "ruff>=0.3.0,<1",
     "types-PyYAML>=6.0.12,<7",
 ]
@@ -68,6 +69,7 @@ select = [
     "F",     # pyflakes
     "W",     # pycodestyle warnings
     "I",     # isort
+    "B",     # flake8-bugbear correctness checks
 ]
 ignore = [
     "E501",  # line too long (handled by formatter)
@@ -78,7 +80,8 @@ ignore = [
 "tests/*.py" = ["F401"]  # Allow unused imports in tests
 
 [tool.pytest.ini_options]
-addopts = "--import-mode=importlib --basetemp=.pytest-sandbox"
+addopts = "--import-mode=importlib"
+cache_dir = ".pytest-runs/cache"
 # 裸 pytest 下 cwd 不在 sys.path，`scripts.*` 会误从主仓库的 editable 安装解析；
 # 显式把 rootdir 加入 sys.path，保证测试始终导入当前 checkout 的模块
 pythonpath = ["."]
@@ -90,15 +93,32 @@ markers = [
 [tool.mypy]
 python_version = "3.11"
 files = [
+    "entrix/server.py",
+    "entrix/cli_runtime.py",
+    "entrix/cli_overview.py",
+    "entrix/reporting.py",
+    "entrix/reporters",
+    "entrix/cli_hints.py",
     "entrix/harness/config.py",
     "entrix/harness/engine.py",
     "entrix/harness/gate",
     "entrix/harness/producers",
     "entrix/stop_gate/hook.py",
     "entrix/stop_gate/runner.py",
+    "entrix/runners/graph.py",
     "entrix/runners/shell.py",
+    "entrix/structure/language.py",
 ]
 exclude = ["docs/multi_agent_system"]
 check_untyped_defs = true
 follow_imports = "skip"
 ignore_missing_imports = true
+
+[tool.coverage.run]
+branch = true
+source = ["entrix"]
+
+[tool.coverage.report]
+fail_under = 75
+show_missing = true
+skip_covered = true

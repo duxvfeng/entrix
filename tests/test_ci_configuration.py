@@ -20,6 +20,32 @@ def test_python_baseline_is_311_for_package_and_release_ci() -> None:
         assert "3.10" not in workflow
 
 
+def test_ci_runs_the_test_suite_on_windows() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    payload = yaml.safe_load(workflow)
+    matrix = payload["jobs"]["test"]["strategy"]["matrix"]["include"]
+
+    assert {"os": "windows-latest", "python-version": "3.12"} in matrix
+
+
+def test_ci_has_a_dedicated_mcp_contract_job() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    payload = yaml.safe_load(workflow)
+    steps = payload["jobs"]["mcp-contract"]["steps"]
+
+    assert any('.[dev,mcp]' in step.get("run", "") for step in steps)
+    assert any("tests/test_mcp_stdio.py" in step.get("run", "") for step in steps)
+
+
+def test_ci_publishes_junit_and_coverage_reports() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert "--junitxml=.artifacts/pytest.xml" in workflow
+    assert "--cov=entrix" in workflow
+    assert "scripts/write_test_summary.py" in workflow
+    assert "Upload test reports" in workflow
+
+
 def test_type_checking_uses_project_mypy_configuration() -> None:
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     payload = yaml.safe_load(workflow)
@@ -36,9 +62,12 @@ def test_defense_workflow_uses_the_checked_out_entrix_package() -> None:
     assert 'python -m pip install -e ".[dev]"' in workflow
     assert "docs/fitness" not in workflow
     assert "uvx --from entrix entrix" not in workflow
-    assert "python -m entrix validate" in workflow
+    assert "python -m entrix harness validate harness.yaml" in workflow
     assert "python -m entrix run" in workflow
     assert "python -m entrix review-trigger" in workflow
+    assert "--tier fast" in workflow
+    assert "--scope ci" in workflow
+    assert "--tier normal" not in workflow
 
 
 def test_skill_regression_targets_harness_configuration() -> None:

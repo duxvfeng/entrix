@@ -4,6 +4,7 @@ __pycache__/
 dist/
 build/
 .pytest_cache/
+.pytest-runs/
 .pytest_*/
 .pytest-*/
 .ruff_cache/
@@ -19,6 +20,7 @@ venv/
 # Claude Code 运行时产物（本地权限积累与 Stop Gate 状态）
 .claude/settings.json
 .claude/stop-gate/
+.claude/plan-canvas-state/
 .harness/evidence/
 .harness/runtime/
 .stop-gate-state/

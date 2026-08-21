@@ -9,13 +9,17 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version:
-          - "3.11"
-          - "3.12"
+        include:
+          - os: ubuntu-latest
+            python-version: "3.11"
+          - os: ubuntu-latest
+            python-version: "3.12"
+          - os: windows-latest
+            python-version: "3.12"
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Check out repository
@@ -33,11 +37,57 @@ jobs:
       - name: Lint
         run: ruff check .
 
+      - name: Create report directory
+        run: python -c "from pathlib import Path; Path('.artifacts').mkdir(exist_ok=True)"
+
+      - name: Run tests with coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: >-
+          pytest -q
+          --junitxml=.artifacts/pytest.xml
+          --cov=entrix
+          --cov-report=term
+          --cov-report=xml:.artifacts/coverage.xml
+
       - name: Run tests
-        run: pytest
+        if: matrix.os != 'ubuntu-latest' || matrix.python-version != '3.12'
+        run: pytest -q --junitxml=.artifacts/pytest.xml
+
+      - name: Write test summary
+        if: always()
+        run: >-
+          python scripts/write_test_summary.py .artifacts/pytest.xml
+          --label "${{ matrix.os }} / Python ${{ matrix.python-version }}"
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: .artifacts/
+          if-no-files-found: warn
 
       - name: Type checking
         run: mypy
 
       - name: Build package
         run: python -m pip install build && python -m build
+
+  mcp-contract:
+    name: MCP contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install MCP and test dependencies
+        run: python -m pip install -e ".[dev,mcp]"
+
+      - name: Run MCP contract and stdio tests
+        run: pytest tests/test_mcp_contract.py tests/test_mcp_stdio.py -q

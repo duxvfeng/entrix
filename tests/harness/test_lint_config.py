@@ -101,7 +101,7 @@ class TestLintConfigSystem:
         config = load_lint_config()
 
         # 检查每个语言配置的结构
-        for lang, lang_config in config.get("languages", {}).items():
+        for _lang, lang_config in config.get("languages", {}).items():
             if "code_quality" in lang_config:
                 for tool in lang_config["code_quality"]:
                     required_fields = ["name", "command", "description", "tier", "enabled", "required"]

@@ -3,6 +3,107 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
+
+
+def run_fitness_tool(
+    project_root: Path,
+    *,
+    tier: str | None = None,
+    scope: str | None = None,
+    parallel: bool = False,
+    dry_run: bool = False,
+    min_score: float = 80.0,
+) -> dict[str, Any]:
+    """Run guardrail checks and return a JSON-compatible fitness report."""
+    from entrix.engine import run_fitness_report
+    from entrix.governance import GovernancePolicy
+    from entrix.harness.config import load_harness_config
+    from entrix.model import ExecutionScope, Tier
+    from entrix.presets import get_project_preset
+    from entrix.reporting import report_to_dict
+
+    tier_filter = Tier(tier) if tier else None
+    execution_scope = ExecutionScope(scope) if scope else None
+    policy = GovernancePolicy(
+        tier_filter=tier_filter,
+        parallel=parallel,
+        dry_run=dry_run,
+        min_score=min_score,
+        execution_scope=execution_scope,
+    )
+    config = load_harness_config(project_root / "harness.yaml")
+    report, _ = run_fitness_report(
+        project_root,
+        policy,
+        get_project_preset(),
+        dimensions=config.fitness_dimensions,
+    )
+    return report_to_dict(report)
+
+
+def get_dimension_status_tool(project_root: Path, dimension: str) -> dict[str, Any]:
+    """Run fitness checks and return one dimension's current status."""
+    from entrix.engine import run_fitness_report
+    from entrix.governance import GovernancePolicy
+    from entrix.harness.config import load_harness_config
+    from entrix.presets import get_project_preset
+
+    report, _ = run_fitness_report(
+        project_root,
+        GovernancePolicy(),
+        get_project_preset(),
+        dimensions=load_harness_config(project_root / "harness.yaml").fitness_dimensions,
+    )
+    for dimension_score in report.dimensions:
+        if dimension_score.dimension == dimension:
+            return {
+                "final_score": report.final_score,
+                "name": dimension_score.dimension,
+                "weight": dimension_score.weight,
+                "score": dimension_score.score,
+                "passed": dimension_score.passed,
+                "total": dimension_score.total,
+                "hard_gate_failures": dimension_score.hard_gate_failures,
+                "results": [
+                    {
+                        "name": result.metric_name,
+                        "passed": result.passed,
+                        "state": result.state.value if result.state else None,
+                        "tier": result.tier.value,
+                        "hard_gate": result.hard_gate,
+                    }
+                    for result in dimension_score.results
+                ],
+            }
+    return {"error": f"Dimension '{dimension}' not found"}
+
+
+def analyze_change_impact_tool(
+    project_root: Path,
+    *,
+    changed_files: list[str] | None = None,
+    depth: int = 2,
+    base: str = "HEAD",
+    build_mode: str = "auto",
+) -> dict[str, Any]:
+    """Analyze the code-graph blast radius for a set of changed files."""
+    from entrix.runners.graph import GraphRunner
+
+    if depth < 1:
+        raise ValueError("depth must be a positive integer")
+    if build_mode not in {"auto", "full", "skip"}:
+        raise ValueError("build_mode must be one of: auto, full, skip")
+
+    runner = GraphRunner(project_root)
+    if not runner.available:
+        return {"status": "unavailable", "reason": "graph backend unavailable"}
+    return runner.analyze_impact(
+        changed_files=changed_files,
+        base=base,
+        max_depth=depth,
+        build_mode=build_mode,
+    )
 
 
 def create_server(project_root: Path | None = None):
@@ -45,31 +146,14 @@ def create_server(project_root: Path | None = None):
             dry_run: 显示将要运行的内容而不实际执行。
             min_score: 结果被视为阻塞前的最低加权分数。
         """
-        from entrix.engine import run_fitness_report
-        from entrix.governance import GovernancePolicy
-        from entrix.harness.config import load_harness_config
-        from entrix.model import ExecutionScope, Tier
-        from entrix.presets import get_project_preset
-        from entrix.reporting import report_to_dict
-
-        tier_filter = Tier(tier) if tier else None
-        execution_scope = ExecutionScope(scope) if scope else None
-        policy = GovernancePolicy(
-            tier_filter=tier_filter,
+        return run_fitness_tool(
+            project_root,
+            tier=tier,
+            scope=scope,
             parallel=parallel,
             dry_run=dry_run,
             min_score=min_score,
-            execution_scope=execution_scope,
         )
-
-        config = load_harness_config(project_root / "harness.yaml")
-        report, _ = run_fitness_report(
-            project_root,
-            policy,
-            get_project_preset(),
-            dimensions=config.fitness_dimensions,
-        )
-        return report_to_dict(report)
 
     @mcp.tool()
     def get_dimension_status(dimension: str) -> dict:
@@ -78,41 +162,7 @@ def create_server(project_root: Path | None = None):
         Args:
             dimension: Dimension 名称（例如 'code_quality'、'security'）。
         """
-        from entrix.engine import run_fitness_report
-        from entrix.governance import GovernancePolicy
-        from entrix.harness.config import load_harness_config
-        from entrix.presets import get_project_preset
-
-        report, _ = run_fitness_report(
-            project_root,
-            GovernancePolicy(),
-            get_project_preset(),
-            dimensions=load_harness_config(project_root / "harness.yaml").fitness_dimensions,
-        )
-
-        for ds in report.dimensions:
-            if ds.dimension == dimension:
-                return {
-                    "final_score": report.final_score,
-                    "name": ds.dimension,
-                    "weight": ds.weight,
-                    "score": ds.score,
-                    "passed": ds.passed,
-                    "total": ds.total,
-                    "hard_gate_failures": ds.hard_gate_failures,
-                    "results": [
-                        {
-                            "name": r.metric_name,
-                            "passed": r.passed,
-                            "state": r.state.value if r.state else None,
-                            "tier": r.tier.value,
-                            "hard_gate": r.hard_gate,
-                        }
-                        for r in ds.results
-                    ],
-                }
-
-        return {"error": f"Dimension '{dimension}' not found"}
+        return get_dimension_status_tool(project_root, dimension)
 
     @mcp.tool()
     def analyze_change_impact(
@@ -131,21 +181,13 @@ def create_server(project_root: Path | None = None):
             base: 用于 diff 的 Git ref。
             build_mode: Graph 构建模式（auto、full、skip）。
         """
-        from entrix.runners.graph import GraphRunner
-
-        runner = GraphRunner(project_root)
-        if not runner.available:
-            return {"status": "unavailable", "reason": "graph backend unavailable"}
-
-        result = runner.analyze_impact(
+        return analyze_change_impact_tool(
+            project_root,
             changed_files=changed_files,
+            depth=depth,
             base=base,
-            max_depth=depth,
             build_mode=build_mode,
         )
-
-        # analyze_impact already returns a dict with all details
-        return result
 
     return mcp
 

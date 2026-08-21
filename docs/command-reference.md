@@ -54,10 +54,10 @@
 ### 自定义配置
 ```bash
 # 编辑配置文件
-vim .claude/lint-config.yaml
+vim harness.yaml
 
 # 验证配置
-/entrix init --repo .
+/entrix harness validate
 ```
 
 ### 支持的语言

@@ -16,6 +16,21 @@ from entrix.structure.impact import (
     filter_code_files,
     git_changed_files,
 )
+from entrix.structure.language import (
+    CALL_NODE_TYPES as _CALL_NODE_TYPES,
+)
+from entrix.structure.language import (
+    CODE_EXTENSIONS as _CODE_EXTENSIONS,
+)
+from entrix.structure.language import (
+    LANGUAGE_BY_SUFFIX as _LANGUAGE_BY_SUFFIX,
+)
+from entrix.structure.language import (
+    SUPPORTED_QUERY_TYPES as _SUPPORTED_QUERY_TYPES,
+)
+from entrix.structure.language import (
+    SYMBOL_KINDS as _SYMBOL_KINDS,
+)
 
 try:
     from tree_sitter_language_pack import get_parser
@@ -52,92 +67,6 @@ _DEFAULT_IGNORE_PATTERNS = [
     "*.db-journal",
     "*.db-wal",
 ]
-_CODE_EXTENSIONS = {
-    ".go",
-    ".java",
-    ".py",
-    ".rs",
-    ".ts",
-    ".tsx",
-    ".js",
-    ".jsx",
-}
-_LANGUAGE_BY_SUFFIX = {
-    ".go": "go",
-    ".java": "java",
-    ".py": "python",
-    ".rs": "rust",
-    ".ts": "typescript",
-    ".tsx": "tsx",
-    ".js": "javascript",
-    ".jsx": "javascript",
-}
-_CALL_NODE_TYPES = {
-    "go": {"call_expression"},
-    "java": {"method_invocation", "object_creation_expression"},
-    "python": {"call"},
-    "rust": {"call_expression", "macro_invocation"},
-    "typescript": {"call_expression", "new_expression"},
-    "tsx": {"call_expression", "new_expression"},
-    "javascript": {"call_expression", "new_expression"},
-}
-_SYMBOL_KINDS = {
-    "go": {
-        "type_spec": "Struct",
-        "function_declaration": "Function",
-        "method_declaration": "Function",
-    },
-    "java": {
-        "class_declaration": "Class",
-        "interface_declaration": "Interface",
-        "enum_declaration": "Enum",
-        "method_declaration": "Function",
-    },
-    "python": {
-        "class_definition": "Class",
-        "function_definition": "Function",
-    },
-    "rust": {
-        "struct_item": "Struct",
-        "enum_item": "Enum",
-        "trait_item": "Trait",
-        "function_item": "Function",
-    },
-    "typescript": {
-        "class_declaration": "Class",
-        "interface_declaration": "Interface",
-        "enum_declaration": "Enum",
-        "function_declaration": "Function",
-        "method_definition": "Function",
-        "variable_declarator": "Function",
-    },
-    "tsx": {
-        "class_declaration": "Class",
-        "interface_declaration": "Interface",
-        "enum_declaration": "Enum",
-        "function_declaration": "Function",
-        "method_definition": "Function",
-        "variable_declarator": "Function",
-    },
-    "javascript": {
-        "class_declaration": "Class",
-        "function_declaration": "Function",
-        "method_definition": "Function",
-        "variable_declarator": "Function",
-    },
-}
-_SUPPORTED_QUERY_TYPES = {
-    "tests_for",
-    "callers_of",
-    "callees_of",
-    "imports_of",
-    "importers_of",
-    "children_of",
-    "inheritors_of",
-    "file_summary",
-}
-
-
 class BuiltinGraphAdapter:
     """基于 Tree-sitter 的 structural analyzer，支持增量缓存。"""
 

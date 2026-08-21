@@ -162,7 +162,7 @@ gate_policies:
     monkeypatch.setattr("entrix.stop_gate.runner.GateEngine.arbitrate", record_arbitration)
 
     with pytest.raises(OSError, match="disk unavailable"):
-        HarnessRunner(config_path).run(
+        _ = HarnessRunner(config_path).run(
             {"task_id": "task-1", "workspace": tmp_path, "branch": "main"}
         ).verdict
 

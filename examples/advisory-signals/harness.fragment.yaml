@@ -1,0 +1,37 @@
+# Merge these examples under fitness.dimensions after implementing the commands.
+- dimension: observability
+  weight: 0
+  threshold: {pass: 100, warn: 80}
+  metrics:
+    - name: tracing_signal_available
+      command: ./scripts/obs/check-tracing-signal.sh 2>&1
+      pattern: "signal_ok"
+      tier: deep
+      execution_scope: staging
+      gate: advisory
+      kind: holistic
+      analysis: dynamic
+      stability: noisy
+      evidence_type: probe
+      scope: [web, runtime]
+      owner: platform
+      confidence: high
+      description: Verify tracing and runtime visibility signals in staging.
+- dimension: performance
+  weight: 0
+  threshold: {pass: 100, warn: 80}
+  metrics:
+    - name: latency_budget_available
+      command: ./scripts/performance/check-latency-budget.sh 2>&1
+      pattern: "latency_budget_ok"
+      tier: deep
+      execution_scope: staging
+      gate: advisory
+      kind: holistic
+      analysis: dynamic
+      stability: noisy
+      evidence_type: probe
+      scope: [web, api, runtime]
+      owner: platform
+      confidence: medium
+      description: Verify the measured latency budget in staging.

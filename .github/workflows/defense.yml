@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   fitness:
-    name: "Gate: Fitness"
+    name: "Gate: Change governance"
     runs-on: ubuntu-latest
 
     steps:
@@ -51,14 +51,14 @@ jobs:
           echo "ENTRIX_FITNESS_BASE=$base" >> "$GITHUB_ENV"
 
       - name: Validate harness configuration
-        run: python -m entrix validate
+        run: python -m entrix harness validate harness.yaml
 
-      - name: Run fitness with checked-out entrix
+      - name: Run change governance with checked-out entrix
         run: |
           mkdir -p .artifacts
           python -m entrix run \
             --parallel \
-            --tier normal \
+            --tier fast \
             --scope ci \
             --min-score 0 \
             --output .artifacts/fitness-report.json

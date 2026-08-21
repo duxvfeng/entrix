@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from importlib import import_module
-from typing import TextIO
+from typing import Any, TextIO
 
 from entrix.model import (
     Dimension,
@@ -60,8 +60,8 @@ class RichLiveProgressReporter:
         self._states: dict[str, dict] = {}
         self._order: list[str] = []
         self._tail: list[str] = []
-        self._live = None
-        self._console = None
+        self._live: Any | None = None
+        self._console: Any | None = None
         self._rich = _load_rich_live()
 
     def setup(self, dimensions: list[Dimension]) -> None:

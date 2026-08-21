@@ -9,13 +9,13 @@
   "overrides": [
     {
       "path": "entrix/cli.py",
-      "max_lines": 2053,
-      "reason": "legacy hotspot frozen at current baseline; CLI subcommand split planned in follow-up refactor"
+      "max_lines": 1780,
+      "reason": "legacy hotspot ratcheted after extracting runtime persistence and overview rendering"
     },
     {
       "path": "entrix/structure/builtin.py",
-      "max_lines": 1662,
-      "reason": "legacy hotspot frozen at current baseline; structure adapter split planned in follow-up refactor"
+      "max_lines": 1591,
+      "reason": "legacy hotspot ratcheted after extracting language metadata"
     }
   ]
 }
