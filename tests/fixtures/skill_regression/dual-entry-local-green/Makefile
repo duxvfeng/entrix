@@ -1,8 +1,8 @@
 lint:
-	@python3 -c "print('lint ok')"
+	@python -c "print('lint ok')"
 
 test:
-	@python3 -c "print('tests ok')"
+	@python -c "print('tests ok')"
 
 build:
-	@python3 -c "print('build ok')"
+	@python -c "print('build ok')"

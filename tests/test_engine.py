@@ -1,6 +1,7 @@
 """Tests for entrix.engine."""
 
 from pathlib import Path
+from time import monotonic
 
 import entrix.engine as engine_module
 from entrix.governance import GovernancePolicy
@@ -20,10 +21,12 @@ class FakeShellRunner:
         self,
         _project_root: Path,
         env_overrides: dict[str, str] | None = None,
+        deadline: float | None = None,
         stream_output: bool = False,
         output_callback=None,
     ) -> None:
         self.env_overrides = env_overrides or {}
+        self.deadline = deadline
         self.stream_output = stream_output
         self.output_callback = output_callback
 
@@ -97,7 +100,13 @@ class FakeGraphRunner:
 
 
 class FakeSarifRunner:
-    def __init__(self, _project_root: Path, env_overrides: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        _project_root: Path,
+        deadline: float | None = None,
+        env_overrides: dict[str, str] | None = None,
+    ) -> None:
+        self.deadline = deadline
         self.env_overrides = env_overrides or {}
         self.calls: list[str] = []
 
@@ -364,3 +373,33 @@ def test_run_fitness_report_passes_policy_worker_limit(monkeypatch, tmp_path: Pa
     )
 
     assert captured["max_workers"] == 2
+
+
+def test_run_fitness_report_disables_parallelism_with_deadline(monkeypatch, tmp_path: Path):
+    captured: dict[str, bool] = {}
+
+    class CapturingShellRunner(FakeShellRunner):
+        def run_batch(self, metrics: list[Metric], **kwargs) -> list[MetricResult]:
+            captured["parallel"] = kwargs["parallel"]
+            return super().run_batch(metrics, **kwargs)
+
+    configured_dimensions = [
+        Dimension(
+            name="quality",
+            weight=100,
+            metrics=[Metric(name="shell_metric", command="echo ok")],
+        )
+    ]
+    monkeypatch.setattr(engine_module, "ShellRunner", CapturingShellRunner)
+    monkeypatch.setattr(engine_module, "SarifRunner", FakeSarifRunner)
+    monkeypatch.setattr(engine_module, "GraphRunner", FakeGraphRunner)
+
+    engine_module.run_fitness_report(
+        tmp_path,
+        GovernancePolicy(parallel=True, max_workers=2),
+        get_project_preset(),
+        dimensions=configured_dimensions,
+        deadline=monotonic() + 30,
+    )
+
+    assert captured["parallel"] is False

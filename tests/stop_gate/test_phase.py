@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from entrix.stop_gate.phase import consume_phase, read_phase, write_phase
+from entrix.stop_gate.phase import clear_phase, consume_phase, read_phase, write_phase
 
 
 def test_write_phase_persists_mode_for_workspace(tmp_path: Path) -> None:
@@ -58,6 +58,30 @@ def test_consume_phase_only_consumes_matching_one_shot_state(tmp_path: Path) -> 
     assert consume_phase(tmp_path, "planning") is False
     assert consume_phase(tmp_path, "init") is True
     assert consume_phase(tmp_path, "init") is False
+
+
+def test_session_phase_states_do_not_overwrite_each_other(tmp_path: Path, monkeypatch) -> None:
+    state_dir = tmp_path / "state"
+    monkeypatch.setenv("ENTRIX_STATE_DIR", str(state_dir))
+
+    write_phase(tmp_path, "planning", session_id="session-a")
+    write_phase(tmp_path, "implementation", session_id="session-b")
+
+    assert read_phase(tmp_path, session_id="session-a") == "planning"
+    assert read_phase(tmp_path, session_id="session-b") == "implementation"
+    assert not (tmp_path / ".harness" / "runtime" / "phase.json").exists()
+
+
+def test_clear_phase_removes_session_and_legacy_markers(tmp_path: Path, monkeypatch) -> None:
+    state_dir = tmp_path / "state"
+    monkeypatch.setenv("ENTRIX_STATE_DIR", str(state_dir))
+
+    write_phase(tmp_path, "planning")
+    write_phase(tmp_path, "implementation", session_id="session-a")
+
+    assert clear_phase(tmp_path, session_id="session-a") == 2
+    assert read_phase(tmp_path) is None
+    assert read_phase(tmp_path, session_id="session-a") is None
 
 
 @pytest.mark.parametrize("mode", ["", "brainstorm", "stop-gate"])

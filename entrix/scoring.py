@@ -5,7 +5,14 @@ from __future__ import annotations
 from entrix.model import DimensionScore, FitnessReport, MetricResult, ResultState
 
 _SCORABLE_PASS_STATES = {ResultState.PASS, ResultState.WAIVED}
-_SCORABLE_TOTAL_STATES = {ResultState.PASS, ResultState.FAIL, ResultState.WAIVED}
+# UNKNOWN means the check did not produce a trustworthy result. It must remain
+# in the denominator so an infrastructure failure cannot improve the score.
+_SCORABLE_TOTAL_STATES = {
+    ResultState.PASS,
+    ResultState.FAIL,
+    ResultState.UNKNOWN,
+    ResultState.WAIVED,
+}
 
 
 def score_dimension(results: list[MetricResult], dimension_name: str, weight: int) -> DimensionScore:
@@ -21,7 +28,7 @@ def score_dimension(results: list[MetricResult], dimension_name: str, weight: in
     hard_gate_failures = [
         r.metric_name
         for r in results
-        if r.state == ResultState.FAIL and r.hard_gate
+        if r.hard_gate and r.state not in _SCORABLE_PASS_STATES
     ]
 
     return DimensionScore(

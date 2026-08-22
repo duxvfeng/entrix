@@ -81,7 +81,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--state-dir",
-        help="状态存储目录（默认系统临时目录）",
+        help="状态存储目录（默认用户级 Entrix 缓存目录）",
     )
     parser.add_argument(
         "--dry-run",

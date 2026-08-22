@@ -66,7 +66,15 @@ mkdir -p "$ARTIFACT_DIR"
 # Entrix or a published uvx package may still carry the legacy file-based
 # loader and would validate a different configuration contract.
 export PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}"
-ENTRIX_CMD=(python3 -m entrix)
+if command -v python >/dev/null 2>&1; then
+  ENTRIX_PYTHON=python
+elif command -v python3 >/dev/null 2>&1; then
+  ENTRIX_PYTHON=python3
+else
+  echo "python or python3 is required for skill regression" >&2
+  exit 1
+fi
+ENTRIX_CMD=("$ENTRIX_PYTHON" -m entrix)
 
 if command -v claude >/dev/null 2>&1; then
   CLAUDE_CMD=(claude -p --permission-mode bypassPermissions)

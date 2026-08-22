@@ -27,6 +27,7 @@ from entrix.presets import get_project_preset
 from entrix.reporters.terminal import TerminalReporter
 from entrix.reporting import report_to_dict
 from entrix.stop_gate.phase import read_phase
+from entrix.stop_gate.revalidation import CachedVerdict
 
 
 def test_default_mcp_config_uses_binary_command() -> None:
@@ -36,19 +37,15 @@ def test_default_mcp_config_uses_binary_command() -> None:
     assert "entrix" in config["mcpServers"]
     entrix_config = config["mcpServers"]["entrix"]
 
-    # 在有 entrix 命令的环境中应该是 {"command": "entrix", "args": ["serve"]}
-    # 在 python module 环境中应该是 {"command": "python", "args": ["-m", "entrix.cli", "serve"]}
-    assert entrix_config["command"] in ["entrix", "python"]
-    if entrix_config["command"] == "entrix":
-        assert entrix_config["args"] == ["serve"]
-    else:
-        assert "serve" in entrix_config["args"]
+    assert Path(entrix_config["command"]).name.lower().startswith("python")
+    assert entrix_config["args"] == ["-m", "entrix.cli", "serve"]
 
 
 def test_parser_run_defaults():
     parser = build_parser()
     args = parser.parse_args(["run"])
     assert args.command == "run"
+    assert args.repo is None
     assert args.tier is None
     assert args.parallel is False
     assert args.max_workers == 4
@@ -65,6 +62,28 @@ def test_parser_run_defaults():
     assert args.base == "HEAD"
     assert args.dimension == []
     assert args.metric == []
+
+
+def test_run_accepts_explicit_repo(monkeypatch, tmp_path: Path):
+    captured: dict[str, Path] = {}
+
+    def fake_load(project_root: Path):
+        captured["root"] = project_root
+        raise FileNotFoundError("stop after root detection")
+
+    monkeypatch.setattr(cli_module, "_load_project_harness", fake_load)
+    args = build_parser().parse_args(["run", "--repo", str(tmp_path)])
+
+    assert cli_module.cmd_run(args) == 1
+    assert captured["root"] == tmp_path.resolve()
+
+
+def test_parser_exposes_version(capsys):
+    with pytest.raises(SystemExit) as error:
+        build_parser().parse_args(["--version"])
+
+    assert error.value.code == 0
+    assert "entrix 0.1.24" in capsys.readouterr().out
 
 
 def test_init_creates_mcp_config_and_harness_template(tmp_path, capsys):
@@ -84,6 +103,44 @@ def test_init_creates_mcp_config_and_harness_template(tmp_path, capsys):
         "performance",
     }
     assert "已创建" in capsys.readouterr().out
+
+
+def test_init_merges_existing_mcp_servers_without_overwriting_them(tmp_path, capsys):
+    mcp_path = tmp_path / ".mcp.json"
+    mcp_path.write_text(
+        json.dumps({"mcpServers": {"other": {"command": "other-mcp"}}}),
+        encoding="utf-8",
+    )
+
+    args = argparse.Namespace(repo=str(tmp_path), dry_run=False, force=False, profile="auto")
+    assert cli_module.cmd_init(args) == 0
+
+    config = json.loads(mcp_path.read_text(encoding="utf-8"))
+    assert config["mcpServers"]["other"] == {"command": "other-mcp"}
+    assert "entrix" in config["mcpServers"]
+    assert "其他 MCP server" in capsys.readouterr().out
+
+
+def test_init_refuses_conflicting_mcp_entry_without_force(tmp_path, capsys):
+    mcp_path = tmp_path / ".mcp.json"
+    mcp_path.write_text(
+        json.dumps({"mcpServers": {"entrix": {"command": "user-managed"}}}),
+        encoding="utf-8",
+    )
+    args = argparse.Namespace(repo=str(tmp_path), dry_run=False, force=False, profile="auto")
+
+    assert cli_module.cmd_init(args) == 1
+    assert json.loads(mcp_path.read_text(encoding="utf-8"))["mcpServers"]["entrix"]["command"] == "user-managed"
+    assert "--force" in capsys.readouterr().err
+
+
+def test_init_in_marketplace_mode_does_not_write_mcp_config(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", "/plugin")
+    args = argparse.Namespace(repo=str(tmp_path), dry_run=False, force=False, profile="auto")
+
+    assert cli_module.cmd_init(args) == 0
+    assert not (tmp_path / ".mcp.json").exists()
+    assert (tmp_path / "harness.yaml").exists()
 
 
 def test_init_auto_detects_python_profile(tmp_path, capsys):
@@ -302,6 +359,62 @@ def test_parser_validate():
     parser = build_parser()
     args = parser.parse_args(["validate"])
     assert args.command == "validate"
+
+
+def test_parser_exposes_recovery_and_diagnostics_commands():
+    parser = build_parser()
+
+    phase = parser.parse_args(["phase", "clear", "--session-id", "session-a"])
+    assert phase.mode == "clear"
+    assert phase.session_id == "session-a"
+
+    status = parser.parse_args(["status", "--json"])
+    assert status.command == "status"
+    assert status.json is True
+
+    doctor = parser.parse_args(["doctor", "--repo", "/tmp/project"])
+    assert doctor.command == "doctor"
+    assert doctor.repo == "/tmp/project"
+
+    retry = parser.parse_args(["stop-gate", "retry", "--session-id", "session-a"])
+    assert retry.action == "retry"
+    assert retry.session_id == "session-a"
+
+
+def test_cmd_status_reports_phase_and_cached_verdict(tmp_path: Path, monkeypatch, capsys):
+    state_dir = tmp_path / "state"
+    monkeypatch.setenv("ENTRIX_STATE_DIR", str(state_dir))
+    (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
+    cli_module.StopGateStateStore(state_dir).trust_config(tmp_path, tmp_path / "harness.yaml")
+    cli_module.write_phase(tmp_path, "implementation", session_id="session-a")
+    cli_module.StopGateStateStore(state_dir).save(
+        tmp_path,
+        "session-a",
+        CachedVerdict(fingerprint="f" * 64, status="fail", summary="fix it"),
+    )
+
+    args = argparse.Namespace(repo=str(tmp_path), session_id="session-a", json=True)
+    assert cli_module.cmd_status(args) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["harness"]["trusted"] is True
+    assert payload["phase"]["effective"] == "implementation"
+    assert payload["stop_gate"]["cached_verdict"]["status"] == "fail"
+
+
+def test_cmd_stop_gate_retry_clears_cached_verdict(tmp_path: Path, monkeypatch, capsys):
+    state_dir = tmp_path / "state"
+    monkeypatch.setenv("ENTRIX_STATE_DIR", str(state_dir))
+    store = cli_module.StopGateStateStore(state_dir)
+    store.save(
+        tmp_path,
+        "session-a",
+        CachedVerdict(fingerprint="f" * 64, status="blocked", summary="fix it"),
+    )
+
+    args = argparse.Namespace(repo=str(tmp_path), session_id="session-a")
+    assert cli_module.cmd_stop_gate_retry(args) == 0
+    assert store.load(tmp_path, "session-a") is None
+    assert "已清理" in capsys.readouterr().out
 
 
 def test_parser_run_stream_without_value_defaults_to_all():

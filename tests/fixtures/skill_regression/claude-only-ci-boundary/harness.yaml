@@ -10,7 +10,7 @@ fitness:
         warn: 90
       metrics:
         - name: py_compile_pass
-          command: python3 -m py_compile app.py 2>&1
+          command: python -m py_compile app.py 2>&1
           hard_gate: true
           tier: fast
           description: Cheap local syntax validation must pass.
@@ -22,12 +22,12 @@ fitness:
         warn: 90
       metrics:
         - name: import_smoke
-          command: python3 -c "import app; print(app.answer())" 2>&1
+          command: python -c "import app; print(app.answer())" 2>&1
           hard_gate: true
           tier: fast
           description: Cheap local import smoke keeps default runs green.
         - name: pytest_suite
-          command: python3 -m pytest -q 2>&1
+          command: python -m pytest -q 2>&1
           hard_gate: true
           tier: normal
           execution_scope: ci

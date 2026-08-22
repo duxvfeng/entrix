@@ -8,6 +8,7 @@ import pytest
 
 from entrix.harness.gate.arbiter import VerdictStatus
 from entrix.stop_gate.hook import run_stop_gate_hook
+from entrix.stop_gate.revalidation import StopGateStateStore
 from entrix.stop_gate.runner import HarnessRunner
 
 
@@ -250,6 +251,7 @@ gate_policies:
         encoding="utf-8",
     )
     state_dir = tmp_path / "stop-gate-state"
+    StopGateStateStore(state_dir).trust_config(workspace, workspace / "harness.yaml")
     payload = {"session_id": "session-1", "cwd": str(workspace)}
 
     def invoke() -> tuple[int, str]:
@@ -323,6 +325,7 @@ gate_policies:
         encoding="utf-8",
     )
     state_dir = tmp_path / "stop-gate-state"
+    StopGateStateStore(state_dir).trust_config(workspace, workspace / "harness.yaml")
     output = io.StringIO()
 
     rc = run_stop_gate_hook(
@@ -343,3 +346,37 @@ gate_policies:
         for ev in result["evidence"]
     )
     assert result["evidence_bundle_path"].endswith("-bundle.json")
+
+
+def test_stop_hook_blocks_untrusted_harness_before_running_commands(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    marker = workspace / "command-ran.txt"
+    (workspace / "harness.yaml").write_text(
+        f'''version: "harness/v1"
+evidence_producers:
+  - id: command
+    type: test
+    name: command
+    command: "echo ran > {marker}"
+    parser: {{type: exit_code}}
+gate_policies:
+  - name: command
+    severity: hard
+    rule: {{evidence_id: command, condition: 'status == "pass"'}}
+''',
+        encoding="utf-8",
+    )
+    output = io.StringIO()
+
+    rc = run_stop_gate_hook(
+        input_stream=io.StringIO(json.dumps({"session_id": "session-1", "cwd": str(workspace)})),
+        output_stream=output,
+        state_dir=tmp_path / "stop-gate-state",
+    )
+
+    result = json.loads(output.getvalue())
+    assert rc == 0
+    assert result["decision"] == "block"
+    assert "未信任" in result["reason"]
+    assert not marker.exists()

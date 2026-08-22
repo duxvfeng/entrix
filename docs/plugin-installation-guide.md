@@ -16,7 +16,7 @@
    }
    ```
 
-2. **或者使用 MCP 配置文件：**
+2. **独立 Python 安装才需要手工配置 MCP：**
 
    创建 `.mcp.json`：
    ```json
@@ -53,16 +53,15 @@
 
 **解决方案**：
 1. 确保使用最新版本的 `.claude-plugin/plugin.json`
-2. Hook 现在使用 `${CLAUDE_PLUGIN_ROOT}/bin/entrix stop-gate` 而不是直接调用脚本
+2. Hook 使用 `${CLAUDE_PLUGIN_ROOT}/bin/entrix-bootstrap.mjs stop-gate`，不依赖项目目录或 `PATH`
 3. 重新加载插件
 
 ### 问题：权限错误
 
 **解决方案**：
 ```bash
-# Windows
-chmod +x bin/entrix
-chmod +x hooks/stop-gate.sh
+# Unix：Node 启动器不需要手工 chmod；仅在从源码直接调用 shell launcher 时检查执行权限
+chmod +x bin/entrix-bootstrap.sh
 
 # 或者使用管理员权限运行 Claude Code
 ```
@@ -83,17 +82,17 @@ python -m entrix --version
 安装完成后，运行以下命令验证：
 
 ```bash
-# 1. 检查版本
-python -m entrix --version
+# 1. 检查版本（独立 Python 安装）
+entrix --version
 
 # 2. 测试 stop-gate
-python -m entrix stop-gate --help
+entrix stop-gate --help
 
 # 3. 查看命令概览
-python -m entrix
+entrix
 
 # 4. 运行快速检查
-python -m entrix run --tier fast
+entrix run --tier fast
 ```
 
 ## 📋 配置说明
@@ -125,6 +124,14 @@ python -m entrix run --tier fast
 - ✅ 使用插件根目录的绝对路径
 - ✅ 直接调用 entrix 命令而不是 shell 脚本
 - ✅ 跨平台兼容（Windows/Linux/Mac）
+
+首次运行会下载并缓存五平台之一的二进制，同时验证：
+
+- `release-manifest.json` 和 `release-manifest.json.sig`
+- `<asset>.sha256` 和 `<asset>.sha256.sig`
+- 二进制的 SHA-256 与 manifest 中的版本、平台、文件名和摘要
+
+校验失败时启动器会拒绝执行。请不要删除 `security/release-public-key.pem`，也不要用未配套的镜像文件替换单个 Release 资产。
 
 ### MCP Server 配置
 
@@ -169,6 +176,15 @@ python -m entrix run --tier fast
 2. **查看命令**：`/entrix` （显示所有可用命令）
 3. **运行检查**：`/entrix run --tier fast`
 4. **阶段管理**：`/entrix phase planning`
+5. **查看状态**：`/entrix status --repo .`
+6. **诊断环境**：`/entrix doctor --repo .`
+7. **清理阻断缓存**：`/entrix stop-gate retry --repo . --session-id <session-id>`
+
+### 发布签名与公钥轮换
+
+Release workflow 使用仓库 Secret `ENTRIX_RELEASE_SIGNING_KEY` 签名 manifest 和 checksum sidecar；私钥只存在于 CI 临时目录，不提交到仓库。插件内的 `security/release-public-key.pem` 必须与该 Secret 匹配。
+
+轮换公钥时应先生成新的 RSA 私钥，在同一个变更中更新插件公钥和 CI Secret，完成一次带签名资产的构建验证后再推送 marketplace。旧版本插件仍使用旧公钥，因此轮换后需要保留旧 Release 资产，直到旧版本用户完成升级。
 
 ## 🔗 相关文档
 

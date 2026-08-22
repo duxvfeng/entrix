@@ -22,11 +22,35 @@ function Get-ExpectedSha256([string] $Path) {
     return ($line -split "\s+")[0].ToLowerInvariant()
 }
 
-function Test-Cache([string] $BinaryPath, [string] $ChecksumPath) {
+function Test-Manifest([string] $ManifestPath, [string] $ExpectedVersion, [string] $ExpectedTarget, [string] $ExpectedAsset, [string] $ExpectedSha256) {
+    $verifier = Join-Path $pluginRoot "bin\verify-release-manifest.mjs"
+    $node = Get-Command node.exe -ErrorAction SilentlyContinue
+    if ($null -ne $node -and (Test-Path -LiteralPath $verifier -PathType Leaf)) {
+        & $node.Source $verifier $ManifestPath $ExpectedVersion $ExpectedTarget $ExpectedAsset $ExpectedSha256 *> $null
+        return $LASTEXITCODE -eq 0
+    }
+    try {
+        $manifest = Get-Content -Path $ManifestPath -Raw | ConvertFrom-Json
+        $asset = @($manifest.assets) | Where-Object { $_.filename -eq $ExpectedAsset } | Select-Object -First 1
+        return $null -ne $asset -and
+            $manifest.version -eq $ExpectedVersion -and
+            $asset.version -eq $ExpectedVersion -and
+            $asset.target -eq $ExpectedTarget -and
+            $asset.sha256 -eq $ExpectedSha256
+    } catch {
+        return $false
+    }
+}
+
+function Test-Cache([string] $BinaryPath, [string] $ChecksumPath, [string] $ChecksumSignaturePath, [string] $ManifestPath, [string] $ManifestSignaturePath) {
     if (-not (Test-Path -LiteralPath $BinaryPath -PathType Leaf)) {
         return $false
     }
     if (-not (Test-Path -LiteralPath $ChecksumPath -PathType Leaf)) {
+        return $false
+    }
+    if (-not (Test-Signature $ChecksumPath $ChecksumSignaturePath) -or
+        -not (Test-Signature $ManifestPath $ManifestSignaturePath)) {
         return $false
     }
     try {
@@ -34,7 +58,8 @@ function Test-Cache([string] $BinaryPath, [string] $ChecksumPath) {
         if ($expected.Length -ne 64) {
             return $false
         }
-        return (Get-Sha256 $BinaryPath) -eq $expected
+        return (Test-Manifest $ManifestPath $version $target $asset $expected) -and
+            ((Get-Sha256 $BinaryPath) -eq $expected)
     } catch {
         return $false
     }
@@ -70,6 +95,30 @@ if ([string]::IsNullOrWhiteSpace($version)) {
     Fail "cannot determine plugin binary version"
 }
 
+$publicKey = Join-Path $pluginRoot "security\release-public-key.pem"
+if (-not (Test-Path -LiteralPath $publicKey -PathType Leaf)) {
+    Fail "release public key is missing: $publicKey"
+}
+
+function Test-Signature([string] $FilePath, [string] $SignaturePath) {
+    if (-not (Test-Path -LiteralPath $FilePath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $SignaturePath -PathType Leaf)) {
+        return $false
+    }
+    $node = Get-Command node.exe -ErrorAction SilentlyContinue
+    $verifier = Join-Path $pluginRoot "bin\verify-release-signature.mjs"
+    if ($null -ne $node -and (Test-Path -LiteralPath $verifier -PathType Leaf)) {
+        & $node.Source $verifier $publicKey $FilePath $SignaturePath *> $null
+        return $LASTEXITCODE -eq 0
+    }
+    $openssl = Get-Command openssl.exe -ErrorAction SilentlyContinue
+    if ($null -ne $openssl) {
+        & $openssl.Source dgst -sha256 -verify $publicKey -signature $SignaturePath $FilePath *> $null
+        return $LASTEXITCODE -eq 0
+    }
+    return $false
+}
+
 # RuntimeInformation.ProcessArchitecture selects the host binary target.
 $architecture = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
 if ($architecture -eq [System.Runtime.InteropServices.Architecture]::X64) {
@@ -90,6 +139,9 @@ if ([string]::IsNullOrWhiteSpace($localAppData)) {
 $cacheDir = Join-Path $localAppData "entrix\bin\$version\$target"
 $cachedBinary = Join-Path $cacheDir $asset
 $cachedChecksum = "$cachedBinary.sha256"
+$cachedChecksumSignature = "$cachedChecksum.sig"
+$cachedManifest = Join-Path $cacheDir "release-manifest.json"
+$cachedManifestSignature = "$cachedManifest.sig"
 New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
 
 $lockDir = Join-Path $cacheDir ".lock"
@@ -100,7 +152,7 @@ for ($attempt = 0; $attempt -lt 120; $attempt++) {
         $lockAcquired = $true
         break
     } catch {
-        if (Test-Cache $cachedBinary $cachedChecksum) {
+        if (Test-Cache $cachedBinary $cachedChecksum $cachedChecksumSignature $cachedManifest $cachedManifestSignature) {
             & $cachedBinary @EntrixArgs
             exit $LASTEXITCODE
         }
@@ -112,7 +164,7 @@ if (-not $lockAcquired) {
 }
 
 try {
-    if (Test-Cache $cachedBinary $cachedChecksum) {
+    if (Test-Cache $cachedBinary $cachedChecksum $cachedChecksumSignature $cachedManifest $cachedManifestSignature) {
         Remove-Item -LiteralPath $lockDir -Force -ErrorAction SilentlyContinue
         $lockAcquired = $false
         & $cachedBinary @EntrixArgs
@@ -132,20 +184,45 @@ try {
     New-Item -ItemType Directory -Path $downloadDir -Force | Out-Null
     $binaryTemp = Join-Path $downloadDir $asset
     $checksumTemp = "$binaryTemp.sha256"
+    $checksumSignatureTemp = "$checksumTemp.sig"
+    $manifestTemp = Join-Path $downloadDir "release-manifest.json"
+    $manifestSignatureTemp = "$manifestTemp.sig"
 
     try {
         [Console]::Error.WriteLine("downloading $asset for $target")
-        Invoke-WebRequest -UseBasicParsing -Uri "$baseUrl/$asset" -OutFile $binaryTemp
-        Invoke-WebRequest -UseBasicParsing -Uri "$baseUrl/$asset.sha256" -OutFile $checksumTemp
+        $downloadTimeout = 120
+        if (-not [string]::IsNullOrWhiteSpace($env:ENTRIX_DOWNLOAD_TIMEOUT_SECONDS)) {
+            $downloadTimeout = 0
+            if (-not [int]::TryParse($env:ENTRIX_DOWNLOAD_TIMEOUT_SECONDS, [ref] $downloadTimeout) -or $downloadTimeout -le 0) {
+                Fail "ENTRIX_DOWNLOAD_TIMEOUT_SECONDS must be a positive integer"
+            }
+        }
+        Invoke-WebRequest -UseBasicParsing -TimeoutSec $downloadTimeout -Uri "$baseUrl/$asset" -OutFile $binaryTemp
+        Invoke-WebRequest -UseBasicParsing -TimeoutSec $downloadTimeout -Uri "$baseUrl/$asset.sha256" -OutFile $checksumTemp
+        Invoke-WebRequest -UseBasicParsing -TimeoutSec $downloadTimeout -Uri "$baseUrl/$asset.sha256.sig" -OutFile $checksumSignatureTemp
+        Invoke-WebRequest -UseBasicParsing -TimeoutSec $downloadTimeout -Uri "$baseUrl/release-manifest.json" -OutFile $manifestTemp
+        Invoke-WebRequest -UseBasicParsing -TimeoutSec $downloadTimeout -Uri "$baseUrl/release-manifest.json.sig" -OutFile $manifestSignatureTemp
+        if (-not (Test-Signature $manifestTemp $manifestSignatureTemp)) {
+            Fail "release manifest signature verification failed"
+        }
+        if (-not (Test-Signature $checksumTemp $checksumSignatureTemp)) {
+            Fail "checksum signature verification failed"
+        }
         $expected = Get-ExpectedSha256 $checksumTemp
         if ($expected.Length -ne 64) {
             Fail "invalid SHA-256 file for $asset"
+        }
+        if (-not (Test-Manifest $manifestTemp $version $target $asset $expected)) {
+            Fail "release manifest asset mismatch"
         }
         if ((Get-Sha256 $binaryTemp) -ne $expected) {
             Fail "SHA-256 verification failed for $asset"
         }
         Move-Item -LiteralPath $binaryTemp -Destination $cachedBinary -Force
         Move-Item -LiteralPath $checksumTemp -Destination $cachedChecksum -Force
+        Move-Item -LiteralPath $checksumSignatureTemp -Destination $cachedChecksumSignature -Force
+        Move-Item -LiteralPath $manifestTemp -Destination $cachedManifest -Force
+        Move-Item -LiteralPath $manifestSignatureTemp -Destination $cachedManifestSignature -Force
     } finally {
         if (Test-Path -LiteralPath $downloadDir) {
             Remove-Item -LiteralPath $downloadDir -Recurse -Force -ErrorAction SilentlyContinue

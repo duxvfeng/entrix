@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import platform
 import shutil
 import stat
 import subprocess
@@ -26,8 +27,70 @@ def _make_executable(path: Path) -> None:
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def _write_release_asset(source_dir: Path, version: str, *, checksum: str | None = None) -> Path:
-    binary = source_dir / f"entrix-{version}-linux-amd64"
+def _prepare_signed_plugin_root(tmp_path: Path) -> tuple[Path, Path]:
+    plugin_root = tmp_path / "plugin-root"
+    (plugin_root / "bin").mkdir(parents=True)
+    (plugin_root / "security").mkdir()
+    shutil.copy(ROOT / "bin" / "verify-release-signature.mjs", plugin_root / "bin")
+    shutil.copy(ROOT / "bin" / "verify-release-manifest.mjs", plugin_root / "bin")
+    private_key = tmp_path / "release-signing.key"
+    subprocess.run(
+        [
+            "openssl",
+            "genpkey",
+            "-algorithm",
+            "RSA",
+            "-pkeyopt",
+            "rsa_keygen_bits:2048",
+            "-out",
+            str(private_key),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        [
+            "openssl",
+            "pkey",
+            "-in",
+            str(private_key),
+            "-pubout",
+            "-out",
+            str(plugin_root / "security" / "release-public-key.pem"),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    return plugin_root, private_key
+
+
+def _sign_file(path: Path, private_key: Path) -> None:
+    subprocess.run(
+        [
+            "openssl",
+            "dgst",
+            "-sha256",
+            "-sign",
+            str(private_key),
+            "-out",
+            str(path) + ".sig",
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+
+def _write_release_asset(
+    source_dir: Path,
+    version: str,
+    *,
+    checksum: str | None = None,
+    private_key: Path,
+    target: str = "linux-amd64",
+) -> Path:
+    suffix = ".exe" if target == "windows-amd64" else ""
+    binary = source_dir / f"entrix-{version}-{target}{suffix}"
     binary.write_text(
         "#!/usr/bin/env bash\n"
         "printf 'fake-binary:%s\\n' \"$*\"\n"
@@ -37,7 +100,32 @@ def _write_release_asset(source_dir: Path, version: str, *, checksum: str | None
     _make_executable(binary)
     digest = checksum or hashlib.sha256(binary.read_bytes()).hexdigest()
     (source_dir / f"{binary.name}.sha256").write_text(f"{digest}  {binary.name}\n", encoding="ascii")
+    _sign_file(source_dir / f"{binary.name}.sha256", private_key)
+    manifest = {
+        "version": version,
+        "assets": [
+            {
+                "version": version,
+                "target": target,
+                "filename": binary.name,
+                "url": f"https://release.invalid/assets/{binary.name}",
+                "sha256": digest,
+            }
+        ],
+    }
+    manifest_path = source_dir / "release-manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    _sign_file(manifest_path, private_key)
     return binary
+
+
+def _host_target() -> str:
+    machine = platform.machine().lower()
+    if sys.platform == "darwin":
+        return "macos-arm64" if machine in {"arm64", "aarch64"} else "macos-amd64"
+    if sys.platform == "linux":
+        return "linux-arm64" if machine in {"arm64", "aarch64"} else "linux-amd64"
+    return "windows-amd64"
 
 
 def _write_fake_curl(tmp_path: Path, source_dir: Path) -> tuple[Path, Path]:
@@ -69,14 +157,17 @@ def _write_fake_curl(tmp_path: Path, source_dir: Path) -> tuple[Path, Path]:
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash is unavailable")
+@pytest.mark.skipif(shutil.which("openssl") is None, reason="OpenSSL is unavailable")
 @pytest.mark.skipif(sys.platform == "win32", reason="Unix launcher tests not supported on Windows")
 def test_unix_launcher_downloads_verifies_caches_and_forwards_args(tmp_path: Path) -> None:
     bash = shutil.which("bash")
     assert bash is not None
     version = "9.9.9"
+    target = _host_target()
     source_dir = tmp_path / "release"
     source_dir.mkdir()
-    _write_release_asset(source_dir, version)
+    plugin_root, private_key = _prepare_signed_plugin_root(tmp_path)
+    _write_release_asset(source_dir, version, private_key=private_key, target=target)
     fake_bin, log_path = _write_fake_curl(tmp_path, source_dir)
     cache_home = tmp_path / "cache"
     environment = os.environ.copy()
@@ -86,6 +177,7 @@ def test_unix_launcher_downloads_verifies_caches_and_forwards_args(tmp_path: Pat
             "XDG_CACHE_HOME": str(cache_home),
             "ENTRIX_BINARY_VERSION": version,
             "ENTRIX_RELEASE_BASE_URL": "https://release.invalid/assets",
+            "CLAUDE_PLUGIN_ROOT": str(plugin_root),
         }
     )
 
@@ -99,9 +191,25 @@ def test_unix_launcher_downloads_verifies_caches_and_forwards_args(tmp_path: Pat
     assert first.returncode == 0
     assert first.stdout.strip() == "fake-binary:serve --flag value"
     assert log_path.read_text(encoding="utf-8").splitlines() == [
-        "entrix-9.9.9-linux-amd64",
-        "entrix-9.9.9-linux-amd64.sha256",
+        f"entrix-9.9.9-{target}",
+        f"entrix-9.9.9-{target}.sha256",
+        f"entrix-9.9.9-{target}.sha256.sig",
+        "release-manifest.json",
+        "release-manifest.json.sig",
     ]
+
+    cached_binary = cache_home / "entrix" / "bin" / version / target / f"entrix-{version}-{target}"
+    cached_binary.write_bytes(cached_binary.read_bytes() + b"corrupt cache")
+    repaired = subprocess.run(
+        [bash, str(UNIX_ENTRYPOINT), "status"],
+        capture_output=True,
+        text=True,
+        env=environment,
+        check=False,
+    )
+    assert repaired.returncode == 0
+    assert repaired.stdout.strip() == "fake-binary:status"
+    assert len(log_path.read_text(encoding="utf-8").splitlines()) == 10
 
     source_dir.rename(tmp_path / "release-offline")
     second = subprocess.run(
@@ -113,18 +221,27 @@ def test_unix_launcher_downloads_verifies_caches_and_forwards_args(tmp_path: Pat
     )
     assert second.returncode == 0
     assert second.stdout.strip() == "fake-binary:stop-gate payload"
-    assert len(log_path.read_text(encoding="utf-8").splitlines()) == 2
+    assert len(log_path.read_text(encoding="utf-8").splitlines()) == 10
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash is unavailable")
+@pytest.mark.skipif(shutil.which("openssl") is None, reason="OpenSSL is unavailable")
 @pytest.mark.skipif(sys.platform == "win32", reason="Unix launcher tests not supported on Windows")
 def test_unix_launcher_rejects_checksum_mismatch(tmp_path: Path) -> None:
     bash = shutil.which("bash")
     assert bash is not None
     version = "9.9.10"
+    target = _host_target()
     source_dir = tmp_path / "release"
     source_dir.mkdir()
-    _write_release_asset(source_dir, version, checksum="0" * 64)
+    plugin_root, private_key = _prepare_signed_plugin_root(tmp_path)
+    _write_release_asset(
+        source_dir,
+        version,
+        checksum="0" * 64,
+        private_key=private_key,
+        target=target,
+    )
     fake_bin, _ = _write_fake_curl(tmp_path, source_dir)
     cache_home = tmp_path / "cache"
     environment = os.environ.copy()
@@ -134,6 +251,7 @@ def test_unix_launcher_rejects_checksum_mismatch(tmp_path: Path) -> None:
             "XDG_CACHE_HOME": str(cache_home),
             "ENTRIX_BINARY_VERSION": version,
             "ENTRIX_RELEASE_BASE_URL": "https://release.invalid/assets",
+            "CLAUDE_PLUGIN_ROOT": str(plugin_root),
         }
     )
 
@@ -146,6 +264,44 @@ def test_unix_launcher_rejects_checksum_mismatch(tmp_path: Path) -> None:
     )
     assert result.returncode != 0
     assert "SHA-256" in result.stderr
+    assert not list((cache_home / "entrix" / "bin" / version).rglob("entrix-*"))
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash is unavailable")
+@pytest.mark.skipif(shutil.which("openssl") is None, reason="OpenSSL is unavailable")
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix launcher tests not supported on Windows")
+def test_unix_launcher_rejects_invalid_release_signature(tmp_path: Path) -> None:
+    bash = shutil.which("bash")
+    assert bash is not None
+    version = "9.9.11"
+    target = _host_target()
+    source_dir = tmp_path / "release"
+    source_dir.mkdir()
+    plugin_root, private_key = _prepare_signed_plugin_root(tmp_path)
+    _write_release_asset(source_dir, version, private_key=private_key, target=target)
+    (source_dir / "release-manifest.json.sig").write_bytes(b"invalid signature")
+    fake_bin, _ = _write_fake_curl(tmp_path, source_dir)
+    cache_home = tmp_path / "cache"
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "PATH": os.pathsep.join((str(fake_bin), environment.get("PATH", ""))),
+            "XDG_CACHE_HOME": str(cache_home),
+            "ENTRIX_BINARY_VERSION": version,
+            "ENTRIX_RELEASE_BASE_URL": "https://release.invalid/assets",
+            "CLAUDE_PLUGIN_ROOT": str(plugin_root),
+        }
+    )
+
+    result = subprocess.run(
+        [bash, str(UNIX_BOOTSTRAP), "serve"],
+        capture_output=True,
+        text=True,
+        env=environment,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "signature" in result.stderr.lower()
     assert not list((cache_home / "entrix" / "bin" / version).rglob("entrix-*"))
 
 
@@ -176,6 +332,9 @@ def test_windows_launcher_contract() -> None:
     assert "Algorithm SHA256" in bootstrap
     assert "ValueFromRemainingArguments" in bootstrap
     assert "LASTEXITCODE" in bootstrap
+    assert "release-manifest.json.sig" in bootstrap
+    assert "checksum signature verification failed" in bootstrap
+    assert "Test-Manifest" in bootstrap
     assert "powershell.exe" in entrypoint
     assert "entrix-bootstrap.ps1" in entrypoint
 

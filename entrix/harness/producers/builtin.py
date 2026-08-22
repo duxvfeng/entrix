@@ -68,6 +68,7 @@ class EntrixFitnessProducer(Producer):
                 dimensions=self.dimensions,
                 changed_files=context.when_context.changed_files,
                 base=context.base_ref,
+                deadline=context.deadline,
             )
             evidence.status = "fail" if report.hard_gate_blocked or report.score_blocked else "pass"
             evidence.summary = {
@@ -100,8 +101,16 @@ class EntrixReviewTriggerProducer(Producer):
             )
 
             base = context.base_ref
-            changed_files = collect_changed_files(context.repo_root, base)
-            diff_stats = collect_diff_stats(context.repo_root, base)
+            if context.deadline is None:
+                changed_files = collect_changed_files(context.repo_root, base)
+                diff_stats = collect_diff_stats(context.repo_root, base)
+            else:
+                changed_files = collect_changed_files(
+                    context.repo_root, base, deadline=context.deadline
+                )
+                diff_stats = collect_diff_stats(
+                    context.repo_root, base, deadline=context.deadline
+                )
             report = evaluate_review_triggers(
                 self.rules,
                 changed_files,
@@ -135,12 +144,18 @@ class DiffStatsProducer(Producer):
             total_added = 0
             total_deleted = 0
             for file_path in changed_files:
+                timeout = None
+                if context.deadline is not None:
+                    timeout = context.deadline - monotonic()
+                    if timeout <= 0:
+                        raise subprocess.TimeoutExpired("git diff", timeout)
                 result = subprocess.run(
                     ["git", "diff", "--numstat", context.base_ref, "--", file_path],
                     capture_output=True,
                     text=True,
                     cwd=context.repo_root,
                     check=False,
+                    timeout=timeout,
                 )
                 if not result.stdout.strip():
                     continue

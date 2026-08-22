@@ -78,7 +78,9 @@ def test_skill_regression_targets_harness_configuration() -> None:
 
     assert "docs/fitness" not in script
     assert "harness.yaml" in script
-    assert "ENTRIX_CMD=(python3 -m entrix)" in script
+    assert "ENTRIX_PYTHON=python" in script
+    assert "ENTRIX_PYTHON=python3" in script
+    assert 'ENTRIX_CMD=("$ENTRIX_PYTHON" -m entrix)' in script
     assert "docs/fitness" not in workflow
     assert "harness.yaml" in workflow
 
@@ -102,6 +104,8 @@ def test_release_workflow_builds_verified_five_platform_assets() -> None:
     assert "--collect-all fastmcp" in workflow
     assert "--collect-all tree_sitter_language_pack" in workflow
     assert ".sha256" in workflow
+    assert "scripts/release_launcher_smoke.py" in workflow
+    assert "Smoke test release launcher" in workflow
     assert "softprops/action-gh-release" in workflow
 
     python_job = workflow.split("build-python-package:", 1)[1]
@@ -127,6 +131,14 @@ def test_release_upload_resolves_a_tag_for_every_trigger() -> None:
     assert "git describe --tags --abbrev=0 HEAD" in workflow
     assert "Manual release runs require an existing tag reachable from HEAD" in workflow
     assert not any(step.get("uses") == "actions/create-release@v1" for step in release_steps)
+
+
+def test_release_workflow_requires_signed_manifest_and_checksum_sidecars() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+
+    assert "ENTRIX_RELEASE_SIGNING_KEY" in workflow
+    assert "--signing-key" in workflow
+    assert "overwrite_files: true" in workflow
 
 
 def test_release_workflow_rejects_tag_and_manifest_version_mismatch() -> None:

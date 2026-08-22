@@ -50,7 +50,7 @@
 这项约定控制 Claude 的自然语言回复，不会翻译 MCP/Stop Gate 协议字段或底层二进制的原始 stdout/stderr。
 已经安装旧版本的电脑需要更新或重新安装 `entrix` 插件；旧插件缓存不会自动包含新的 Skill 规则。
 
-插件内置无 Python 启动器。首次调用 MCP 或 Stop Gate 时，启动器会按当前平台从 GitHub Release 下载固定版本的单文件 Entrix 二进制，校验 SHA-256 后缓存；后续调用直接使用缓存。因此安装插件和运行门禁**不要求本机安装 Python、pip、uv 或 uvx**。
+插件内置无 Python 启动器。首次调用 MCP 或 Stop Gate 时，Node.js 启动器会按当前平台从 GitHub Release 下载固定版本的单文件 Entrix 二进制，验证签名 manifest、签名 checksum 和 SHA-256 后缓存；后续调用直接使用缓存。因此安装插件和运行门禁**不要求本机安装 Python、pip、uv 或 uvx**，但 Claude Code 所在环境需要有 Node.js。
 
 支持的平台资产：
 
@@ -70,7 +70,11 @@ entrix-<version>-macos-arm64
 - `ENTRIX_BINARY_PATH`：指定本地可执行文件路径
 - `ENTRIX_RELEASE_REPOSITORY`：测试镜像仓库（格式 `owner/repo`）
 - `ENTRIX_RELEASE_BASE_URL`：自定义 Release 下载地址
+- `ENTRIX_DOWNLOAD_TIMEOUT_SECONDS`：每个下载请求的超时时间，默认 `120`
+- `ENTRIX_STATE_DIR`：Stop Gate 状态、信任记录和 verdict 缓存目录
 - `ENTRIX_STOP_GATE_DISABLED=1`：显式绕过 Stop Gate（仅用于开发/故障排查，生产环境不应设置）
+
+插件启动器还会读取插件内置的 `security/release-public-key.pem`。签名、manifest 或 checksum 任一校验失败都会拒绝执行并删除临时下载，不要通过替换公钥或关闭校验来绕过错误。
 
 ### 独立 CLI（`uv` 或 `pip`）
 
@@ -621,9 +625,16 @@ entrix analyze long-file --config file_budgets.json --strict-limit
 ### Stop Gate 未触发
 
 1. 检查 `harness.yaml` 是否存在
-2. 验证阶段标记：`entrix phase status --repo .`
-3. 检查是否设置了 `ENTRIX_STOP_GATE_DISABLED=1`
-4. 查看 Claude Code hooks 配置
+2. 查看状态：`entrix status --repo .`
+3. 运行诊断：`entrix doctor --repo .`
+4. 检查是否设置了 `ENTRIX_STOP_GATE_DISABLED=1`
+5. 查看 Claude Code hooks 配置
+
+### Stop Gate 一直重复阻断
+
+1. 修复报告中的问题后，运行 `entrix stop-gate retry --repo . --session-id <session-id>` 清理当前 session 的缓存裁决
+2. 阶段状态异常时运行 `entrix phase clear --repo . --session-id <session-id>`
+3. 再次运行 `entrix status --repo . --session-id <session-id>` 确认缓存已清除
 
 ### 检查执行失败
 
@@ -636,6 +647,7 @@ entrix analyze long-file --config file_budgets.json --strict-limit
 1. 检查网络连接
 2. 设置镜像：`ENTRIX_RELEASE_BASE_URL=https://your-mirror.com`
 3. 使用本地文件：`ENTRIX_BINARY_PATH=/path/to/entrix-binary`
+4. 如果提示 signature、manifest 或 checksum 校验失败，确认镜像完整同步了同版本的二进制、`.sha256`、`.sha256.sig`、`release-manifest.json` 和 `release-manifest.json.sig`
 
 ### Java 并发问题
 

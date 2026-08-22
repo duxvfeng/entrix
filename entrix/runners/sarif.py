@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import time
@@ -11,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from entrix.model import Gate, Metric, MetricResult, ResultState
+from entrix.runners.process import process_group_kwargs, terminate_process_tree
 
 
 class SarifRunner:
@@ -20,10 +22,12 @@ class SarifRunner:
         self,
         project_root: Path,
         timeout: int = 300,
+        deadline: float | None = None,
         env_overrides: dict[str, str] | None = None,
     ):
         self.project_root = project_root
         self.timeout = timeout
+        self.deadline = deadline
         self.env_overrides = env_overrides or {}
 
     def run(self, metric: Metric, *, dry_run: bool = False) -> MetricResult:
@@ -49,6 +53,17 @@ class SarifRunner:
 
         start = time.monotonic()
         timeout = metric.timeout_seconds or self.timeout
+        if self.deadline is not None:
+            timeout = min(float(timeout), self.deadline - time.monotonic())
+            if timeout <= 0:
+                return MetricResult(
+                    metric_name=metric.name,
+                    passed=False,
+                    output="STOP GATE DEADLINE EXCEEDED",
+                    tier=metric.tier,
+                    hard_gate=metric.gate == Gate.HARD,
+                    state=ResultState.UNKNOWN,
+                )
         try:
             payload = self._load_payload(metric.command, timeout=timeout)
             summary = _summarize_sarif(payload)
@@ -99,7 +114,7 @@ class SarifRunner:
         """按顺序执行多个 SARIF metric。"""
         return [self.run(metric, dry_run=dry_run) for metric in metrics]
 
-    def _load_payload(self, command: str, *, timeout: int) -> dict[str, Any]:
+    def _load_payload(self, command: str, *, timeout: float) -> dict[str, Any]:
         # 如果 command 解析为已存在的文件路径，则将其视为 SARIF 文件输入。
         candidate = (self.project_root / command).resolve()
         if candidate.is_file():
@@ -109,15 +124,39 @@ class SarifRunner:
                 raise ValueError("SARIF root must be an object")
             return data
 
-        result = subprocess.run(
-            ["/bin/bash", "-lc", command],
-            capture_output=True,
+        if os.name == "nt":
+            process_command: str | list[str] = command
+            use_shell = True
+        else:
+            process_command = ["/bin/bash", "-lc", command]
+            use_shell = False
+        process = subprocess.Popen(
+            process_command,
+            shell=use_shell,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout,
             cwd=self.project_root,
             env={**environ, **self.env_overrides},
+            **process_group_kwargs(),
         )
-        parsed = _parse_json_from_text(result.stdout)
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            terminate_process_tree(process)
+            try:
+                process.communicate(timeout=1)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                try:
+                    process.communicate(timeout=1)
+                except subprocess.TimeoutExpired:
+                    pass
+            raise
+        if process.returncode != 0:
+            detail = stderr.strip() or f"exit code {process.returncode}"
+            raise RuntimeError(f"SARIF command failed: {detail}")
+        parsed = _parse_json_from_text(stdout)
         if not isinstance(parsed, dict):
             raise ValueError("SARIF stdout did not contain a JSON object")
         return parsed

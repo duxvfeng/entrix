@@ -80,6 +80,18 @@ jobs:
           test -f "dist/$binary"
           "dist/$binary" --help
 
+      - name: Smoke test release launcher
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          binary="entrix-${VERSION}-${{ matrix.target }}${{ matrix.extension }}"
+          python scripts/release_launcher_smoke.py \
+            --launcher bin/entrix-bootstrap.${{ matrix.target == 'windows-amd64' && 'ps1' || 'sh' }} \
+            --binary "dist/$binary" \
+            --version "$VERSION" \
+            --target "${{ matrix.target }}"
+
       - name: Package binary
         shell: bash
         env:
@@ -202,12 +214,22 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
           REPOSITORY: https://github.com/${{ github.repository }}
+          RELEASE_SIGNING_KEY: ${{ secrets.ENTRIX_RELEASE_SIGNING_KEY }}
         run: |
+          test -n "$RELEASE_SIGNING_KEY" || {
+            echo "ENTRIX_RELEASE_SIGNING_KEY secret is required for signed releases" >&2
+            exit 1
+          }
+          umask 077
+          signing_key="$RUNNER_TEMP/entrix-release-signing.key"
+          printf '%s\n' "$RELEASE_SIGNING_KEY" > "$signing_key"
           python scripts/build_release_assets.py \
             --version "$VERSION" \
             --repository "$REPOSITORY" \
             --input-dir release \
-            --output release/release-manifest.json
+            --output release/release-manifest.json \
+            --signing-key "$signing_key"
+          rm -f "$signing_key"
           find release -name '*.sha256' -type f -print
 
       - name: Upload release assets

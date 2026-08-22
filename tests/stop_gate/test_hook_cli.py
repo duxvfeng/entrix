@@ -20,6 +20,7 @@ from entrix.stop_gate.hook import (
     main as stop_gate_main,
 )
 from entrix.stop_gate.phase import write_phase
+from entrix.stop_gate.revalidation import StopGateStateStore
 from entrix.stop_gate.runner import RunResult
 
 
@@ -33,12 +34,15 @@ def _run(
     monkeypatch.chdir(cwd)
     stream = io.StringIO()
     raw = payload if isinstance(payload, str) else json.dumps(payload)
+    effective_state_dir = state_dir or cwd / "stop-gate-state"
+    harness_config = find_harness_config(cwd)
+    if harness_config is not None:
+        StopGateStateStore(effective_state_dir).trust_config(cwd, harness_config)
     kwargs = {
         "input_stream": io.StringIO(raw),
         "output_stream": stream,
+        "state_dir": effective_state_dir,
     }
-    if state_dir is not None:
-        kwargs["state_dir"] = state_dir
     rc = run_stop_gate_hook(**kwargs)
     return rc, stream.getvalue()
 
@@ -356,12 +360,15 @@ class TestRunStopGateHook:
         monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
 
         output = io.StringIO()
+        state_dir = tmp_path / "stop-gate-state"
+        StopGateStateStore(state_dir).trust_config(tmp_path, tmp_path / "harness.yaml")
         rc = run_stop_gate_hook(
             base_ref="origin/main",
             input_stream=io.StringIO(
                 json.dumps({"session_id": "s1", "cwd": str(tmp_path), "branch": "feature/check"})
             ),
             output_stream=output,
+            state_dir=state_dir,
         )
 
         assert rc == 0
@@ -633,6 +640,7 @@ class TestRunStopGateHook:
         )
         state_dir = tmp_path / "stop-gate-state"
         payload = {"session_id": "s1", "cwd": str(tmp_path)}
+        StopGateStateStore(state_dir).trust_config(tmp_path, tmp_path / "harness.yaml")
 
         _run(payload, tmp_path, monkeypatch, state_dir=state_dir)
         run_stop_gate_hook(
@@ -775,6 +783,50 @@ def test_main_blocks_unexpected_error_in_configured_workspace(
     output = capsys.readouterr()
     assert json.loads(output.out)["decision"] == "block"
     assert "unexpected" in output.out
+
+
+def test_run_stop_gate_blocks_unexpected_error_in_configured_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
+
+    def fail_read_phase(_workspace: Path, **_kwargs: object) -> str:
+        raise RuntimeError("phase storage unavailable")
+
+    monkeypatch.setattr("entrix.stop_gate.hook.read_phase", fail_read_phase)
+    rc, output = _run(
+        {"session_id": "s1", "cwd": str(tmp_path)}, tmp_path, monkeypatch
+    )
+
+    assert rc == 0
+    decision = json.loads(output)
+    assert decision["decision"] == "block"
+    assert "phase storage unavailable" in decision["reason"]
+
+
+def test_run_stop_gate_passes_remaining_deadline_to_runner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
+    captured: dict[str, float] = {}
+
+    class Runner:
+        def __init__(self, _path: Path, **kwargs: object) -> None:
+            captured["timeout_seconds"] = float(kwargs["timeout_seconds"])
+
+        def run(self, _context: dict) -> RunResult:
+            return RunResult(
+                verdict=type("Verdict", (), {"status": "pass", "summary": "ok"})()
+            )
+
+    monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
+    rc, output = _run(
+        {"session_id": "s1", "cwd": str(tmp_path)}, tmp_path, monkeypatch
+    )
+
+    assert rc == 0
+    assert output == ""
+    assert 0 < captured["timeout_seconds"] <= 240
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash is unavailable")

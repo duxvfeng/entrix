@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -76,3 +78,39 @@ def test_cli_writes_sha256_sidecars_and_manifest(tmp_path: Path, monkeypatch: py
         hashlib.sha256(b"binary").hexdigest()
     )
     assert json.loads(output.read_text(encoding="utf-8"))["assets"][0]["filename"] == binary.name
+
+
+@pytest.mark.skipif(shutil.which("openssl") is None, reason="OpenSSL is unavailable")
+def test_cli_signs_manifest_and_checksum_sidecar(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    binary = tmp_path / "entrix-0.1.22-linux-amd64"
+    binary.write_bytes(b"binary")
+    key = tmp_path / "signing.key"
+    subprocess.run(
+        ["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048", "-out", str(key)],
+        check=True,
+        capture_output=True,
+    )
+    output = tmp_path / "release-manifest.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "build_release_assets.py",
+            "--version",
+            "0.1.22",
+            "--repository",
+            "https://github.com/duxvfeng/entrix",
+            "--input-dir",
+            str(tmp_path),
+            "--output",
+            str(output),
+            "--signing-key",
+            str(key),
+        ],
+    )
+
+    assert main() == 0
+    assert (tmp_path / "release-manifest.json.sig").is_file()
+    assert (tmp_path / f"{binary.name}.sha256.sig").is_file()

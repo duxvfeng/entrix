@@ -130,6 +130,7 @@ def run_fitness_report(
     progress_callback: ProgressCallback | None = None,
     progress_setup_callback: ProgressSetupCallback | None = None,
     shell_output_callback: OutputCallback | None = None,
+    deadline: float | None = None,
 ) -> tuple[FitnessReport, list[Dimension]]:
     """执行一次 fitness run，返回报告以及选中的 dimension。"""
     dimensions = filter_dimensions(dimensions, policy)
@@ -153,15 +154,30 @@ def run_fitness_report(
     if progress_setup_callback is not None:
         progress_setup_callback(dimensions)
 
-    shell_runner = ShellRunner(
-        project_root,
-        env_overrides=runner_env,
-        stream_output=policy.stream_output != "off",
-        output_callback=shell_output_callback,
-    )
-    sarif_runner = SarifRunner(project_root, env_overrides=runner_env)
+    if deadline is None:
+        shell_runner = ShellRunner(
+            project_root,
+            env_overrides=runner_env,
+            stream_output=policy.stream_output != "off",
+            output_callback=shell_output_callback,
+        )
+        sarif_runner = SarifRunner(project_root, env_overrides=runner_env)
+    else:
+        shell_runner = ShellRunner(
+            project_root,
+            deadline=deadline,
+            env_overrides=runner_env,
+            stream_output=policy.stream_output != "off",
+            output_callback=shell_output_callback,
+        )
+        sarif_runner = SarifRunner(project_root, deadline=deadline, env_overrides=runner_env)
     graph_runner = GraphRunner(project_root)
     dimension_scores = []
+    # A Stop Hook deadline is a hard wall-clock budget. ThreadPoolExecutor
+    # waits for running workers during shutdown, so parallel execution could
+    # make the caller exceed that budget even after individual metrics time
+    # out. Prefer bounded sequential execution for deadline-bound runs.
+    effective_parallel = policy.parallel if deadline is None else False
     for dim in dimensions:
         results = _run_metric_batch(
             dim.metrics,
@@ -169,7 +185,7 @@ def run_fitness_report(
             sarif_runner=sarif_runner,
             graph_runner=graph_runner,
             dry_run=policy.dry_run,
-            parallel=policy.parallel,
+            parallel=effective_parallel,
             max_workers=policy.max_workers,
             changed_files=effective_changed_files,
             base=base,

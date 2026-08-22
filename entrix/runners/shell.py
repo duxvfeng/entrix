@@ -50,12 +50,14 @@ class ShellRunner:
         self,
         project_root: Path,
         timeout: int = 300,
+        deadline: float | None = None,
         env_overrides: dict[str, str] | None = None,
         stream_output: bool = False,
         output_callback: OutputCallback | None = None,
     ):
         self.project_root = project_root
         self.timeout = timeout
+        self.deadline = deadline
         self.env_overrides = env_overrides or {}
         self.stream_output = stream_output
         self.output_callback = output_callback
@@ -86,6 +88,17 @@ class ShellRunner:
 
         start = time.monotonic()
         timeout = metric.timeout_seconds or self.timeout
+        if self.deadline is not None:
+            timeout = min(float(timeout), self.deadline - time.monotonic())
+            if timeout <= 0:
+                return MetricResult(
+                    metric_name=metric.name,
+                    passed=False,
+                    output="STOP GATE DEADLINE EXCEEDED",
+                    tier=metric.tier,
+                    hard_gate=metric.gate == Gate.HARD,
+                    state=ResultState.UNKNOWN,
+                )
         try:
             if self.stream_output and self.output_callback is not None:
                 output, returncode = self._run_streaming(metric, timeout=timeout)
@@ -135,6 +148,7 @@ class ShellRunner:
                 tier=metric.tier,
                 hard_gate=metric.gate == Gate.HARD,
                 duration_ms=elapsed,
+                state=ResultState.UNKNOWN,
             )
         except Exception as e:
             elapsed = (time.monotonic() - start) * 1000
@@ -220,7 +234,14 @@ class ShellRunner:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 _terminate_process_tree(process)
-                process.wait()
+                try:
+                    process.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    try:
+                        process.wait(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        pass
                 raise subprocess.TimeoutExpired(metric.command, timeout)
             try:
                 source, chunk = queue.get(timeout=min(0.1, remaining))
@@ -232,7 +253,15 @@ class ShellRunner:
             chunks.append(chunk)
             self._emit_output(metric, source, chunk)
 
-        returncode = process.wait(timeout=max(0.1, deadline - time.monotonic()))
+        try:
+            returncode = process.wait(timeout=max(0.1, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            _terminate_process_tree(process)
+            try:
+                process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                process.kill()
+            raise subprocess.TimeoutExpired(metric.command, timeout)
         for thread in threads:
             thread.join(timeout=0.1)
         return "".join(chunks), returncode

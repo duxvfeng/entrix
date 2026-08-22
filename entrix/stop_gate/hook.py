@@ -24,6 +24,7 @@ import json
 import os
 import subprocess
 import sys
+from time import monotonic
 from pathlib import Path
 from typing import IO, Any
 
@@ -152,14 +153,15 @@ def has_code_change(changed_files: list[str]) -> bool:
         "src/", "lib/", "app/", "entrix/", "packages/",
         ".py", ".js", ".ts", ".tsx", ".jsx",
         ".java", ".go", ".rs", ".cpp", ".c", ".h",
-        ".sh", ".yml", ".yaml"
+        ".sh", ".mjs", ".ps1", ".bat", ".yml", ".yaml",
+        ".json",
     }
 
     # 配置文件
     CONFIG_FILES = {
-        "pyproject.toml", "package.json", "Cargo.toml",
-        "go.mod", "pom.xml", "build.gradle",
-        "harness.yaml", ".github", "Makefile",
+        "pyproject.toml", "package.json", "cargo.toml",
+        "go.mod", "pom.xml", "build.gradle", "build.gradle.kts",
+        "harness.yaml", ".github", "makefile",
         "dockerfile", ".dockerignore"
     }
 
@@ -173,7 +175,7 @@ def has_code_change(changed_files: list[str]) -> bool:
         path_lower = file_path.lower()
 
         # 检查是否是配置文件
-        if any(config in file_path for config in CONFIG_FILES):
+        if any(config in path_lower for config in CONFIG_FILES):
             return True
 
         # 检查是否是测试文件
@@ -385,6 +387,8 @@ def run_stop_gate_hook(
     if output_stream is None:
         output_stream = sys.stdout
 
+    stop_deadline = monotonic() + max(0.1, float(timeout_seconds))
+
     # 安全阀：显式禁用时放行
     if os.environ.get("ENTRIX_STOP_GATE_DISABLED"):
         print(
@@ -400,16 +404,20 @@ def run_stop_gate_hook(
         return 0
 
     try:
-        phase = read_phase(workspace)
-        if consume_phase(workspace, "init") or phase == "planning":
+        session_id = str(payload.get("session_id") or "unknown-session")
+        stop_reason = str(payload.get("reason") or "agent_completed")
+        phase = read_phase(workspace, session_id=session_id) or read_phase(workspace)
+        if (
+            consume_phase(workspace, "init", session_id=session_id)
+            or consume_phase(workspace, "init")
+            or phase == "planning"
+        ):
             return 0
         detected_changed_files = derive_changed_files(workspace)
         changed_files = detected_changed_files or []
         detection_failed = detected_changed_files is None
 
         # 提前计算session_id和branch，以便缓存检查
-        session_id = str(payload.get("session_id") or "unknown-session")
-        stop_reason = str(payload.get("reason") or "agent_completed")
         try:
             branch = str(payload.get("branch") or derive_current_branch(workspace))
         except Exception as error:
@@ -426,7 +434,6 @@ def run_stop_gate_hook(
             effective_base_ref,
             _when_environment_fingerprint(harness_config),
         )
-        state_dir = state_dir or (workspace / ".stop-gate-state")
         state_store = StopGateStateStore(state_dir)
         try:
             cached = state_store.load(workspace, session_id) if snapshot is not None else None
@@ -461,6 +468,14 @@ def run_stop_gate_hook(
 
         should_collect = phase == "implementation" or bool(changed_files) or detection_failed
 
+        if should_collect and not state_store.is_config_trusted(workspace, harness_config):
+            _write_block_decision(
+                output_stream,
+                "发现尚未信任的 Harness 配置；为避免自动执行不可信命令，Stop Gate 已暂停。"
+                f"请先检查 {harness_config}，确认后运行 `entrix trust --repo {workspace}`。",
+            )
+            return 0
+
         return _run_configured_stop_gate(
             workspace=workspace,
             session_id=session_id,
@@ -470,6 +485,7 @@ def run_stop_gate_hook(
             harness_config=harness_config,
             changed_files=changed_files,
             should_collect=should_collect,
+            stop_deadline=stop_deadline,
             output_stream=output_stream,
             state_dir=state_dir,
             snapshot=snapshot or "",
@@ -483,8 +499,9 @@ def run_stop_gate_hook(
         if os.environ.get("ENTRIX_DEBUG"):
             traceback.print_exc(file=sys.stderr)
 
-        # 不要阻塞，直接放行
-        print("[Entrix] 检测到异常，跳过 Stop Gate 检查", file=sys.stderr)
+        # A configured workspace must fail closed. Only the explicit disable
+        # switch and the no-config path above are allowed to bypass the gate.
+        _write_block_decision(output_stream, f"Stop Gate 执行异常，已阻断：{error}")
         return 0
 
 
@@ -498,6 +515,7 @@ def _run_configured_stop_gate(
     harness_config: Path,
     changed_files: list[str],
     should_collect: bool,
+    stop_deadline: float,
     output_stream: IO[str],
     state_dir: Path | None,
     snapshot: str,
@@ -521,9 +539,14 @@ def _run_configured_stop_gate(
     from entrix.stop_gate.runner import HarnessRunner
 
     try:
+        remaining = stop_deadline - monotonic()
+        if remaining <= 0:
+            _write_block_decision(output_stream, "Stop Gate 总超时已到期，未完成证据收集。")
+            return 0
         result = HarnessRunner(
             harness_config,
             evidence_root=state_store.evidence_root(workspace),
+            timeout_seconds=remaining,
         ).run(context)
     except Exception as error:  # noqa: BLE001
         # 输出详细错误信息

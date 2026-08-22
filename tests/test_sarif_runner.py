@@ -91,3 +91,13 @@ def test_sarif_runner_returns_unknown_for_invalid_payload(tmp_path: Path):
     assert result.state == ResultState.UNKNOWN
     assert "SARIF parse error" in result.output
 
+
+def test_sarif_runner_returns_unknown_when_command_fails(tmp_path: Path):
+    runner = SarifRunner(tmp_path)
+    result = runner.run(
+        Metric(name="sarif_command_error", command="printf broken >&2; exit 2")
+    )
+
+    assert result.passed is False
+    assert result.state == ResultState.UNKNOWN
+    assert "SARIF command failed" in result.output

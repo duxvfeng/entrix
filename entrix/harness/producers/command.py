@@ -56,15 +56,23 @@ class CommandProducer(Producer):
                 cwd=context.repo_root,
                 **process_group_kwargs(),
             )
+            timeout = float(self.config.timeout_seconds)
+            if context.deadline is not None:
+                timeout = min(timeout, context.deadline - time.monotonic())
+                if timeout <= 0:
+                    raise subprocess.TimeoutExpired(self.config.command, timeout)
             try:
-                stdout, stderr = process.communicate(timeout=self.config.timeout_seconds)
+                stdout, stderr = process.communicate(timeout=timeout)
             except subprocess.TimeoutExpired:
                 terminate_process_tree(process)
                 try:
-                    process.communicate(timeout=5)
+                    process.communicate(timeout=1)
                 except subprocess.TimeoutExpired:
                     process.kill()
-                    process.communicate()
+                    try:
+                        process.communicate(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        pass
                 raise
             duration_ms = int((time.time() - start_time) * 1000)
             evidence.duration_ms = duration_ms
@@ -92,7 +100,7 @@ class CommandProducer(Producer):
 
         except subprocess.TimeoutExpired:
             evidence.status = "timeout"
-            evidence.raw = {"error": f"Command timed out after {self.config.timeout_seconds}s"}
+            evidence.raw = {"error": f"Command timed out after {self.config.timeout_seconds}s or the Stop Gate deadline"}
         except Exception as e:
             evidence.status = "error"
             evidence.raw = {"error": str(e)}

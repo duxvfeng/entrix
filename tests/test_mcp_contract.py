@@ -40,6 +40,12 @@ def _report() -> FitnessReport:
 
 def test_run_fitness_tool_returns_json_contract(monkeypatch, tmp_path: Path) -> None:
     calls: dict[str, object] = {}
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text("version: harness/v1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "entrix.server.StopGateStateStore.is_config_trusted",
+        lambda _store, _workspace, _config: True,
+    )
 
     def fake_run(repo_root, policy, preset, *, dimensions):
         calls.update(repo_root=repo_root, policy=policy, preset=preset, dimensions=dimensions)
@@ -61,6 +67,39 @@ def test_run_fitness_tool_returns_json_contract(monkeypatch, tmp_path: Path) -> 
     json.dumps(result)
 
 
+def test_run_fitness_tool_reads_nested_harness_config(monkeypatch, tmp_path: Path) -> None:
+    nested = tmp_path / ".harness" / "harness.yaml"
+    nested.parent.mkdir()
+    nested.write_text("version: harness/v1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "entrix.server.StopGateStateStore.is_config_trusted",
+        lambda _store, _workspace, _config: True,
+    )
+    calls: list[Path] = []
+
+    def fake_load(path: Path):
+        calls.append(path)
+        return type("Config", (), {"fitness_dimensions": []})()
+
+    monkeypatch.setattr("entrix.harness.config.load_harness_config", fake_load)
+    monkeypatch.setattr("entrix.engine.run_fitness_report", lambda *args, **kwargs: (_report(), []))
+
+    run_fitness_tool(tmp_path)
+
+    assert calls == [nested]
+
+
+def test_run_fitness_tool_blocks_untrusted_harness(tmp_path: Path) -> None:
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text("version: harness/v1\n", encoding="utf-8")
+
+    result = run_fitness_tool(tmp_path)
+
+    assert result["status"] == "blocked"
+    assert "尚未信任" in result["error"]
+    assert "trust --repo" in result["next_action"]
+
+
 @pytest.mark.parametrize("field,value", [("tier", "invalid"), ("scope", "invalid")])
 def test_run_fitness_tool_rejects_invalid_enums(tmp_path: Path, field: str, value: str) -> None:
     with pytest.raises(ValueError):
@@ -68,6 +107,11 @@ def test_run_fitness_tool_rejects_invalid_enums(tmp_path: Path, field: str, valu
 
 
 def test_get_dimension_status_tool_returns_stable_schema(monkeypatch, tmp_path: Path) -> None:
+    (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "entrix.server.StopGateStateStore.is_config_trusted",
+        lambda _store, _workspace, _config: True,
+    )
     monkeypatch.setattr("entrix.engine.run_fitness_report", lambda *_args, **_kwargs: (_report(), []))
     monkeypatch.setattr(
         "entrix.harness.config.load_harness_config",

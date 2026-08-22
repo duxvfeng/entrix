@@ -37,12 +37,7 @@ def default_harness_config() -> dict[str, Any]:
                         },
                         {
                             "name": "no_new_debug_prints",
-                            "command": (
-                                'base_ref="${ENTRIX_FITNESS_BASE:-HEAD}"\n'
-                                "git diff --unified=0 \"$base_ref\" -- . ':(exclude)docs/**' 2>/dev/null | "
-                                "grep -E '^\\+[^+].*\\b(print|pprint)\\(' | grep -vE '(^\\+\\+\\+|tests?/|test_)' | "
-                                "wc -l | awk '{print \"new_debug_prints:\", $1}'"
-                            ),
+                            "command": "python scripts/check_new_debug_prints.py 2>&1",
                             "pattern": "new_debug_prints: 0",
                             "tier": "fast",
                             "description": "Production code should not grow accidental debug prints.",
@@ -56,7 +51,7 @@ def default_harness_config() -> dict[str, Any]:
                     "metrics": [
                         {
                             "name": "pytest_pass",
-                            "command": "pytest 2>&1",
+                            "command": "python -m pytest 2>&1",
                             "hard_gate": True,
                             "tier": "normal",
                             "description": "The repository test suite must pass.",
@@ -70,7 +65,7 @@ def default_harness_config() -> dict[str, Any]:
                     "metrics": [
                         {
                             "name": "cli_help_smoke",
-                            "command": "python3 -m entrix --help 2>&1",
+                            "command": "python -m entrix --help 2>&1",
                             "pattern": "usage: entrix",
                             "hard_gate": True,
                             "tier": "fast",
@@ -78,7 +73,7 @@ def default_harness_config() -> dict[str, Any]:
                         },
                         {
                             "name": "package_build_pass",
-                            "command": "python3 -m build --no-isolation 2>&1",
+                            "command": "python -m build --no-isolation 2>&1",
                             "hard_gate": True,
                             "tier": "normal",
                             "description": "The project must still produce source and wheel distributions.",
