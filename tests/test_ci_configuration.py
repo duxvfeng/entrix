@@ -141,6 +141,13 @@ def test_release_workflow_requires_signed_manifest_and_checksum_sidecars() -> No
     assert "overwrite_files: true" in workflow
 
 
+def test_signed_release_reads_key_from_protected_publish_environment() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+    payload = yaml.safe_load(workflow)
+
+    assert payload["jobs"]["release"]["environment"] == "PUBLISH"
+
+
 def test_release_workflow_rejects_tag_and_manifest_version_mismatch() -> None:
     workflow = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
 
