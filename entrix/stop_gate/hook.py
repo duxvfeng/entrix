@@ -24,8 +24,8 @@ import json
 import os
 import subprocess
 import sys
-from time import monotonic
 from pathlib import Path
+from time import monotonic
 from typing import IO, Any
 
 import yaml

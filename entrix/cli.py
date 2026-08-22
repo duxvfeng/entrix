@@ -14,8 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
 
-from entrix import cli_runtime as _cli_runtime
 from entrix import __version__ as PACKAGE_VERSION
+from entrix import cli_runtime as _cli_runtime
 from entrix.analysis.long_file import analyze_long_files
 from entrix.cli_hints import (
     HintingArgumentParser,

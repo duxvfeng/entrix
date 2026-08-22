@@ -92,7 +92,9 @@ def _prepare_release(release_dir: Path, plugin_root: Path, binary: Path, version
 
 
 def _start_server(release_dir: Path) -> tuple[socketserver.ThreadingTCPServer, threading.Thread]:
-    handler = lambda *args, **kwargs: _QuietHandler(*args, directory=str(release_dir), **kwargs)
+    def handler(*args, **kwargs):
+        return _QuietHandler(*args, directory=str(release_dir), **kwargs)
+
     server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

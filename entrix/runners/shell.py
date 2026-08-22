@@ -261,7 +261,7 @@ class ShellRunner:
                 process.wait(timeout=1)
             except subprocess.TimeoutExpired:
                 process.kill()
-            raise subprocess.TimeoutExpired(metric.command, timeout)
+            raise subprocess.TimeoutExpired(metric.command, timeout) from None
         for thread in threads:
             thread.join(timeout=0.1)
         return "".join(chunks), returncode
