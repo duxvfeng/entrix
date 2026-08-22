@@ -42,9 +42,9 @@ def test_push_current_tag_rejects_missing_reachable_tag(monkeypatch: pytest.Monk
     )
 
     with pytest.raises(ValueError, match="no existing tag"):
-        push_current_tag.push_current_tag("dxf")
+        push_current_tag.push_current_tag("origin")
 
 
 def test_push_current_tag_rejects_unknown_remote() -> None:
     with pytest.raises(ValueError, match="unsupported remote"):
-        push_current_tag.push_current_tag("origin")
+        push_current_tag.push_current_tag("dxf")

@@ -26,7 +26,7 @@ def test_tasks_only_define_current_branch_and_tag_pushes() -> None:
         "Git: 一键推送当前 tag 到 GitHub + Gitee",
         "Git: 一键推送代码 + 当前 tag 到 GitHub + Gitee",
     }
-    assert all("origin" not in json.dumps(task, ensure_ascii=False) for task in tasks)
+    assert all("dxf" not in json.dumps(task, ensure_ascii=False) for task in tasks)
     assert all("所有分支" not in task["label"] for task in tasks)
 
 
@@ -34,7 +34,7 @@ def test_single_remote_tasks_use_expected_push_commands() -> None:
     tasks = {task["label"]: task for task in _tasks()}
 
     assert tasks["Git: 推送 GitHub（不带 tag）"]["args"] == ["push", "github", "HEAD"]
-    assert tasks["Git: 推送 Gitee（不带 tag）"]["args"] == ["push", "dxf", "HEAD"]
+    assert tasks["Git: 推送 Gitee（不带 tag）"]["args"] == ["push", "origin", "HEAD"]
     assert tasks["Git: 推送当前 tag 到 GitHub"]["args"] == [
         "scripts/push_current_tag.py",
         "--remote",
@@ -43,7 +43,7 @@ def test_single_remote_tasks_use_expected_push_commands() -> None:
     assert tasks["Git: 推送当前 tag 到 Gitee"]["args"] == [
         "scripts/push_current_tag.py",
         "--remote",
-        "dxf",
+        "origin",
     ]
 
 

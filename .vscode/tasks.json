@@ -13,7 +13,7 @@
       "label": "Git: 推送 Gitee（不带 tag）",
       "type": "shell",
       "command": "git",
-      "args": ["push", "dxf", "HEAD"],
+      "args": ["push", "origin", "HEAD"],
       "problemMatcher": [],
       "detail": "只推送当前分支到 Gitee"
     },
@@ -39,7 +39,7 @@
       "label": "Git: 推送当前 tag 到 Gitee",
       "type": "shell",
       "command": "python",
-      "args": ["scripts/push_current_tag.py", "--remote", "dxf"],
+      "args": ["scripts/push_current_tag.py", "--remote", "origin"],
       "problemMatcher": [],
       "detail": "只推送 HEAD 可追溯到的最近已有 tag 到 Gitee"
     },
