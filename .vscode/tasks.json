@@ -29,16 +29,16 @@
     },
     {
       "label": "Git: 推送当前 tag 到 GitHub",
-      "type": "shell",
-      "command": "python",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
       "args": ["scripts/push_current_tag.py", "--remote", "github"],
       "problemMatcher": [],
       "detail": "只推送 HEAD 可追溯到的最近已有 tag 到 GitHub"
     },
     {
       "label": "Git: 推送当前 tag 到 Gitee",
-      "type": "shell",
-      "command": "python",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
       "args": ["scripts/push_current_tag.py", "--remote", "origin"],
       "problemMatcher": [],
       "detail": "只推送 HEAD 可追溯到的最近已有 tag 到 Gitee"
