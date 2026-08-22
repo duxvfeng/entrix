@@ -24,3 +24,4 @@ venv/
 .harness/evidence/
 .harness/runtime/
 .stop-gate-state/
+.claude/plans/2026-08-22-entrix-plugin-audit.plan.md
