@@ -22,6 +22,36 @@
 
 <br>
 
+Entrix 是一个面向 AI 辅助开发流程的质量门禁工具。它把测试、Lint、构建、架构约束、变更风险和代码影响分析统一为可配置、可审计的质量信号，并通过 CLI、MCP 和 Claude Code Stop Hook 提供三种使用方式。
+
+三条入口链路的职责不同：
+
+| 入口 | 触发时机 | 主要用途 | 输出 |
+| --- | --- | --- | --- |
+| `entrix run` | 开发者主动执行 | 直接运行 Fitness 指标 | 终端报告或 JSON |
+| `entrix serve` | Claude 在对话中主动调用 | MCP 工具查询质量和影响范围 | MCP 工具结果 |
+| `entrix stop-gate` | Claude Code 准备结束任务时 | 任务结束前执行独立门禁 | 空 stdout 放行，JSON 阻断 |
+
+MCP 和 Stop Gate 是两条独立通道：MCP 负责开发过程中的主动反馈，Stop Gate 负责任务结束时的被动裁决。Stop Gate 不依赖 Claude 是否主动调用过 MCP。
+
+一次 Harness 运行的主链路如下：
+
+```text
+harness.yaml
+    |
+    v
+配置加载与校验
+    |
+    +--> Fitness Dimensions ------> entrix run / entrix-fitness producer
+    |
+    +--> Evidence Producers ------> Evidence Bundle
+    |                                  |
+    +--> Gate Policies --------------> Gate Engine
+                                       |
+                                       v
+                              PASS / FAIL / BLOCKED
+```
+
 ## 快速开始
 
 选择一种安装方式：
@@ -125,7 +155,7 @@ Entrix 使用单一的 `harness.yaml`（或 `.harness/harness.yaml`）作为质�
 
 - **Evidence Producers**：定义证据收集器（测试、lint、构建等）
 - **Gate Policies**：定义门禁策略，基于证据裁决 PASS/FAIL
-- **Fitness Dimensions**：基于维度的质量护栏（legacy 格式，兼容支持）
+- **Fitness Dimensions**：基于维度的加权质量护栏
 - **Review Triggers**：高风险变更升级规则
 
 ### MCP vs Stop Gate
@@ -156,6 +186,19 @@ entrix init --repo .
 - `generic`：通用项目
 - `python`、`node-typescript`、`java-maven`、`java-gradle`、`go`、`rust`
 
+Profile 的检测标记和默认命令如下。Profile 只提供可审查的初始模板，生成后应按项目实际情况调整 `harness.yaml`。
+
+| Profile | 检测标记 | 默认检查 |
+| --- | --- | --- |
+| `python` | `pyproject.toml`、`pytest.ini`、`requirements.txt`、`setup.py`、`setup.cfg` | `ruff check .`、`python -m pytest`、`python -m build --no-isolation` |
+| `node-typescript` | `package.json`、`tsconfig.json` | `npm run lint/test/build --if-present` |
+| `java-maven` | `pom.xml` | `mvn -B -T1` 的 validate、test、package |
+| `java-gradle` | `build.gradle`、`build.gradle.kts`、`gradlew`、`gradlew.bat` | `gradlew --no-daemon --max-workers=1` 的 check、test、assemble |
+| `go` | `go.mod` | `go vet ./...`、`go test ./...`、`go build ./...` |
+| `rust` | `Cargo.toml` | `cargo fmt`、`cargo test --workspace`、`cargo build --workspace` |
+
+如果 `auto` 同时检测到多个项目类型，命令会要求显式指定 `--profile`；没有匹配标记时使用 `generic`。
+
 对于特定项目类型：
 
 ```bash
@@ -172,6 +215,14 @@ entrix init --repo . --profile node-typescript
 ```bash
 entrix harness validate harness.yaml
 ```
+
+`harness.yaml` 中的 `command` 会执行项目命令。交给 Stop Hook 或 MCP 前，应先审查命令、路径、环境条件和超时设置。`entrix init` 会自动信任刚生成的配置；手工创建或替换配置后，需要显式信任：
+
+```bash
+entrix trust --repo .
+```
+
+未信任的 Harness 不会被 MCP 自动执行。配置发生实质变化后，需要重新审查并重新信任。
 
 ### 3. 运行检查
 
@@ -662,12 +713,67 @@ Entrix 在 [`examples/`](./examples/) 下提供了可复制的示例：
 - [`examples/file-length-hook/`](./examples/file-length-hook/)：pre-commit 文件预算 hook
 - [`examples/frontend-quality-pack/`](./examples/frontend-quality-pack/)：前端质量门禁与 review-trigger 指南
 
+## 项目结构
+
+```text
+entrix/
+├── entrix/                  # Python 核心实现
+│   ├── cli.py               # CLI 解析和命令编排
+│   ├── engine.py            # Fitness 执行引擎
+│   ├── model.py             # Metric、Report 和状态模型
+│   ├── governance.py        # tier、scope、评分和执行策略
+│   ├── harness/             # YAML 配置、Evidence、Producer、Gate
+│   ├── stop_gate/           # Claude Code Stop Hook 和状态管理
+│   ├── runners/             # shell、SARIF 和 graph 执行器
+│   ├── structure/           # 语言结构分析和 graph adapter
+│   ├── reporters/           # text、ASCII、Rich 和 JSON 报告
+│   └── presets/              # 项目类型预设
+├── bin/                     # 插件启动器和 Release 校验器
+├── hooks/                   # Claude Code Hook 清单
+├── skills/entrix/           # Entrix Skill、示例和规格
+├── examples/                # 可复制的配置和 Hook 示例
+├── scripts/                 # 发布、回归和文件预算脚本
+├── tests/                   # 单元、集成、MCP、Harness 和 Stop Gate 测试
+├── docs/                    # 使用指南、设计、ADR 和发布文档
+├── harness.yaml             # 本仓库自身的质量门禁配置
+├── pyproject.toml           # Python 包和开发工具配置
+└── .claude-plugin/          # Claude Code 插件和 marketplace 清单
+```
+
 ## 更多资源
 
 - **架构决策**：[`docs/adr/README.md`](./docs/adr/README.md) — Entrix 架构决策与原理
 - **本地插件调试**：[`docs/local-plugin-install.md`](./docs/local-plugin-install.md) — 本地源码插件和离线调试详细步骤
 - **发布清单**：[`docs/release-checklist.md`](./docs/release-checklist.md) — 版本发布到双远程的完整时序与验证步骤
 - **贡献指南**：[CONTRIBUTING.md](CONTRIBUTING.md)
+
+## 本地开发
+
+项目要求 Python 3.11+。从源码开发时建议创建隔离虚拟环境，并安装开发、MCP、graph 和 Rich 输出依赖：
+
+```bash
+python -m venv .venv
+source .venv/bin/activate       # Windows PowerShell：.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev,mcp,graph,visual]"
+```
+
+标准验证命令：
+
+```bash
+ruff check .
+pytest -q
+mypy
+python -m build --no-isolation
+python -m entrix harness validate harness.yaml
+python -m entrix harness run --config harness.yaml --json
+```
+
+本项目的覆盖率基线在 `pyproject.toml` 中设置为 75%。MCP 可选依赖的合同和 stdio 握手测试：
+
+```bash
+python -m pip install -e ".[dev,mcp]"
+pytest tests/test_mcp_contract.py tests/test_mcp_stdio.py -q
+```
 
 ## 开发者验证
 
