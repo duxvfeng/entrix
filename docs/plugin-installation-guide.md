@@ -182,7 +182,7 @@ entrix run --tier fast
 
 ### 发布签名与公钥轮换
 
-Release workflow 使用仓库 Secret `ENTRIX_RELEASE_SIGNING_KEY` 签名 manifest 和 checksum sidecar；私钥只存在于 CI 临时目录，不提交到仓库。插件内的 `security/release-public-key.pem` 必须与该 Secret 匹配。
+Release workflow 使用 GitHub Actions `PUBLISH` 环境中的 Secret `ENTRIX_RELEASE_SIGNING_KEY` 签名 manifest 和 checksum sidecar；私钥只存在于 CI 临时目录，不提交到仓库。插件内的 `security/release-public-key.pem` 必须与该 Secret 匹配。
 
 轮换公钥时应先生成新的 RSA 私钥，在同一个变更中更新插件公钥和 CI Secret，完成一次带签名资产的构建验证后再推送 marketplace。旧版本插件仍使用旧公钥，因此轮换后需要保留旧 Release 资产，直到旧版本用户完成升级。
 

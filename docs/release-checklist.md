@@ -56,7 +56,7 @@ git push github refs/tags/vX.Y.Z:refs/tags/vX.Y.Z
 
 1. 五平台单文件二进制（windows/linux-amd64/linux-arm64/macos-amd64/macos-arm64），每个跑 `--help` 冒烟
 2. 生成 `.sha256` sidecar、`.sha256.sig`、`release-manifest.json` 和 `release-manifest.json.sig`
-3. 使用仓库 Secret `ENTRIX_RELEASE_SIGNING_KEY` 签名；私钥只写入 runner 临时目录
+3. 使用 GitHub Actions `PUBLISH` 环境的 Secret `ENTRIX_RELEASE_SIGNING_KEY` 签名；私钥只写入 runner 临时目录
 4. 创建 GitHub Release 并上传全部资产（允许覆盖，CI 使用 `overwrite_files: true`）
 
 ### 5. 等待 Release 资产就绪

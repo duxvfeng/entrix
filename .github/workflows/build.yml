@@ -119,6 +119,7 @@ jobs:
     needs: build
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    environment: PUBLISH
     permissions:
       contents: write
     steps:
@@ -217,7 +218,8 @@ jobs:
           RELEASE_SIGNING_KEY: ${{ secrets.ENTRIX_RELEASE_SIGNING_KEY }}
         run: |
           test -n "$RELEASE_SIGNING_KEY" || {
-            echo "ENTRIX_RELEASE_SIGNING_KEY secret is required for signed releases" >&2
+            echo "ENTRIX_RELEASE_SIGNING_KEY is required in the PUBLISH environment for signed releases" >&2
+            echo "Configure it in GitHub Settings > Environments > PUBLISH > Environment secrets" >&2
             exit 1
           }
           umask 077
