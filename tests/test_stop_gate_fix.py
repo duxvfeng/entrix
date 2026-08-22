@@ -76,3 +76,35 @@ def test_clear_cache_script(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert "预览模式" in result.stdout
     assert state_store.load(workspace, "session-1") is not None
+
+
+def test_default_state_store_is_external_to_workspace(tmp_path: Path, monkeypatch) -> None:
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    external = tmp_path / "user-state"
+    monkeypatch.setenv("ENTRIX_STATE_DIR", str(external))
+
+    store = StopGateStateStore()
+    store.save(
+        workspace,
+        "session-1",
+        CachedVerdict(fingerprint="f" * 64, status="fail", summary="cached verdict"),
+    )
+
+    assert not (workspace / ".stop-gate-state").exists()
+    assert not (workspace / ".harness" / "evidence").exists()
+    assert list(external.rglob("*.json"))
+
+
+def test_harness_trust_is_invalidated_when_config_changes(tmp_path: Path) -> None:
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    config = workspace / "harness.yaml"
+    config.write_text("version: harness/v1\n", encoding="utf-8")
+    store = StopGateStateStore(tmp_path / "state")
+
+    assert store.is_config_trusted(workspace, config) is False
+    store.trust_config(workspace, config)
+    assert store.is_config_trusted(workspace, config) is True
+    config.write_text("version: harness/v1\nsettings: {failure_mode: closed}\n", encoding="utf-8")
+    assert store.is_config_trusted(workspace, config) is False

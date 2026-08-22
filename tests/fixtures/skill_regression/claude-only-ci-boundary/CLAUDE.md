@@ -6,4 +6,4 @@ This fixture models a repository that uses only `CLAUDE.md` as its agent entry.
 
 - Entrix rules live in `harness.yaml`
 - Do not create an extra `AGENTS.md`
-- Keep default local `python3 -m entrix run` green
+- Keep default local `python -m entrix run` green

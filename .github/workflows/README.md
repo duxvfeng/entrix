@@ -17,6 +17,7 @@
 
 3. **自动发布到 Release**
    - 所有平台的原始可执行文件、归档文件和 `.sha256` 校验文件
+   - `.sha256.sig`、`release-manifest.json` 和 `release-manifest.json.sig`
    - `release-manifest.json`（版本、目标、下载地址和 SHA-256）
    - Python 包
    - 可选择发布到 PyPI
@@ -45,7 +46,8 @@ GitHub Actions 会自动：
 - ✅ 用 `entrix[mcp]` 构建包含 FastMCP 和 Tree-sitter 资源的单文件程序
 - ✅ 构建 Windows/Linux/macOS 五个目标
 - ✅ 运行每个二进制的 `--help` smoke test
-- ✅ 生成 SHA-256 sidecar 和 release manifest
+- ✅ 在五平台验证启动器首次下载、缓存命中、损坏缓存修复和离线缓存执行
+- ✅ 生成 SHA-256 sidecar、签名 sidecar 和 release manifest
 - ✅ 构建 Python 包
 - ✅ 上传到 Release 页面
 
@@ -61,13 +63,17 @@ GitHub Actions 会自动：
 Release v0.1.24/
 ├── entrix-0.1.24-windows-amd64.exe
 ├── entrix-0.1.24-windows-amd64.exe.sha256
+├── entrix-0.1.24-windows-amd64.exe.sha256.sig
 ├── entrix-0.1.24-linux-amd64
 ├── entrix-0.1.24-linux-amd64.sha256
+├── entrix-0.1.24-linux-amd64.sha256.sig
 ├── entrix-0.1.24-linux-arm64
 ├── entrix-0.1.24-linux-arm64.sha256
+├── entrix-0.1.24-linux-arm64.sha256.sig
 ├── entrix-0.1.24-macos-amd64
 ├── entrix-0.1.24-macos-arm64
 ├── release-manifest.json
+├── release-manifest.json.sig
 ├── entrix-0.1.24-windows-amd64.zip
 ├── entrix-0.1.24-linux-amd64.tar.gz
 ├── entrix-0.1.24-linux-arm64.tar.gz

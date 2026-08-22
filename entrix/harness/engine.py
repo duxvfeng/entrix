@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from time import monotonic
 from typing import Optional
 
 from entrix.harness.conditions import WhenContext, evaluate_when
@@ -30,6 +31,7 @@ class HarnessRunContext:
     base_ref: str = "HEAD"
     parallel_producers: bool = False
     max_parallel_producers: int | None = None
+    deadline: float | None = None
 
 
 class EvidenceEngine:
@@ -95,6 +97,15 @@ class EvidenceEngine:
                         collection_errors.append({"producer_id": producer_config.id, "error": str(error)})
         else:
             for producer_config in active_producers:
+                if context.deadline is not None and context.deadline <= monotonic():
+                    collection_errors.append(
+                        {
+                            "producer_id": producer_config.id,
+                            "error": "Stop Gate deadline exceeded before producer start",
+                        }
+                    )
+                    evidence_list.append(self._timeout_evidence(producer_config, context))
+                    continue
                 try:
                     evidence_list.append(self._run_producer(producer_config, context))
                 except Exception as error:  # noqa: BLE001
@@ -135,6 +146,21 @@ class EvidenceEngine:
         )
 
     @staticmethod
+    def _timeout_evidence(
+        producer_config: EvidenceProducerConfig, context: HarnessRunContext
+    ) -> Evidence:
+        return Evidence(
+            id=producer_config.id,
+            type=producer_config.type,
+            name=producer_config.name,
+            status="timeout",
+            producer=producer_config.producer or producer_config.builtin or "harness",
+            task_id=context.task_id,
+            started_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            raw={"error": "Stop Gate deadline exceeded before producer start"},
+        )
+
+    @staticmethod
     def _save_bundle(context: HarnessRunContext, bundle: EvidenceBundle) -> None:
         if context.store is not None:
             context.store.save(bundle)
@@ -147,6 +173,7 @@ class EvidenceEngine:
             when_context=context.when_context,
             attempt_id=context.attempt_id,
             base_ref=context.base_ref,
+            deadline=context.deadline,
         )
         return producer.run(producer_context)
 

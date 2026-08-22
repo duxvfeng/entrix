@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import tempfile
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,14 +20,15 @@ class CachedVerdict:
 
 
 class StopGateStateStore:
-    """Persist the last verdict for each Claude session outside the workspace."""
+    """Persist verdicts and evidence outside the checked workspace."""
 
     def __init__(self, state_dir: Path | None = None) -> None:
-        # 容忍 argparse 等来源传入的 str 路径
+        # 容忍 argparse 等来源传入的 str 路径。 The workspace is never a
+        # default storage location: Stop hooks must not dirty the repository.
         self.state_dir = (
             Path(state_dir)
             if state_dir
-            else Path(tempfile.gettempdir()) / "harness-monitor" / "stop-gate"
+            else _default_state_dir()
         )
 
     def load(self, workspace: Path, session_id: str) -> CachedVerdict | None:
@@ -73,6 +74,34 @@ class StopGateStateStore:
         root.mkdir(parents=True, exist_ok=True)
         return root
 
+    def trust_config(self, workspace: Path, config_path: Path) -> None:
+        """Record explicit user approval for the current Harness config hash."""
+        target = self._trust_path(workspace)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "schema_version": "stop-gate-trust/v1",
+            "workspace": str(workspace.resolve()),
+            "config": str(config_path.resolve()),
+            "config_sha256": _file_sha256(config_path),
+        }
+        temporary = target.with_suffix(f".{os.getpid()}.tmp")
+        temporary.write_text(json.dumps(payload, ensure_ascii=False) + "\n", encoding="utf-8")
+        temporary.replace(target)
+
+    def is_config_trusted(self, workspace: Path, config_path: Path) -> bool:
+        """Return whether the exact current config was explicitly approved."""
+        try:
+            payload = json.loads(self._trust_path(workspace).read_text(encoding="utf-8"))
+            return (
+                isinstance(payload, dict)
+                and payload.get("schema_version") == "stop-gate-trust/v1"
+                and payload.get("workspace") == str(workspace.resolve())
+                and payload.get("config") == str(config_path.resolve())
+                and payload.get("config_sha256") == _file_sha256(config_path)
+            )
+        except (OSError, json.JSONDecodeError, ValueError):
+            return False
+
     def sessions_dir(self, workspace: Path) -> Path:
         """Return the directory holding cached verdicts for a workspace."""
         return self.state_dir / "sessions" / self._workspace_marker(workspace)
@@ -81,6 +110,33 @@ class StopGateStateStore:
         session_marker = hashlib.sha256(session_id.encode("utf-8")).hexdigest()
         return self.state_dir / "sessions" / self._workspace_marker(workspace) / f"{session_marker}.json"
 
+    def _trust_path(self, workspace: Path) -> Path:
+        return self.state_dir / "trust" / f"{self._workspace_marker(workspace)}.json"
+
     @staticmethod
     def _workspace_marker(workspace: Path) -> str:
         return hashlib.sha256(str(workspace.resolve()).encode("utf-8")).hexdigest()
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        while chunk := file.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _default_state_dir() -> Path:
+    """Return a user-scoped cache directory on the current platform."""
+    configured = os.environ.get("ENTRIX_STATE_DIR")
+    if configured:
+        return Path(configured).expanduser()
+    if os.name == "nt":
+        root = os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local"
+        return Path(root) / "entrix" / "stop-gate"
+    xdg_state_home = os.environ.get("XDG_STATE_HOME")
+    if xdg_state_home:
+        return Path(xdg_state_home) / "entrix" / "stop-gate"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Caches" / "entrix" / "stop-gate"
+    return Path.home() / ".local" / "state" / "entrix" / "stop-gate"

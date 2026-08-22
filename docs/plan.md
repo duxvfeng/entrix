@@ -1,6 +1,6 @@
 # Entrix 当前改进路线图
 
-> 更新日期：2026-08-21。本文只记录当前未完成工作；历史实施计划保留在
+> 更新日期：2026-08-22。本文只记录当前未完成工作；历史实施计划保留在
 > `docs/superpowers/plans/`，不能作为当前测试或功能状态依据。
 
 ## 已完成
@@ -22,7 +22,8 @@
 
 - [x] 由基础 CI 执行完整测试，Defense workflow 只执行 fast/ci 变更治理检查。
 - [x] 自动发布 pytest/JUnit、coverage、fitness 和 review-trigger 摘要/工件。
-- [ ] 保持发布 workflow 的五平台二进制、checksum 和版本一致性验证。
+- [x] 保持发布 workflow 的五平台二进制、checksum、签名和版本一致性验证，
+  并在上传前执行启动器 smoke test；同名 Release 资产允许覆盖更新。
 
 ### 结构治理
 

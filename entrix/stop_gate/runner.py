@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+from time import monotonic
 from typing import Any
 
 from entrix.harness.conditions import WhenContext
@@ -30,16 +31,23 @@ class HarnessRunner:
         *,
         evidence_root: Path | None = None,
         parallel_producers: bool = False,
+        timeout_seconds: int | float | None = None,
     ) -> None:
         self.config_path = config_path
         self.evidence_root = evidence_root
         self.parallel_producers = parallel_producers
+        self.timeout_seconds = timeout_seconds
 
     def run(self, context: dict[str, Any]) -> RunResult:
         """Collect evidence and arbitrate the configured Harness policies."""
         config = load_harness_config(self.config_path)
         workspace = Path(context.get("workspace") or context["repo_path"])
         task_id = str(context.get("task_id") or context.get("session_id") or "unknown-session")
+        deadline = (
+            monotonic() + float(self.timeout_seconds)
+            if self.timeout_seconds is not None
+            else None
+        )
         harness_context = HarnessRunContext(
             task_id=task_id,
             attempt_id=str(context.get("attempt_id") or task_id),
@@ -52,6 +60,7 @@ class HarnessRunner:
             store=None,
             base_ref=str(context.get("base_ref") or "HEAD"),
             parallel_producers=self.parallel_producers,
+            deadline=deadline,
         )
         evidence_engine = EvidenceEngine(config)
         bundle = evidence_engine.collect(harness_context)

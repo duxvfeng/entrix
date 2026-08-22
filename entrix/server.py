@@ -5,6 +5,32 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from entrix.stop_gate.revalidation import StopGateStateStore
+
+
+def _harness_config_path(project_root: Path) -> Path:
+    """Resolve the same Harness locations used by the Stop Hook."""
+    for candidate in (project_root / "harness.yaml", project_root / ".harness" / "harness.yaml"):
+        if candidate.is_file():
+            return candidate
+    return project_root / "harness.yaml"
+
+
+def _trusted_harness_or_error(project_root: Path, config_path: Path) -> dict[str, str] | None:
+    """Prevent MCP tools from executing commands from an untrusted Harness."""
+    if not config_path.is_file():
+        return {
+            "status": "blocked",
+            "error": f"未找到 Harness 配置：{config_path}",
+        }
+    if StopGateStateStore().is_config_trusted(project_root, config_path):
+        return None
+    return {
+        "status": "blocked",
+        "error": "Harness 配置尚未信任，MCP 不会自动执行其中的命令。",
+        "next_action": f"检查配置后运行：entrix trust --repo {project_root}",
+    }
+
 
 def run_fitness_tool(
     project_root: Path,
@@ -32,7 +58,12 @@ def run_fitness_tool(
         min_score=min_score,
         execution_scope=execution_scope,
     )
-    config = load_harness_config(project_root / "harness.yaml")
+    config_path = _harness_config_path(project_root)
+    if not dry_run:
+        trust_error = _trusted_harness_or_error(project_root, config_path)
+        if trust_error is not None:
+            return trust_error
+    config = load_harness_config(config_path)
     report, _ = run_fitness_report(
         project_root,
         policy,
@@ -49,11 +80,15 @@ def get_dimension_status_tool(project_root: Path, dimension: str) -> dict[str, A
     from entrix.harness.config import load_harness_config
     from entrix.presets import get_project_preset
 
+    config_path = _harness_config_path(project_root)
+    trust_error = _trusted_harness_or_error(project_root, config_path)
+    if trust_error is not None:
+        return trust_error
     report, _ = run_fitness_report(
         project_root,
         GovernancePolicy(),
         get_project_preset(),
-        dimensions=load_harness_config(project_root / "harness.yaml").fitness_dimensions,
+        dimensions=load_harness_config(config_path).fitness_dimensions,
     )
     for dimension_score in report.dimensions:
         if dimension_score.dimension == dimension:

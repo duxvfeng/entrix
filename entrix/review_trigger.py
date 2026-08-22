@@ -6,6 +6,7 @@ import fnmatch
 import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from time import monotonic
 
 
 @dataclass(frozen=True)
@@ -116,7 +117,19 @@ def parse_review_trigger_rules(raw_rules: object) -> list[ReviewTriggerRule]:
     return rules
 
 
-def collect_changed_files(repo_root: Path, base: str) -> list[str]:
+def _remaining_timeout(deadline: float | None) -> float | None:
+    """Return a positive subprocess timeout for an optional absolute deadline."""
+    if deadline is None:
+        return None
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise subprocess.TimeoutExpired("git", 0)
+    return remaining
+
+
+def collect_changed_files(
+    repo_root: Path, base: str, *, deadline: float | None = None
+) -> list[str]:
     """收集相对于 git base 的变更和未跟踪文件。"""
     files: list[str] = []
     commands = [
@@ -131,6 +144,7 @@ def collect_changed_files(repo_root: Path, base: str) -> list[str]:
             capture_output=True,
             text=True,
             check=False,
+            timeout=_remaining_timeout(deadline),
         )
         files.extend(line.strip() for line in result.stdout.splitlines() if line.strip())
 
@@ -143,7 +157,9 @@ def collect_changed_files(repo_root: Path, base: str) -> list[str]:
     return deduped
 
 
-def collect_diff_stats(repo_root: Path, base: str) -> DiffStats:
+def collect_diff_stats(
+    repo_root: Path, base: str, *, deadline: float | None = None
+) -> DiffStats:
     """收集相对于 git base 的聚合 diff 统计。"""
     result = subprocess.run(
         ["git", "diff", "--numstat", "--diff-filter=ACMR", base],
@@ -151,6 +167,7 @@ def collect_diff_stats(repo_root: Path, base: str) -> DiffStats:
         capture_output=True,
         text=True,
         check=False,
+        timeout=_remaining_timeout(deadline),
     )
     added_lines = 0
     deleted_lines = 0

@@ -55,8 +55,9 @@ git push github refs/tags/vX.Y.Z:refs/tags/vX.Y.Z
 `build.yml` 随即自动执行：
 
 1. 五平台单文件二进制（windows/linux-amd64/linux-arm64/macos-amd64/macos-arm64），每个跑 `--help` 冒烟
-2. 生成 `.sha256` sidecar 与 `release-manifest.json`
-3. 创建 GitHub Release 并上传全部资产（`overwrite_files: true`）
+2. 生成 `.sha256` sidecar、`.sha256.sig`、`release-manifest.json` 和 `release-manifest.json.sig`
+3. 使用仓库 Secret `ENTRIX_RELEASE_SIGNING_KEY` 签名；私钥只写入 runner 临时目录
+4. 创建 GitHub Release 并上传全部资产（允许覆盖，CI 使用 `overwrite_files: true`）
 
 ### 5. 等待 Release 资产就绪
 
@@ -65,7 +66,9 @@ git push github refs/tags/vX.Y.Z:refs/tags/vX.Y.Z
 ```
 entrix-X.Y.Z-{windows-amd64.exe,linux-amd64,linux-arm64,macos-amd64,macos-arm64}
 entrix-X.Y.Z-*.sha256（5 个）
+entrix-X.Y.Z-*.sha256.sig（5 个）
 release-manifest.json
+release-manifest.json.sig
 ```
 
 ### 6. 发布 PyPI（publish.yml）
@@ -88,7 +91,7 @@ python scripts/push_current_tag.py --remote dxf
 
 ### 8. 发布后验证
 
-- [ ] Release 页面：5 个二进制 + 5 个 sha256 + manifest + sdist/wheel
+- [ ] Release 页面：5 个二进制 + 5 个 sha256 + 5 个 checksum 签名 + manifest 及其签名 + sdist/wheel
 - [ ] PyPI 页面出现 `X.Y.Z`
 - [ ] 干净机器上 `/plugin marketplace add https://gitee.com/duxvfeng/entrix.git && /plugin install entrix@entrix`，重启后 MCP 工具可调用
 - [ ] `entrix --help` 经插件二进制正常输出
@@ -98,3 +101,11 @@ python scripts/push_current_tag.py --remote dxf
 - **构建失败**：修复后可直接重推 tag（`git push github -f refs/tags/vX.Y.Z`）或在 Actions 页面 `workflow_dispatch` 重跑 `build.yml`（要求 tag 可从 HEAD 到达）
 - **PyPI 发布失败**：Actions 页面 `workflow_dispatch` 重跑 `publish.yml`
 - **版本校验失败**（tag 与文件版本不一致）：本地重跑步骤 1 修正，重新提交打 tag
+- **签名校验失败**：确认 `ENTRIX_RELEASE_SIGNING_KEY` 与仓库内 `security/release-public-key.pem` 匹配，并确认所有签名资产来自同一次构建；不要只覆盖二进制而保留旧 checksum 或 manifest
+
+### 公钥轮换
+
+1. 生成新的 RSA 私钥，并将公钥更新到 `security/release-public-key.pem`
+2. 更新 GitHub Secret `ENTRIX_RELEASE_SIGNING_KEY`
+3. 用新 key 重新生成并验证一整个版本的五平台资产
+4. 保留旧版本 Release 资产，直到旧插件版本不再需要旧公钥

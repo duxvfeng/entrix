@@ -70,6 +70,7 @@ def test_run_timeout(tmp_path):
     result = runner.run(m)
     assert result.passed is False
     assert "TIMEOUT" in result.output
+    assert result.state == ResultState.UNKNOWN
 
 
 def test_run_metric_specific_timeout(tmp_path):

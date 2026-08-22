@@ -20,6 +20,10 @@
 ```bash
 /entrix phase planning                        # 开始规划阶段
 /entrix phase implementation                   # 开始实现阶段
+/entrix phase clear                            # 清理阶段标记
+/entrix status                                 # 查看当前状态
+/entrix doctor                                 # 诊断运行环境
+/entrix stop-gate retry --session-id <id>       # 清理缓存裁决并重试
 ```
 
 ### 分析与调试

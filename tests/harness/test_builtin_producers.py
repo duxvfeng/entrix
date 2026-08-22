@@ -134,11 +134,11 @@ def test_entrix_review_trigger_producer(monkeypatch, tmp_path):
     producer = EntrixReviewTriggerProducer(config, rules)
     calls = {}
 
-    def fake_collect_changed_files(repo_root, base):
+    def fake_collect_changed_files(repo_root, base, *, deadline=None):
         calls["changed_files"] = (repo_root, base)
         return ["entrix/model.py"]
 
-    def fake_collect_diff_stats(repo_root, base):
+    def fake_collect_diff_stats(repo_root, base, *, deadline=None):
         calls["diff_stats"] = (repo_root, base)
         return DiffStats(file_count=1, added_lines=4, deleted_lines=1)
 

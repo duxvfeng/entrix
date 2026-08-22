@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import asdict, fields, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +13,12 @@ from uuid import uuid4
 from entrix.harness.evidence import EvidenceBundle
 
 T = TypeVar("T")
+
+_MAX_PERSISTED_TEXT = 4000
+_SECRET_KEY = re.compile(r"(?:password|passwd|secret|token|api[_-]?key|authorization)", re.I)
+_SECRET_ASSIGNMENT = re.compile(
+    r"(?i)(\b(?:password|passwd|secret|token|api[_-]?key|authorization)\b\s*[:=]\s*)([^\s,;]+)"
+)
 
 
 def _validated_task_id(task_id: object) -> str:
@@ -74,7 +81,7 @@ class EvidenceStore:
         temporary_path = task_dir / f".{filepath.name}.{uuid4().hex}.tmp"
         try:
             with temporary_path.open("x", encoding="utf-8") as file:
-                json.dump(asdict(bundle), file, indent=2, ensure_ascii=False)
+                json.dump(_sanitize_value(asdict(bundle)), file, indent=2, ensure_ascii=False)
                 file.flush()
                 os.fsync(file.fileno())
             temporary_path.replace(filepath)
@@ -82,7 +89,26 @@ class EvidenceStore:
             temporary_path.unlink(missing_ok=True)
             raise
 
+        try:
+            self.prune(target_task_id)
+        except OSError:
+            # Retention is best-effort; a successful gate must not become a
+            # failure only because an old diagnostic file cannot be removed.
+            pass
         return filepath
+
+    def prune(self, task_id: str, *, keep: int = 20) -> int:
+        """Remove old bundles for one task and return the number removed."""
+        task_dir = self.evidence_dir / _validated_task_id(task_id)
+        bundles = sorted(task_dir.glob("*-bundle.json"), key=lambda path: path.name)
+        removed = 0
+        for path in bundles[:-max(1, keep)]:
+            try:
+                path.unlink()
+            except OSError:
+                continue
+            removed += 1
+        return removed
 
     def load(self, path: Path) -> EvidenceBundle | None:
         """Load an evidence bundle from disk.
@@ -120,6 +146,24 @@ def _dict_to_dataclass(cls: type[T], data: dict[str, Any]) -> T:
         field_type = type_hints.get(name, field.type)
         converted[name] = _convert_value(data[name], field_type)
     return cls(**converted)
+
+
+def _sanitize_value(value: Any, *, key: str = "") -> Any:
+    """Bound persisted output and redact common credential-shaped values."""
+    if isinstance(value, str):
+        if key and _SECRET_KEY.search(key):
+            return "<redacted>"
+        redacted = _SECRET_ASSIGNMENT.sub(r"\1<redacted>", value)
+        if len(redacted) <= _MAX_PERSISTED_TEXT:
+            return redacted
+        return f"{redacted[:_MAX_PERSISTED_TEXT]}... [truncated]"
+    if isinstance(value, dict):
+        return {str(name): _sanitize_value(item, key=str(name)) for name, item in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_sanitize_value(item) for item in value]
+    return value
 
 
 def _convert_value(value: Any, field_type: Any) -> Any:

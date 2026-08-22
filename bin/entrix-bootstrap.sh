@@ -36,11 +36,21 @@ case "$system_name:$machine_name" in
 esac
 
 asset="entrix-${version}-${target}"
-cache_home="${XDG_CACHE_HOME:-${HOME:-}/.cache}"
-[ -n "$cache_home" ] || die "cannot determine a cache directory"
+if [ -n "${XDG_CACHE_HOME:-}" ]; then
+  cache_home="$XDG_CACHE_HOME"
+elif [ -n "${HOME:-}" ]; then
+  cache_home="$HOME/.cache"
+else
+  die "cannot determine a cache directory"
+fi
 cache_dir="$cache_home/entrix/bin/$version/$target"
 cached_binary="$cache_dir/$asset"
 cached_checksum="$cached_binary.sha256"
+cached_checksum_signature="$cached_checksum.sig"
+cached_manifest="$cache_dir/release-manifest.json"
+cached_manifest_signature="$cached_manifest.sig"
+public_key="$plugin_root/security/release-public-key.pem"
+[ -f "$public_key" ] || die "release public key is missing: $public_key"
 mkdir -p "$cache_dir" || die "cannot create cache directory: $cache_dir"
 
 hash_file() {
@@ -55,12 +65,37 @@ hash_file() {
   return 1
 }
 
+verify_signature() {
+  file="$1"
+  signature="$2"
+  if command -v node >/dev/null 2>&1 && [ -f "$plugin_root/bin/verify-release-signature.mjs" ]; then
+    node "$plugin_root/bin/verify-release-signature.mjs" "$public_key" "$file" "$signature" >/dev/null 2>&1
+    return
+  fi
+  if command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha256 -verify "$public_key" -signature "$signature" "$file" >/dev/null 2>&1
+    return
+  fi
+  return 1
+}
+
+verify_manifest() {
+  [ -f "$plugin_root/bin/verify-release-manifest.mjs" ] || return 1
+  command -v node >/dev/null 2>&1 || return 1
+  node "$plugin_root/bin/verify-release-manifest.mjs" "$@" >/dev/null 2>&1
+}
+
 valid_cache() {
   [ -f "$cached_binary" ] && [ -f "$cached_checksum" ] || return 1
+  [ -f "$cached_checksum_signature" ] && [ -f "$cached_manifest" ] || return 1
+  [ -f "$cached_manifest_signature" ] || return 1
   expected="$(awk 'NF { print $1; exit }' "$cached_checksum" 2>/dev/null || true)"
   [ "${#expected}" -eq 64 ] || return 1
   actual="$(hash_file "$cached_binary" 2>/dev/null || true)"
-  [ "$actual" = "$expected" ]
+  [ "$actual" = "$expected" ] || return 1
+  verify_signature "$cached_manifest" "$cached_manifest_signature" || return 1
+  verify_signature "$cached_checksum" "$cached_checksum_signature" || return 1
+  verify_manifest "$cached_manifest" "$version" "$target" "$asset" "$expected"
 }
 
 if valid_cache; then
@@ -114,16 +149,25 @@ download_dir="$(mktemp -d "$cache_dir/.download.XXXXXX" 2>/dev/null || true)"
 [ -n "$download_dir" ] && [ -d "$download_dir" ] || die "cannot create download temp directory"
 binary_tmp="$download_dir/$asset"
 checksum_tmp="$download_dir/$asset.sha256"
+checksum_signature_tmp="$checksum_tmp.sig"
+manifest_tmp="$download_dir/release-manifest.json"
+manifest_signature_tmp="$manifest_tmp.sig"
 
 download() {
   url="$1"
   destination="$2"
+  download_timeout="${ENTRIX_DOWNLOAD_TIMEOUT_SECONDS:-120}"
+  case "$download_timeout" in
+    ''|*[!0-9]*|0) die "ENTRIX_DOWNLOAD_TIMEOUT_SECONDS must be a positive integer" ;;
+  esac
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$url" -o "$destination"
+    curl --fail --silent --show-error --location \
+      --connect-timeout 10 --max-time "$download_timeout" \
+      --retry 2 --retry-delay 1 "$url" -o "$destination"
     return
   fi
   if command -v wget >/dev/null 2>&1; then
-    wget -q -O "$destination" "$url"
+    wget --quiet --timeout="$download_timeout" --tries=3 -O "$destination" "$url"
     return
   fi
   die "neither curl nor wget is available"
@@ -132,9 +176,16 @@ download() {
 echo "downloading $asset for $target" >&2
 download "$base_url/$asset" "$binary_tmp" || die "failed to download $asset"
 download "$base_url/$asset.sha256" "$checksum_tmp" || die "failed to download checksum for $asset"
+download "$base_url/$asset.sha256.sig" "$checksum_signature_tmp" || die "failed to download checksum signature for $asset"
+download "$base_url/release-manifest.json" "$manifest_tmp" || die "failed to download release manifest"
+download "$base_url/release-manifest.json.sig" "$manifest_signature_tmp" || die "failed to download release manifest signature"
+
+verify_signature "$manifest_tmp" "$manifest_signature_tmp" || die "release manifest signature verification failed"
+verify_signature "$checksum_tmp" "$checksum_signature_tmp" || die "checksum signature verification failed"
 
 expected="$(awk 'NF { print $1; exit }' "$checksum_tmp" 2>/dev/null || true)"
 [ "${#expected}" -eq 64 ] || die "invalid SHA-256 file for $asset"
+verify_manifest "$manifest_tmp" "$version" "$target" "$asset" "$expected" || die "release manifest asset mismatch"
 actual="$(hash_file "$binary_tmp" 2>/dev/null || true)"
 [ -n "$actual" ] || die "no SHA-256 implementation available"
 [ "$actual" = "$expected" ] || die "SHA-256 verification failed for $asset"
@@ -142,5 +193,8 @@ actual="$(hash_file "$binary_tmp" 2>/dev/null || true)"
 chmod 755 "$binary_tmp" || die "cannot mark downloaded binary executable"
 mv "$binary_tmp" "$cached_binary" || die "cannot cache binary"
 mv "$checksum_tmp" "$cached_checksum" || die "cannot cache checksum"
+mv "$checksum_signature_tmp" "$cached_checksum_signature" || die "cannot cache checksum signature"
+mv "$manifest_tmp" "$cached_manifest" || die "cannot cache release manifest"
+mv "$manifest_signature_tmp" "$cached_manifest_signature" || die "cannot cache release manifest signature"
 release_lock
 exec "$cached_binary" "$@"

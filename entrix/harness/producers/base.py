@@ -1,6 +1,7 @@
 """Producer protocol and context."""
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 from entrix.harness.conditions import WhenContext
 from entrix.harness.evidence import Evidence
@@ -14,6 +15,7 @@ class ProducerContext:
     when_context: WhenContext
     attempt_id: str = "unknown"
     base_ref: str = "HEAD"
+    deadline: Optional[float] = None
 
 class Producer:
     """Evidence producer protocol.

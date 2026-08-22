@@ -132,6 +132,39 @@ def test_load_corrupt_json_returns_none(tmp_path: Path) -> None:
     assert result is None
 
 
+def test_save_redacts_and_truncates_command_output(tmp_path: Path) -> None:
+    bundle = EvidenceBundle(
+        task_id="redaction",
+        evidence=[
+            Evidence(
+                id="command",
+                status="fail",
+                raw={
+                    "stdout": "token=super-secret\n" + "x" * 5000,
+                    "password": "another-secret",
+                },
+            )
+        ],
+    )
+
+    path = EvidenceStore(tmp_path).save(bundle)
+    text = path.read_text(encoding="utf-8")
+
+    assert "super-secret" not in text
+    assert "another-secret" not in text
+    assert "[truncated]" in text
+
+
+def test_store_prunes_old_bundles(tmp_path: Path) -> None:
+    store = EvidenceStore(tmp_path)
+    for _ in range(3):
+        store.save(EvidenceBundle(task_id="retention", evidence=[]))
+
+    assert len(list((tmp_path / ".harness" / "evidence" / "retention").glob("*-bundle.json"))) == 3
+    assert store.prune("retention", keep=2) == 1
+    assert len(list((tmp_path / ".harness" / "evidence" / "retention").glob("*-bundle.json"))) == 2
+
+
 def test_store_does_not_leave_partial_bundle_when_replace_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -23,6 +23,22 @@ def test_default_harness_template_limits_producer_parallelism():
     assert {"entrix-fitness", "entrix-review-trigger", "diff-stats"} <= builtins
 
 
+def test_default_harness_template_uses_portable_check_commands():
+    config = default_harness_config()
+    commands = [
+        metric["command"]
+        for dimension in config["fitness"]["dimensions"]
+        for metric in dimension["metrics"]
+    ]
+
+    assert any("check_new_debug_prints.py" in command for command in commands)
+    assert any(command.startswith("python -m pytest") for command in commands)
+    assert any(command.startswith("python -m entrix") for command in commands)
+    assert any(command.startswith("python -m build") for command in commands)
+    assert all("python3" not in command for command in commands)
+    assert all("grep" not in command and "awk" not in command for command in commands)
+
+
 def test_render_default_harness_is_valid_yaml_with_one_trailing_newline():
     rendered = render_default_harness()
 

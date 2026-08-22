@@ -60,12 +60,20 @@ entrix phase implementation --repo .
 ```
 
 `entrix init` 会写入一次性初始化阶段，Stop Hook 消费该标记后放行当前回合。阶段状态保存在
-`.harness/runtime/phase.json`，属于短期运行时状态，不是 `harness.yaml` 中的永久豁免。没有
+独立 CLI 未指定 session 时使用 `.harness/runtime/phase.json`；Stop Hook 收到
+`session_id` 后使用用户级缓存中的 workspace/session 状态，属于短期运行时状态，不是 `harness.yaml` 中的永久豁免。没有
 阶段标记时，只有检测到工作区变更才进入门禁，兼容直接编辑项目的使用方式。
 
 阶段标记按工作区保存，默认有效 8 小时，不是 Claude 会话级锁。一个仓库存在并发会话时，
 后设置的阶段可能覆盖先设置的阶段；开始任何实现工作前都应显式执行
 `entrix phase implementation --repo .`，不要依赖遗留的 `planning` 标记。
+
+排查和恢复：
+
+- `entrix status --repo . --session-id <session-id>` 查看当前 phase、Harness trust 和缓存 verdict。
+- `entrix doctor --repo .` 检查配置、状态目录、Node.js、OpenSSL 和 MCP runtime。
+- `entrix stop-gate retry --repo . --session-id <session-id>` 删除当前 session 的缓存裁决，让下一次 Stop Gate 重新收集证据。
+- `entrix phase clear --repo . --session-id <session-id>` 同时清理 session phase 和旧版 workspace phase。
 
 唯一的紧急旁路是：
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,10 @@ from entrix.harness.evidence import Evidence, EvidenceBundle
 from entrix.harness.gate.arbiter import GateResult, Verdict, VerdictStatus
 
 FEEDBACK_SCHEMA_VERSION = "stop-gate-feedback/v1"
+_FEEDBACK_SECRET = re.compile(
+    r"(?i)(\b(?:password|passwd|secret|token|api[_-]?key|authorization)\b\s*[:=]\s*)([^\s,;]+)"
+)
+_FEEDBACK_TAIL = 1200
 
 
 @dataclass(frozen=True)
@@ -104,7 +109,7 @@ def _gate_to_dict(gate: GateResult) -> dict[str, Any]:
 def _evidence_to_dict(evidence: Evidence) -> dict[str, Any]:
     data = asdict(evidence)
     # 只保留对 Claude 修复有用的字段，避免 raw 过大
-    return {
+    result = {
         "id": data.get("id"),
         "type": data.get("type"),
         "name": data.get("name"),
@@ -113,6 +118,26 @@ def _evidence_to_dict(evidence: Evidence) -> dict[str, Any]:
         "summary": data.get("summary") or {},
         "artifacts": [_artifact_to_dict(a) for a in data.get("artifacts", [])],
     }
+    diagnostic = _diagnostic_to_dict(data.get("raw"))
+    if diagnostic:
+        result["diagnostic"] = diagnostic
+    return result
+
+
+def _diagnostic_to_dict(raw: object) -> dict[str, Any]:
+    """Return a small, redacted failure tail that Claude can act on directly."""
+    if not isinstance(raw, dict):
+        return {}
+    diagnostic: dict[str, Any] = {}
+    if "exit_code" in raw:
+        diagnostic["exit_code"] = raw["exit_code"]
+    for field in ("stdout", "stderr"):
+        value = raw.get(field)
+        if not isinstance(value, str) or not value:
+            continue
+        sanitized = _FEEDBACK_SECRET.sub(r"\1<redacted>", value)
+        diagnostic[f"{field}_tail"] = sanitized[-_FEEDBACK_TAIL:]
+    return diagnostic
 
 
 def _artifact_to_dict(artifact: dict[str, Any]) -> dict[str, Any]:

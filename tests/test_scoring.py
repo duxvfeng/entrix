@@ -76,7 +76,7 @@ def test_score_report_score_blocked():
     assert report.score_blocked is True
 
 
-def test_score_dimension_ignores_unknown_and_skipped():
+def test_score_dimension_counts_unknown_as_untrusted_result():
     results = [
         MetricResult(metric_name="pass", passed=True, output="", tier=Tier.FAST),
         MetricResult(
@@ -96,8 +96,27 @@ def test_score_dimension_ignores_unknown_and_skipped():
     ]
     ds = score_dimension(results, "quality", 100)
     assert ds.passed == 1
-    assert ds.total == 1
-    assert ds.score == 100.0
+    assert ds.total == 2
+    assert ds.score == 50.0
+
+
+def test_score_dimension_blocks_unknown_hard_gate():
+    ds = score_dimension(
+        [
+            MetricResult(
+                metric_name="checker",
+                passed=False,
+                output="checker crashed",
+                tier=Tier.FAST,
+                hard_gate=True,
+                state=ResultState.UNKNOWN,
+            )
+        ],
+        "quality",
+        100,
+    )
+
+    assert ds.hard_gate_failures == ["checker"]
 
 
 def test_score_dimension_counts_waived_as_pass():

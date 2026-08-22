@@ -11,7 +11,7 @@ const commandArgs = isWindows
   : [path.join(scriptDir, scriptName)];
 
 const result = spawnSync(command, [...commandArgs, ...process.argv.slice(2)], {
-  env: process.env,
+  env: { ...process.env, ENTRIX_PLUGIN_MODE: "1" },
   stdio: "inherit",
 });
 

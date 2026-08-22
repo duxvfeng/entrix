@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 TARGETS = {
@@ -79,12 +80,37 @@ def _write_sha256_sidecar(path: Path, digest: str) -> None:
     path.with_name(path.name + ".sha256").write_text(f"{digest}  {path.name}\n", encoding="ascii")
 
 
+def _sign_file(path: Path, signing_key: Path) -> None:
+    """Create an OpenSSL SHA-256 detached signature for one release file."""
+    signature_path = path.with_name(path.name + ".sig")
+    subprocess.run(
+        [
+            "openssl",
+            "dgst",
+            "-sha256",
+            "-sign",
+            str(signing_key),
+            "-out",
+            str(signature_path),
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True)
     parser.add_argument("--repository", required=True)
     parser.add_argument("--input-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--signing-key",
+        type=Path,
+        help="Optional RSA private key used to sign the manifest and checksum sidecars.",
+    )
     return parser.parse_args()
 
 
@@ -107,6 +133,12 @@ def main() -> int:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    if args.signing_key is not None:
+        if not args.signing_key.is_file():
+            raise SystemExit(f"signing key does not exist: {args.signing_key}")
+        _sign_file(args.output, args.signing_key)
+        for asset in manifest["assets"]:
+            _sign_file(args.input_dir / f"{asset['filename']}.sha256", args.signing_key)
     return 0
 
 

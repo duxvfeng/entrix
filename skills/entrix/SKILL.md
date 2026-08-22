@@ -39,6 +39,21 @@ license: MIT
 --json                         # 输出 JSON 格式
 ```
 
+在 Marketplace 插件中，以上命令由插件目录里的 Node 启动器执行，不依赖用户的
+`PATH` 或 Python 环境。需要实际执行时使用：
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/bin/entrix-bootstrap.mjs" init --repo .
+node "${CLAUDE_PLUGIN_ROOT}/bin/entrix-bootstrap.mjs" trust --repo .
+node "${CLAUDE_PLUGIN_ROOT}/bin/entrix-bootstrap.mjs" run --repo .
+node "${CLAUDE_PLUGIN_ROOT}/bin/entrix-bootstrap.mjs" phase implementation --repo .
+```
+
+Marketplace 模式下 `init` 只创建或更新 `harness.yaml`；MCP 和 Stop Hook 已由
+`plugin.json` 注册，不要手工把第二个 Entrix server 写入 `.mcp.json`。独立 Python
+安装再使用 `entrix ...` 命令。打开已有仓库或修改 Harness 后，先检查配置并运行
+`trust`；未确认的配置不会在 Stop Hook 中自动执行命令。
+
 ## 可配置 Lint 系统
 
 Entrix 现在支持通过 YAML 配置文件自定义 lint 工具，而不是硬编码：
