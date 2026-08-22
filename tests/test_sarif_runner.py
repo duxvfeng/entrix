@@ -1,5 +1,6 @@
 """Tests for entrix.runners.sarif."""
 
+import sys
 from pathlib import Path
 
 from entrix.model import Metric, ResultState
@@ -93,9 +94,19 @@ def test_sarif_runner_returns_unknown_for_invalid_payload(tmp_path: Path):
 
 
 def test_sarif_runner_returns_unknown_when_command_fails(tmp_path: Path):
+    failing_command = tmp_path / "fail_sarif_command.py"
+    _write(
+        failing_command,
+        "import sys\n"
+        "sys.stderr.write('broken\\n')\n"
+        "sys.exit(2)\n",
+    )
     runner = SarifRunner(tmp_path)
     result = runner.run(
-        Metric(name="sarif_command_error", command="printf broken >&2; exit 2")
+        Metric(
+            name="sarif_command_error",
+            command=f'"{sys.executable}" "{failing_command}"',
+        )
     )
 
     assert result.passed is False

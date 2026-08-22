@@ -47,6 +47,17 @@ def test_single_remote_tasks_use_expected_push_commands() -> None:
     ]
 
 
+def test_tag_tasks_use_the_selected_python_interpreter() -> None:
+    tasks = {task["label"]: task for task in _tasks()}
+
+    for label in (
+        "Git: 推送当前 tag 到 GitHub",
+        "Git: 推送当前 tag 到 Gitee",
+    ):
+        assert tasks[label]["type"] == "process"
+        assert tasks[label]["command"] == "${command:python.interpreterPath}"
+
+
 def test_combined_tasks_run_single_remote_tasks_in_sequence() -> None:
     tasks = {task["label"]: task for task in _tasks()}
 
