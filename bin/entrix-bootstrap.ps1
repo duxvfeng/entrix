@@ -65,6 +65,13 @@ function Test-Cache([string] $BinaryPath, [string] $ChecksumPath, [string] $Chec
     }
 }
 
+function Install-CacheFile([string] $Source, [string] $Destination) {
+    if (Test-Path -LiteralPath $Destination) {
+        Remove-Item -LiteralPath $Destination -Recurse -Force -ErrorAction Stop
+    }
+    Move-Item -LiteralPath $Source -Destination $Destination -Force -ErrorAction Stop
+}
+
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $pluginRoot = $env:CLAUDE_PLUGIN_ROOT
 if ([string]::IsNullOrWhiteSpace($pluginRoot)) {
@@ -276,11 +283,11 @@ try {
         if ((Get-Sha256 $binaryTemp) -ne $expected) {
             Fail "SHA-256 verification failed for $asset"
         }
-        Move-Item -LiteralPath $binaryTemp -Destination $cachedBinary -Force
-        Move-Item -LiteralPath $checksumTemp -Destination $cachedChecksum -Force
-        Move-Item -LiteralPath $checksumSignatureTemp -Destination $cachedChecksumSignature -Force
-        Move-Item -LiteralPath $manifestTemp -Destination $cachedManifest -Force
-        Move-Item -LiteralPath $manifestSignatureTemp -Destination $cachedManifestSignature -Force
+        Install-CacheFile $binaryTemp $cachedBinary
+        Install-CacheFile $checksumTemp $cachedChecksum
+        Install-CacheFile $checksumSignatureTemp $cachedChecksumSignature
+        Install-CacheFile $manifestTemp $cachedManifest
+        Install-CacheFile $manifestSignatureTemp $cachedManifestSignature
     } finally {
         if (Test-Path -LiteralPath $downloadDir) {
             Remove-Item -LiteralPath $downloadDir -Recurse -Force -ErrorAction SilentlyContinue

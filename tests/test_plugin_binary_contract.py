@@ -497,6 +497,15 @@ def test_windows_launcher_contract() -> None:
     assert "entrix-bootstrap.ps1" in entrypoint
 
 
+def test_windows_launcher_replaces_existing_cache_files_before_install() -> None:
+    bootstrap = WINDOWS_BOOTSTRAP.read_text(encoding="utf-8")
+
+    assert "function Install-CacheFile" in bootstrap
+    assert "Remove-Item -LiteralPath $Destination -Recurse -Force -ErrorAction Stop" in bootstrap
+    assert "Move-Item -LiteralPath $Source -Destination $Destination -Force -ErrorAction Stop" in bootstrap
+    assert bootstrap.count("Install-CacheFile ") == 5
+
+
 def test_bootstraps_define_explicit_quality_fallback_contract() -> None:
     """Both platform launchers expose the same cache-lock quality fallback."""
     unix_bootstrap = UNIX_BOOTSTRAP.read_text(encoding="utf-8")
