@@ -8,7 +8,7 @@ import subprocess
 import sys
 from collections.abc import Sequence
 
-SUPPORTED_REMOTES = frozenset({"github", "origin"})
+SUPPORTED_REMOTES = frozenset({"github", "dxf"})
 
 
 def _run_git(args: list[str]) -> subprocess.CompletedProcess[str]:
