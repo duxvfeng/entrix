@@ -307,6 +307,7 @@ def test_unix_launcher_rejects_invalid_release_signature(tmp_path: Path) -> None
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash is unavailable")
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix launcher tests not supported on Windows")
 def test_unix_launcher_runs_configured_quality_command_when_cache_lock_times_out(tmp_path: Path) -> None:
     """Stop Gate can use an explicit project quality command during cache outage."""
     bash = shutil.which("bash")
@@ -352,6 +353,7 @@ def test_unix_launcher_runs_configured_quality_command_when_cache_lock_times_out
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash is unavailable")
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix launcher tests not supported on Windows")
 def test_unix_launcher_does_not_use_quality_fallback_for_other_commands(tmp_path: Path) -> None:
     """The fallback must remain limited to Stop Gate execution."""
     bash = shutil.which("bash")
@@ -385,6 +387,7 @@ def test_unix_launcher_does_not_use_quality_fallback_for_other_commands(tmp_path
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash is unavailable")
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix launcher tests not supported on Windows")
 def test_unix_launcher_preserves_quality_command_failure(tmp_path: Path) -> None:
     """A failed fallback quality command must remain a failed quality result."""
     bash = shutil.which("bash")
