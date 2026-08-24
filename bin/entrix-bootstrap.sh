@@ -175,6 +175,11 @@ for _attempt in $(seq 1 "$lock_attempts"); do
     stale_lock_dir="$cache_dir/.lock-stale-$$-$_attempt"
     if mv "$lock_dir" "$stale_lock_dir" 2>/dev/null; then
       rm -rf "$stale_lock_dir" 2>/dev/null || true
+      if mkdir "$lock_dir" 2>/dev/null; then
+        lock_acquired=1
+        printf '%s\n' "$$" > "$lock_owner" || die "cannot record cache lock owner"
+        break
+      fi
     fi
     continue
   fi
