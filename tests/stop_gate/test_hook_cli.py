@@ -456,10 +456,10 @@ class TestRunStopGateHook:
         assert out == ""
 
     @pytest.mark.parametrize("status", ["fail", "blocked"])
-    def test_stop_hook_active_reuses_failure_until_workspace_changes(
+    def test_stop_hook_active_allows_stop_after_previous_failure(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, status: str
     ) -> None:
-        """失败后不变更工作区时必须重用裁决，不能重新启动 Harness。"""
+        """Claude 重试 Stop hook 时必须放行，避免无限阻断循环。"""
         (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
         calls = []
 
@@ -487,8 +487,7 @@ class TestRunStopGateHook:
         assert first_rc == 0
         assert json.loads(first_out)["decision"] == "block"
         assert second_rc == 0
-        assert json.loads(second_out)["decision"] == "block"
-        assert "未检测到代码变更" in json.loads(second_out)["reason"]
+        assert second_out == ""
         assert calls == ["run"]
 
     def test_unmodified_workspace_preserves_cached_failure_after_implementation(

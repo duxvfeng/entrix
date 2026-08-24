@@ -7,8 +7,8 @@
 - 放行：退出码 0 且不产生 stdout。
 - 阻断：退出码 0，stdout 输出 ``{"decision": "block", "reason": "..."}``，
   ``reason`` 会回传给 Claude 使其继续修复。
-- ``stop_hook_active`` 为真时也必须保留门禁：相同工作区快照重用上次
-  裁决，工作区变更后重新收集证据。
+- ``stop_hook_active`` 为真时直接放行，避免 Claude 在 Stop hook 重试时
+  进入无限阻断循环。
 
 安全阀：
 
@@ -398,6 +398,11 @@ def run_stop_gate_hook(
         return 0
 
     payload = read_hook_payload(input_stream)
+    # Claude sets this flag when it is already continuing because a Stop hook
+    # blocked the previous turn. Blocking again would create an infinite loop.
+    if payload.get("stop_hook_active") is True:
+        return 0
+
     workspace = Path(payload.get("cwd") or os.getcwd()).resolve()
     harness_config = find_harness_config(workspace)
     if harness_config is None:
