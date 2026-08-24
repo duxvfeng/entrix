@@ -1,3 +1,11 @@
+# 当前设计
+
+- [会话感知 Stop Gate 生命周期设计（2026-08-24）](superpowers/specs/2026-08-24-session-aware-stop-gate-lifecycle-design.md)
+
+该设计是当前 Stop Gate 优化工作的实施依据。下方内容为已完成或历史设计，保留用于追溯。
+
+---
+
 # Entrix Harness/Stop Gate 修复设计
 
 ## 目标
