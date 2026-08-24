@@ -145,13 +145,61 @@ $cachedManifestSignature = "$cachedManifest.sig"
 New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
 
 $lockDir = Join-Path $cacheDir ".lock"
+$lockOwnerPath = Join-Path $lockDir "owner.pid"
 $lockAcquired = $false
-for ($attempt = 0; $attempt -lt 120; $attempt++) {
+$lockAttempts = 120
+if (-not [string]::IsNullOrWhiteSpace($env:ENTRIX_BOOTSTRAP_LOCK_ATTEMPTS)) {
+    if (-not [int]::TryParse($env:ENTRIX_BOOTSTRAP_LOCK_ATTEMPTS, [ref] $lockAttempts) -or $lockAttempts -le 0) {
+        Fail "ENTRIX_BOOTSTRAP_LOCK_ATTEMPTS must be a positive integer"
+    }
+}
+$staleLockSeconds = 900
+if (-not [string]::IsNullOrWhiteSpace($env:ENTRIX_BOOTSTRAP_STALE_LOCK_SECONDS)) {
+    if (-not [int]::TryParse($env:ENTRIX_BOOTSTRAP_STALE_LOCK_SECONDS, [ref] $staleLockSeconds) -or $staleLockSeconds -le 0) {
+        Fail "ENTRIX_BOOTSTRAP_STALE_LOCK_SECONDS must be a positive integer"
+    }
+}
+function Test-ProcessAlive([int] $ProcessId) {
+    try {
+        Get-Process -Id $ProcessId -ErrorAction Stop | Out-Null
+        return $true
+    } catch {
+        return $false
+    }
+}
+function Test-StaleLock() {
+    if (Test-Path -LiteralPath $lockOwnerPath -PathType Leaf) {
+        try {
+            $ownerPid = 0
+            $ownerText = (Get-Content -LiteralPath $lockOwnerPath -Raw).Trim()
+            if (-not [int]::TryParse($ownerText, [ref] $ownerPid) -or $ownerPid -le 0) {
+                return $true
+            }
+            return -not (Test-ProcessAlive $ownerPid)
+        } catch {
+            return $true
+        }
+    }
+    try {
+        $lockItem = Get-Item -LiteralPath $lockDir -Force -ErrorAction Stop
+        return ((Get-Date).ToUniversalTime() - $lockItem.LastWriteTime.ToUniversalTime()).TotalSeconds -ge $staleLockSeconds
+    } catch {
+        return $false
+    }
+}
+for ($attempt = 0; $attempt -lt $lockAttempts; $attempt++) {
     try {
         New-Item -ItemType Directory -Path $lockDir -ErrorAction Stop | Out-Null
         $lockAcquired = $true
+        [System.IO.File]::WriteAllText($lockOwnerPath, "$PID`n")
         break
     } catch {
+        if (Test-StaleLock) {
+            $staleLockDir = Join-Path $cacheDir (".lock-stale-" + $PID + "-" + $attempt)
+            Move-Item -LiteralPath $lockDir -Destination $staleLockDir -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $staleLockDir -Recurse -Force -ErrorAction SilentlyContinue
+            continue
+        }
         if (Test-Cache $cachedBinary $cachedChecksum $cachedChecksumSignature $cachedManifest $cachedManifestSignature) {
             & $cachedBinary @EntrixArgs
             exit $LASTEXITCODE
@@ -160,11 +208,21 @@ for ($attempt = 0; $attempt -lt 120; $attempt++) {
     }
 }
 if (-not $lockAcquired) {
+    if ($EntrixArgs.Count -gt 0 -and $EntrixArgs[0] -eq "stop-gate" -and
+        -not [string]::IsNullOrWhiteSpace($env:ENTRIX_BOOTSTRAP_FALLBACK_COMMAND)) {
+        [Console]::Error.WriteLine("entrix bootstrap: cache lock unavailable; running configured quality command")
+        Invoke-Expression $env:ENTRIX_BOOTSTRAP_FALLBACK_COMMAND
+        if ($LASTEXITCODE -is [int]) {
+            exit $LASTEXITCODE
+        }
+        exit $(if ($?) { 0 } else { 1 })
+    }
     Fail "timed out waiting for cache lock"
 }
 
 try {
     if (Test-Cache $cachedBinary $cachedChecksum $cachedChecksumSignature $cachedManifest $cachedManifestSignature) {
+        Remove-Item -LiteralPath $lockOwnerPath -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $lockDir -Force -ErrorAction SilentlyContinue
         $lockAcquired = $false
         & $cachedBinary @EntrixArgs
@@ -232,6 +290,7 @@ try {
     Fail $_.Exception.Message
 } finally {
     if ($lockAcquired -and (Test-Path -LiteralPath $lockDir)) {
+        Remove-Item -LiteralPath $lockOwnerPath -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $lockDir -Force -ErrorAction SilentlyContinue
     }
 }

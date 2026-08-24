@@ -66,6 +66,17 @@ chmod +x bin/entrix-bootstrap.sh
 # 或者使用管理员权限运行 Claude Code
 ```
 
+如果 Stop Hook 遇到缓存锁定超时，可以显式配置项目质量命令作为降级路径。命令只在
+`stop-gate` 缓存锁超时后执行，并且在当前项目目录运行；`serve`、下载失败和签名失败仍然保持失败关闭：
+
+```bash
+export ENTRIX_BOOTSTRAP_FALLBACK_COMMAND='mvn -B -T1 -DforkCount=1 -DreuseForks=true test'
+```
+
+通过 `ENTRIX_BOOTSTRAP_LOCK_ATTEMPTS` 调整锁等待次数，默认 120 次、每次 50ms。Bootstrap 会记录
+锁所有者；所有者已退出的残留锁会自动回收。没有所有者记录的旧锁默认保留 15 分钟后回收，
+可用 `ENTRIX_BOOTSTRAP_STALE_LOCK_SECONDS` 调整。
+
 ### 问题：Python 模块找不到
 
 **解决方案**：

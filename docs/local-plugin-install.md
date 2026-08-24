@@ -36,6 +36,15 @@ entrix --help
 `ENTRIX_RELEASE_REPOSITORY` / `ENTRIX_RELEASE_BASE_URL` 指向测试 Release；只有明确设置
 `ENTRIX_STOP_GATE_DISABLED=1` 才会绕过 Stop Gate。
 
+缓存锁定时，Stop Hook 可使用显式配置的项目质量命令继续检查。例如 Maven 项目可设置：
+
+```powershell
+$env:ENTRIX_BOOTSTRAP_FALLBACK_COMMAND = "mvn -B -T1 -DforkCount=1 -DreuseForks=true test"
+```
+
+该命令仅在 `stop-gate` 缓存锁等待超时后执行，且在当前项目目录运行；不会绕过下载、签名或其他命令的安全校验。
+Bootstrap 会记录锁所有者，异常退出留下的锁会自动回收；没有所有者记录的旧锁默认在 15 分钟后回收。
+
 ---
 
 ## 方式二：本地源码作为插件安装（推荐用于开发调试）

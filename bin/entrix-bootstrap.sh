@@ -8,6 +8,17 @@ die() {
   exit 1
 }
 
+run_quality_fallback() {
+  if [ "${1:-}" != "stop-gate" ]; then
+    return 1
+  fi
+  fallback_command="${ENTRIX_BOOTSTRAP_FALLBACK_COMMAND:-}"
+  [ -n "$fallback_command" ] || return 1
+  echo "entrix bootstrap: cache lock unavailable; running configured quality command" >&2
+  sh -c "$fallback_command"
+  return $?
+}
+
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)" || die "cannot locate launcher directory"
 plugin_root="${CLAUDE_PLUGIN_ROOT:-$(CDPATH= cd -- "$script_dir/.." && pwd)}"
 
@@ -104,9 +115,11 @@ if valid_cache; then
 fi
 
 lock_dir="$cache_dir/.lock"
+lock_owner="$lock_dir/owner.pid"
 lock_acquired=0
 cleanup() {
   if [ "$lock_acquired" -eq 1 ]; then
+    rm -f "$lock_owner" 2>/dev/null || true
     rmdir "$lock_dir" 2>/dev/null || true
   fi
   if [ -n "${download_dir:-}" ]; then
@@ -117,15 +130,53 @@ trap cleanup EXIT INT TERM
 
 release_lock() {
   if [ "$lock_acquired" -eq 1 ]; then
+    rm -f "$lock_owner" 2>/dev/null || true
     rmdir "$lock_dir" 2>/dev/null || true
     lock_acquired=0
   fi
 }
 
-for _attempt in $(seq 1 120); do
+lock_attempts="${ENTRIX_BOOTSTRAP_LOCK_ATTEMPTS:-120}"
+case "$lock_attempts" in
+  ''|*[!0-9]*|0) die "ENTRIX_BOOTSTRAP_LOCK_ATTEMPTS must be a positive integer" ;;
+esac
+stale_lock_seconds="${ENTRIX_BOOTSTRAP_STALE_LOCK_SECONDS:-900}"
+case "$stale_lock_seconds" in
+  ''|*[!0-9]*|0) die "ENTRIX_BOOTSTRAP_STALE_LOCK_SECONDS must be a positive integer" ;;
+esac
+lock_is_stale() {
+  if [ -f "$lock_owner" ]; then
+    owner_pid="$(cat "$lock_owner" 2>/dev/null || true)"
+    case "$owner_pid" in
+      ''|*[!0-9]*) return 0 ;;
+    esac
+    kill -0 "$owner_pid" 2>/dev/null && return 1
+    return 0
+  fi
+
+  lock_mtime="$(stat -c %Y "$lock_dir" 2>/dev/null || stat -f %m "$lock_dir" 2>/dev/null || printf '0')"
+  current_time="$(date +%s)"
+  case "$lock_mtime" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  case "$current_time" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$lock_mtime" -gt 0 ] && [ "$((current_time - lock_mtime))" -ge "$stale_lock_seconds" ]
+}
+
+for _attempt in $(seq 1 "$lock_attempts"); do
   if mkdir "$lock_dir" 2>/dev/null; then
     lock_acquired=1
+    printf '%s\n' "$$" > "$lock_owner" || die "cannot record cache lock owner"
     break
+  fi
+  if lock_is_stale; then
+    stale_lock_dir="$cache_dir/.lock-stale-$$-$_attempt"
+    if mv "$lock_dir" "$stale_lock_dir" 2>/dev/null; then
+      rm -rf "$stale_lock_dir" 2>/dev/null || true
+    fi
+    continue
   fi
   if valid_cache; then
     chmod 755 "$cached_binary" || die "cannot mark cached binary executable"
@@ -134,7 +185,13 @@ for _attempt in $(seq 1 120); do
   fi
   sleep 0.05
 done
-[ "$lock_acquired" -eq 1 ] || die "timed out waiting for cache lock"
+if [ "$lock_acquired" -ne 1 ]; then
+  if [ "${1:-}" = "stop-gate" ] && [ -n "${ENTRIX_BOOTSTRAP_FALLBACK_COMMAND:-}" ]; then
+    run_quality_fallback "$@"
+    exit $?
+  fi
+  die "timed out waiting for cache lock"
+fi
 
 if valid_cache; then
   chmod 755 "$cached_binary" || die "cannot mark cached binary executable"

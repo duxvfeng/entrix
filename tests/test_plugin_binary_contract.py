@@ -9,6 +9,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
 from pathlib import Path
 
@@ -305,6 +306,160 @@ def test_unix_launcher_rejects_invalid_release_signature(tmp_path: Path) -> None
     assert not list((cache_home / "entrix" / "bin" / version).rglob("entrix-*"))
 
 
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash is unavailable")
+def test_unix_launcher_runs_configured_quality_command_when_cache_lock_times_out(tmp_path: Path) -> None:
+    """Stop Gate can use an explicit project quality command during cache outage."""
+    bash = shutil.which("bash")
+    assert bash is not None
+    version = "9.9.12"
+    target = _host_target()
+    plugin_root, _private_key = _prepare_signed_plugin_root(tmp_path)
+    cache_dir = tmp_path / "cache" / "entrix" / "bin" / version / target
+    (cache_dir / ".lock").mkdir(parents=True)
+    marker = tmp_path / "maven-args.log"
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    fake_maven = fake_bin / "mvn"
+    fake_maven.write_text(
+        "#!/usr/bin/env bash\n"
+        f"printf '%s\\n' \"$*\" > {json.dumps(str(marker))}\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    _make_executable(fake_maven)
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "PATH": os.pathsep.join((str(fake_bin), environment.get("PATH", ""))),
+            "XDG_CACHE_HOME": str(tmp_path / "cache"),
+            "ENTRIX_BINARY_VERSION": version,
+            "ENTRIX_BOOTSTRAP_LOCK_ATTEMPTS": "1",
+            "ENTRIX_BOOTSTRAP_FALLBACK_COMMAND": "mvn -B -T1 -DskipTests validate",
+            "CLAUDE_PLUGIN_ROOT": str(plugin_root),
+        }
+    )
+
+    result = subprocess.run(
+        [bash, str(UNIX_BOOTSTRAP), "stop-gate"],
+        capture_output=True,
+        text=True,
+        env=environment,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert marker.read_text(encoding="utf-8").strip() == "-B -T1 -DskipTests validate"
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash is unavailable")
+def test_unix_launcher_does_not_use_quality_fallback_for_other_commands(tmp_path: Path) -> None:
+    """The fallback must remain limited to Stop Gate execution."""
+    bash = shutil.which("bash")
+    assert bash is not None
+    version = "9.9.13"
+    target = _host_target()
+    plugin_root, _private_key = _prepare_signed_plugin_root(tmp_path)
+    cache_dir = tmp_path / "cache" / "entrix" / "bin" / version / target
+    (cache_dir / ".lock").mkdir(parents=True)
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "XDG_CACHE_HOME": str(tmp_path / "cache"),
+            "ENTRIX_BINARY_VERSION": version,
+            "ENTRIX_BOOTSTRAP_LOCK_ATTEMPTS": "1",
+            "ENTRIX_BOOTSTRAP_FALLBACK_COMMAND": "false",
+            "CLAUDE_PLUGIN_ROOT": str(plugin_root),
+        }
+    )
+
+    result = subprocess.run(
+        [bash, str(UNIX_BOOTSTRAP), "serve"],
+        capture_output=True,
+        text=True,
+        env=environment,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "timed out waiting for cache lock" in result.stderr
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash is unavailable")
+def test_unix_launcher_preserves_quality_command_failure(tmp_path: Path) -> None:
+    """A failed fallback quality command must remain a failed quality result."""
+    bash = shutil.which("bash")
+    assert bash is not None
+    version = "9.9.14"
+    target = _host_target()
+    plugin_root, _private_key = _prepare_signed_plugin_root(tmp_path)
+    cache_dir = tmp_path / "cache" / "entrix" / "bin" / version / target
+    (cache_dir / ".lock").mkdir(parents=True)
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "XDG_CACHE_HOME": str(tmp_path / "cache"),
+            "ENTRIX_BINARY_VERSION": version,
+            "ENTRIX_BOOTSTRAP_LOCK_ATTEMPTS": "1",
+            "ENTRIX_BOOTSTRAP_FALLBACK_COMMAND": "exit 7",
+            "CLAUDE_PLUGIN_ROOT": str(plugin_root),
+        }
+    )
+
+    result = subprocess.run(
+        [bash, str(UNIX_BOOTSTRAP), "stop-gate"],
+        capture_output=True,
+        text=True,
+        env=environment,
+        check=False,
+    )
+
+    assert result.returncode == 7
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash is unavailable")
+@pytest.mark.skipif(shutil.which("openssl") is None, reason="OpenSSL is unavailable")
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix launcher tests not supported on Windows")
+def test_unix_launcher_reclaims_stale_cache_lock(tmp_path: Path) -> None:
+    """An abandoned lock must not prevent a later bootstrap from repairing its cache."""
+    bash = shutil.which("bash")
+    assert bash is not None
+    version = "9.9.16"
+    target = _host_target()
+    source_dir = tmp_path / "release"
+    source_dir.mkdir()
+    plugin_root, private_key = _prepare_signed_plugin_root(tmp_path)
+    _write_release_asset(source_dir, version, private_key=private_key, target=target)
+    fake_bin, _log_path = _write_fake_curl(tmp_path, source_dir)
+    cache_dir = tmp_path / "cache" / "entrix" / "bin" / version / target
+    lock_dir = cache_dir / ".lock"
+    lock_dir.mkdir(parents=True)
+    stale_time = time.time() - 3600
+    os.utime(lock_dir, (stale_time, stale_time))
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "PATH": os.pathsep.join((str(fake_bin), environment.get("PATH", ""))),
+            "XDG_CACHE_HOME": str(tmp_path / "cache"),
+            "ENTRIX_BINARY_VERSION": version,
+            "ENTRIX_RELEASE_BASE_URL": "https://release.invalid/assets",
+            "ENTRIX_BOOTSTRAP_LOCK_ATTEMPTS": "1",
+            "ENTRIX_BOOTSTRAP_STALE_LOCK_SECONDS": "60",
+            "CLAUDE_PLUGIN_ROOT": str(plugin_root),
+        }
+    )
+
+    result = subprocess.run(
+        [bash, str(UNIX_BOOTSTRAP), "serve"],
+        capture_output=True,
+        text=True,
+        env=environment,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == "fake-binary:serve"
+
+
 def test_unix_entrypoint_is_python_free() -> None:
     content = UNIX_ENTRYPOINT.read_text(encoding="utf-8")
     assert "python" not in content.lower()
@@ -337,6 +492,70 @@ def test_windows_launcher_contract() -> None:
     assert "Test-Manifest" in bootstrap
     assert "powershell.exe" in entrypoint
     assert "entrix-bootstrap.ps1" in entrypoint
+
+
+def test_bootstraps_define_explicit_quality_fallback_contract() -> None:
+    """Both platform launchers expose the same cache-lock quality fallback."""
+    unix_bootstrap = UNIX_BOOTSTRAP.read_text(encoding="utf-8")
+    windows_bootstrap = WINDOWS_BOOTSTRAP.read_text(encoding="utf-8")
+
+    for content in (unix_bootstrap, windows_bootstrap):
+        assert "ENTRIX_BOOTSTRAP_FALLBACK_COMMAND" in content
+        assert "ENTRIX_BOOTSTRAP_LOCK_ATTEMPTS" in content
+        assert "ENTRIX_BOOTSTRAP_STALE_LOCK_SECONDS" in content
+        assert "stop-gate" in content
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows launcher test")
+def test_windows_launcher_runs_configured_quality_command_when_cache_lock_times_out(tmp_path: Path) -> None:
+    """Windows Stop Gate can use an explicit project quality command during cache outage."""
+    powershell = shutil.which("powershell.exe")
+    assert powershell is not None
+    version = "9.9.15"
+    target = "windows-amd64"
+    plugin_root, _private_key = _prepare_signed_plugin_root(tmp_path)
+    cache_home = tmp_path / "cache"
+    cache_dir = cache_home / "entrix" / "bin" / version / target
+    (cache_dir / ".lock").mkdir(parents=True)
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    marker = tmp_path / "maven-args.log"
+    fake_maven = fake_bin / "mvn.cmd"
+    fake_maven.write_text(
+        f'@echo off\n>"{marker}" echo %*\nexit /b 0\n',
+        encoding="utf-8",
+    )
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "PATH": os.pathsep.join((str(fake_bin), environment.get("PATH", ""))),
+            "LOCALAPPDATA": str(cache_home),
+            "ENTRIX_BINARY_VERSION": version,
+            "ENTRIX_BOOTSTRAP_LOCK_ATTEMPTS": "1",
+            "ENTRIX_BOOTSTRAP_FALLBACK_COMMAND": "mvn -B -T1 -DskipTests validate",
+            "CLAUDE_PLUGIN_ROOT": str(plugin_root),
+        }
+    )
+
+    result = subprocess.run(
+        [
+            powershell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(WINDOWS_BOOTSTRAP),
+            "stop-gate",
+        ],
+        capture_output=True,
+        text=True,
+        env=environment,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert marker.read_text(encoding="utf-8").strip() == "-B -T1 -DskipTests validate"
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows launcher smoke test")
