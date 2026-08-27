@@ -76,6 +76,8 @@ class HarnessRunner:
                 bundle_path=bundle_path,
             )
         verdict = GateEngine(config.gate_policies).arbitrate(
-            bundle, harness_context.when_context
+            bundle,
+            harness_context.when_context,
+            failure_mode=config.failure_mode,
         )
         return RunResult(verdict=verdict, bundle=bundle, bundle_path=bundle_path)

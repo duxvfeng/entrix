@@ -290,3 +290,50 @@ def test_blocked_status_takes_priority_over_hard_failure() -> None:
     verdict = GateEngine(policies).arbitrate(bundle, WhenContext())
 
     assert verdict.status == VerdictStatus.BLOCKED
+
+
+def test_closed_mode_collection_errors_block():
+    """closed 模式下任何 producer 收集失败都必须 BLOCKED。"""
+    from entrix.harness.gate.arbiter import VerdictStatus as VS
+
+    bundle = EvidenceBundle(
+        task_id="task-1",
+        collection_errors=[{"producer_id": "diff-stats", "error": "boom"}],
+        evidence=[
+            Evidence(
+                id="test-1",
+                type="test",
+                name="测试",
+                status="pass",
+            )
+        ],
+    )
+    policy = GatePolicy(
+        name="测试通过",
+        severity=Severity.HARD,
+        rule=GateRule(name="规则", evidence_id="test-1", condition='status == "pass"'),
+    )
+
+    verdict = GateEngine([policy]).arbitrate(bundle, failure_mode="closed")
+
+    assert verdict.status == VerdictStatus.BLOCKED
+    assert "diff-stats" in verdict.summary
+
+
+def test_open_mode_ignores_collection_errors():
+    bundle = EvidenceBundle(
+        task_id="task-1",
+        collection_errors=[{"producer_id": "diff-stats", "error": "boom"}],
+        evidence=[
+            Evidence(id="test-1", type="test", name="测试", status="pass")
+        ],
+    )
+    policy = GatePolicy(
+        name="测试通过",
+        severity=Severity.HARD,
+        rule=GateRule(name="规则", evidence_id="test-1", condition='status == "pass"'),
+    )
+
+    verdict = GateEngine([policy]).arbitrate(bundle, failure_mode="open")
+
+    assert verdict.status == VerdictStatus.PASS

@@ -86,7 +86,7 @@ def test_run_metric_specific_timeout(tmp_path):
 
 
 def test_timeout_terminates_the_complete_process_tree(tmp_path, monkeypatch):
-    """A timeout must delegate cleanup to the process-tree terminator."""
+    """A timeout in the shared executor must delegate cleanup to the terminator."""
     process = type("Process", (), {"pid": 12345, "returncode": None})()
 
     def communicate(timeout=None):
@@ -104,8 +104,8 @@ def test_timeout_terminates_the_complete_process_tree(tmp_path, monkeypatch):
         lambda *args, **kwargs: (_ for _ in ()).throw(subprocess.TimeoutExpired("slow-command", 1)),
     )
     monkeypatch.setattr(
-        shell_module,
-        "_terminate_process_tree",
+        process_module,
+        "terminate_process_tree",
         lambda candidate: terminated.append(candidate),
         raising=False,
     )

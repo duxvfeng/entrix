@@ -87,6 +87,28 @@ def test_shell_script():
     print("✅ 修改 .sh -> 触发检查")
 
 
+def test_config_basename_substring_no_longer_matches():
+    """配置文件改为 basename 精确匹配 - 相似名不再误报"""
+    changed = ["docs/myproject.toml.bak"]
+    assert not has_code_change(changed)
+
+
+def test_json_suffix_still_triggers():
+    """.json 后缀保持触发（锁定行为不回退）"""
+    changed = ["docs/guide.json"]
+    assert has_code_change(changed)
+
+
+def test_plain_text_doc_does_not_trigger():
+    """普通文本文档不触发"""
+    assert not has_code_change(["notes.txt"])
+
+
+def test_markdown_in_docs_does_not_trigger():
+    """docs 下 markdown 保持不触发"""
+    assert not has_code_change(["docs/api.md"])
+
+
 if __name__ == "__main__":
     print("🧪 测试代码变更检测逻辑\n")
 

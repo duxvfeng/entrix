@@ -481,10 +481,12 @@ def _comment_review_warnings(
 
 def _count_file_commits(repo_root: Path, relative_path: str) -> int:
     result = subprocess.run(
-        ["git", "log", "--follow", "--format=%H", "--", relative_path],
+        ["git", "log", "--follow", "--format=%H", "-s", "--", relative_path],
         cwd=repo_root,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     if result.returncode != 0:
@@ -505,10 +507,15 @@ def _count_symbol_commits(
             "-L",
             f"{start_line},{end_line}:{relative_path}",
             "--format=%H",
+            # -L 默认会输出每条提交的补丁内容；补丁中可能包含任意字节，
+            # 在中文 Windows 上按系统编码解码会崩溃。只需要提交头。
+            "-s",
         ],
         cwd=repo_root,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     if result.returncode != 0:

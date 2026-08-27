@@ -10,7 +10,7 @@ from entrix.harness.evidence import Evidence
 from entrix.harness.parsers import get_parser
 from entrix.harness.parsers.base import ParserContext, collect_artifacts
 from entrix.harness.producers.base import Producer, ProducerContext
-from entrix.runners.process import process_group_kwargs, terminate_process_tree
+from entrix.runners.process import run_shell_command
 
 
 class CommandProducer(Producer):
@@ -44,43 +44,26 @@ class CommandProducer(Producer):
         )
 
         try:
-            # Execute command
+            # Execute command via the shared executor (uniform shell/env/timeout).
             assert self.config.command is not None
-            start_time = time.time()
-            process = subprocess.Popen(
-                self.config.command,
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                cwd=context.repo_root,
-                **process_group_kwargs(),
-            )
             timeout = float(self.config.timeout_seconds)
             if context.deadline is not None:
                 timeout = min(timeout, context.deadline - time.monotonic())
                 if timeout <= 0:
                     raise subprocess.TimeoutExpired(self.config.command, timeout)
-            try:
-                stdout, stderr = process.communicate(timeout=timeout)
-            except subprocess.TimeoutExpired:
-                terminate_process_tree(process)
-                try:
-                    process.communicate(timeout=1)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    try:
-                        process.communicate(timeout=1)
-                    except subprocess.TimeoutExpired:
-                        pass
-                raise
-            duration_ms = int((time.time() - start_time) * 1000)
-            evidence.duration_ms = duration_ms
+            outcome = run_shell_command(
+                self.config.command,
+                cwd=context.repo_root,
+                timeout_seconds=timeout,
+            )
+            evidence.duration_ms = int(outcome.duration_ms)
+            if outcome.timed_out:
+                raise subprocess.TimeoutExpired(self.config.command, timeout)
             result = subprocess.CompletedProcess(
                 self.config.command,
-                process.returncode,
-                stdout,
-                stderr,
+                outcome.returncode,
+                outcome.stdout,
+                outcome.stderr,
             )
 
             parser = get_parser(str(self.parser_type))

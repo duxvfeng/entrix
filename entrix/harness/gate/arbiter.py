@@ -51,12 +51,18 @@ class GateEngine:
         self.policies = policies
 
     def arbitrate(
-        self, bundle: EvidenceBundle, when_context: WhenContext | None = None
+        self,
+        bundle: EvidenceBundle,
+        when_context: WhenContext | None = None,
+        *,
+        failure_mode: str = "closed",
     ) -> Verdict:
         """Evaluate all gate policies against the evidence bundle.
 
         Args:
             bundle: Evidence bundle to evaluate
+            when_context: Optional when-condition context
+            failure_mode: ``closed`` blocks on any producer collection error
 
         Returns:
             Verdict containing overall status and individual gate results
@@ -65,6 +71,17 @@ class GateEngine:
             return Verdict(
                 status=VerdictStatus.PASS,
                 summary="Harness inactive for current context",
+            )
+
+        if failure_mode == "closed" and bundle.collection_errors:
+            failed_ids = ", ".join(
+                str(error.get("producer_id", "unknown"))
+                for error in bundle.collection_errors
+            )
+            return Verdict(
+                status=VerdictStatus.BLOCKED,
+                gate_results=[],
+                summary=f"证据收集失败（closed 模式阻断）：{failed_ids}",
             )
 
         context = when_context or WhenContext()

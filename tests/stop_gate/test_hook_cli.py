@@ -134,13 +134,14 @@ class TestReadHookPayload:
         assert payload == {"session_id": "s1"}
 
     def test_empty_stdin(self):
-        assert read_hook_payload(io.StringIO("")) == {}
+        assert read_hook_payload(io.StringIO("")) is None
 
     def test_invalid_json(self):
-        assert read_hook_payload(io.StringIO("not json")) == {}
+        assert read_hook_payload(io.StringIO("not json")) is None
 
-    def test_non_dict_payload(self):
-        assert read_hook_payload(io.StringIO('["list"]')) == {}
+    @pytest.mark.parametrize("raw", ['["list"]', '"string"', "null", "42"])
+    def test_non_dict_payload(self, raw: str):
+        assert read_hook_payload(io.StringIO(raw)) is None
 
 
 class TestHarnessConfigDiscovery:
@@ -718,16 +719,46 @@ class TestRunStopGateHook:
 
         assert calls == ["run", "run"]
 
-    def test_env_var_disables_gate(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    @pytest.mark.parametrize("value", ["1", "true", "TRUE", " yes ", "on"])
+    def test_env_var_disables_gate_for_explicit_true_values(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        value: str,
     ) -> None:
         (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
-        monkeypatch.setenv("ENTRIX_STOP_GATE_DISABLED", "1")
+        monkeypatch.setenv("ENTRIX_STOP_GATE_DISABLED", value)
         payload = {"session_id": "s1", "cwd": str(tmp_path), "hook_event_name": "Stop"}
         rc, out = _run(payload, tmp_path, monkeypatch)
         assert rc == 0
         assert out == ""
         assert "disabled" in capsys.readouterr().err.lower()
+
+    @pytest.mark.parametrize("value", ["0", "false", "FALSE", " off ", "random"])
+    def test_env_var_does_not_disable_gate_for_false_values(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
+        calls: list[str] = []
+
+        class Runner:
+            def __init__(self, _path, **_kwargs):
+                calls.append("constructed")
+
+            def run(self, _context):
+                calls.append("run")
+                return RunResult(
+                    verdict=type("Verdict", (), {"status": "pass", "summary": "ok"})()
+                )
+
+        monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
+        monkeypatch.setenv("ENTRIX_STOP_GATE_DISABLED", value)
+        payload = {"session_id": "s1", "cwd": str(tmp_path), "hook_event_name": "Stop"}
+        rc, out = _run(payload, tmp_path, monkeypatch)
+        assert rc == 0
+        assert out == ""
+        assert calls == ["constructed", "run"]
 
     def test_block_on_hard_gate_failure(self, tmp_path: Path, monkeypatch):
         (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
@@ -752,17 +783,58 @@ class TestRunStopGateHook:
         assert decision["decision"] == "block"
         assert decision["reason"]
 
-    def test_invalid_stdin_falls_back_to_cwd(self, tmp_path: Path, monkeypatch):
-        """损坏的 stdin 按空载荷处理，未配置仓库直接放行。"""
-        rc, out = _run("not-json", tmp_path, monkeypatch)
-        assert rc == 0
-        assert out == ""
+    @pytest.mark.parametrize("payload", ["not-json", ""])
+    def test_invalid_stdin_blocks_without_running_runner(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, payload: str
+    ) -> None:
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
+        calls: list[str] = []
 
-    def test_missing_cwd_uses_process_cwd(self, tmp_path: Path, monkeypatch):
-        payload = {"session_id": "s1", "hook_event_name": "Stop"}
+        class Runner:
+            def __init__(self, _path, **_kwargs):
+                calls.append("constructed")
+
+        monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
         rc, out = _run(payload, tmp_path, monkeypatch)
         assert rc == 0
-        assert out == ""
+        assert json.loads(out)["decision"] == "block"
+        assert "载荷" in json.loads(out)["reason"]
+        assert calls == []
+
+    @pytest.mark.parametrize("cwd", [None, "", "   ", 123, "missing-workspace"])
+    def test_invalid_cwd_blocks_without_running_runner(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cwd: object
+    ) -> None:
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
+        calls: list[str] = []
+
+        class Runner:
+            def __init__(self, _path, **_kwargs):
+                calls.append("constructed")
+
+        monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
+        payload = {"session_id": "s1", "hook_event_name": "Stop", "cwd": cwd}
+        rc, out = _run(payload, tmp_path, monkeypatch)
+        assert rc == 0
+        assert json.loads(out)["decision"] == "block"
+        assert "cwd" in json.loads(out)["reason"]
+        assert calls == []
+
+    def test_empty_object_payload_blocks_without_running_runner(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
+        calls: list[str] = []
+
+        class Runner:
+            def __init__(self, _path, **_kwargs):
+                calls.append("constructed")
+
+        monkeypatch.setattr("entrix.stop_gate.runner.HarnessRunner", Runner)
+        rc, out = _run({}, tmp_path, monkeypatch)
+        assert rc == 0
+        assert json.loads(out)["decision"] == "block"
+        assert calls == []
 
 
 def test_main_blocks_unexpected_error_in_configured_workspace(
@@ -853,6 +925,31 @@ def test_shell_wrapper_blocks_when_no_runner_is_available(tmp_path: Path) -> Non
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash is unavailable")
+@pytest.mark.parametrize("value", ["0", "false", "FALSE", " off ", "random"])
+def test_shell_wrapper_does_not_bypass_false_values(tmp_path: Path, value: str) -> None:
+    bash = shutil.which("bash")
+    assert bash is not None
+    script = Path(__file__).parents[2] / "hooks" / "stop-gate.sh"
+    environment = os.environ.copy()
+    environment["PATH"] = str(tmp_path)
+    environment["ENTRIX_STOP_GATE_DISABLED"] = value
+
+    result = subprocess.run(
+        [bash, str(script)],
+        input="{}",
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        env=environment,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["decision"] == "block"
+    assert "disabled" not in result.stderr.lower()
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash is unavailable")
 def test_shell_wrapper_audits_explicit_disable(tmp_path: Path) -> None:
     bash = shutil.which("bash")
     assert bash is not None
@@ -874,3 +971,29 @@ def test_shell_wrapper_audits_explicit_disable(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert result.stdout == ""
     assert "disabled" in result.stderr.lower()
+
+
+class TestWhenEnvironmentFingerprint:
+    def test_fingerprint_changes_when_path_changes(self, tmp_path: Path, monkeypatch):
+        from entrix.stop_gate.hook import _when_environment_fingerprint
+
+        config = tmp_path / "harness.yaml"
+        config.write_text("version: harness/v1\n", encoding="utf-8")
+        monkeypatch.setenv("PATH", "/before")
+        before = _when_environment_fingerprint(config)
+        monkeypatch.setenv("PATH", "/after")
+        after = _when_environment_fingerprint(config)
+
+        assert before != after
+
+    def test_fingerprint_stable_across_unrelated_env(self, tmp_path: Path, monkeypatch):
+        from entrix.stop_gate.hook import _when_environment_fingerprint
+
+        config = tmp_path / "harness.yaml"
+        config.write_text("version: harness/v1\n", encoding="utf-8")
+        monkeypatch.setenv("ENTRIX_UNRELATED", "a")
+        before = _when_environment_fingerprint(config)
+        monkeypatch.setenv("ENTRIX_UNRELATED", "b")
+        after = _when_environment_fingerprint(config)
+
+        assert before == after

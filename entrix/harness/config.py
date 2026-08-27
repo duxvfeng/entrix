@@ -9,7 +9,7 @@ import yaml
 
 from entrix.harness.conditions import validate_when_config
 from entrix.harness.evidence import EVIDENCE_STATUSES
-from entrix.harness.fitness import parse_dimensions
+from entrix.harness.fitness import parse_dimensions, validate_weights
 from entrix.harness.gate.dsl import validate_condition_syntax
 from entrix.harness.gate.policy import GatePolicy, GateRule, Severity
 from entrix.model import Dimension
@@ -21,6 +21,18 @@ PARSER_TYPES = frozenset(
     {"exit_code", "regex", "junit", "json", "evidence_json", "sarif"}
 )
 SARIF_LEVELS = frozenset({"error", "warning", "note", "none"})
+REVIEW_RULE_TYPES = frozenset(
+    {
+        "changed_paths",
+        "sensitive_file_change",
+        "diff_size",
+        "directory_file_count",
+        "evidence_gap",
+        "cross_boundary_change",
+    }
+)
+REVIEW_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
+REVIEW_ACTIONS = frozenset({"require_human_review"})
 
 
 @dataclass
@@ -197,6 +209,68 @@ def _load_gate_policies(gates_data: Any) -> list[GatePolicy]:
     return policies
 
 
+def _validate_semantics(config: HarnessConfig) -> None:
+    """跨字段语义校验：权重、threshold、gate 引用与 review-trigger 规则。"""
+    # 仅当配置了 fitness 维度时才校验权重总和；
+    # 无维度（纯 producer+gate）的 Harness 是合法配置。
+    if config.fitness_dimensions:
+        valid, total = validate_weights(config.fitness_dimensions)
+        if not valid:
+            raise ValueError(f"fitness 维度权重总和必须为 100，当前为 {total}")
+
+    for index, dimension in enumerate(config.fitness_dimensions):
+        for field_name in ("threshold_pass", "threshold_warn"):
+            value = getattr(dimension, field_name)
+            if not 0 <= value <= 100:
+                raise ValueError(
+                    f"fitness.dimensions[{index}].{field_name} 必须在 0-100：{value}"
+                )
+        if dimension.threshold_pass < dimension.threshold_warn:
+            raise ValueError(
+                f"fitness.dimensions[{index}] 的 threshold.pass 必须 >= threshold.warn："
+                f"{dimension.name}"
+            )
+
+    producer_ids = {producer.id for producer in config.evidence_producers}
+    for index, policy in enumerate(config.gate_policies):
+        rule = policy.rule
+        if rule.evidence_id and rule.evidence_id not in producer_ids:
+            raise ValueError(
+                f"gate_policies[{index}] 引用了不存在的 evidence_id：{rule.evidence_id}"
+            )
+
+    for index, rule in enumerate(config.review_trigger_rules):
+        _validate_review_rule(rule, index)
+
+
+def _validate_review_rule(rule: ReviewTriggerRule, index: int) -> None:
+    """校验单条 review-trigger 规则的枚举与数值字段。"""
+    prefix = f"review_triggers.rules[{index}]"
+    if rule.type not in REVIEW_RULE_TYPES:
+        raise ValueError(
+            f"{prefix}.type 不受支持：{rule.type}。必须是以下之一：{sorted(REVIEW_RULE_TYPES)}"
+        )
+    if rule.severity not in REVIEW_SEVERITIES:
+        raise ValueError(
+            f"{prefix}.severity 不受支持：{rule.severity}。"
+            f"必须是以下之一：{sorted(REVIEW_SEVERITIES)}"
+        )
+    if rule.action not in REVIEW_ACTIONS:
+        raise ValueError(
+            f"{prefix}.action 不受支持：{rule.action}。必须是以下之一：{sorted(REVIEW_ACTIONS)}"
+        )
+    for field_name in ("paths", "directories", "evidence_paths"):
+        values = getattr(rule, field_name)
+        if any(not isinstance(value, str) or not value.strip() for value in values):
+            raise ValueError(f"{prefix}.{field_name} 必须是非空字符串列表")
+    for field_name in ("max_files", "max_added_lines", "max_deleted_lines"):
+        value = getattr(rule, field_name)
+        if value is not None and (not isinstance(value, int) or isinstance(value, bool) or value <= 0):
+            raise ValueError(f"{prefix}.{field_name} 必须是正整数：{value}")
+    if rule.min_boundaries < 1:
+        raise ValueError(f"{prefix}.min_boundaries 必须 >= 1")
+
+
 def load_harness_config(config_path: Path) -> HarnessConfig:
     """Load YAML and return a validated configuration with domain gate policies."""
     if not config_path.exists():
@@ -235,7 +309,7 @@ def load_harness_config(config_path: Path) -> HarnessConfig:
     if not policies:
         raise ValueError("gate_policies 至少需要一个 gate")
 
-    return HarnessConfig(
+    config = HarnessConfig(
         version=version,
         failure_mode=failure_mode,
         max_parallel_producers=max_parallel_producers,
@@ -245,3 +319,5 @@ def load_harness_config(config_path: Path) -> HarnessConfig:
         fitness_dimensions=dimensions,
         review_trigger_rules=review_rules,
     )
+    _validate_semantics(config)
+    return config

@@ -16,15 +16,15 @@ from threading import RLock
 
 from entrix import __version__ as PACKAGE_VERSION
 from entrix import cli_runtime as _cli_runtime
-from entrix.analysis.long_file import analyze_long_files
+from entrix.cli_analysis import cmd_analyze_long_file, cmd_hook_file_length
 from entrix.cli_hints import (
     HintingArgumentParser,
     print_next_steps,
     should_show_next_steps,
 )
 from entrix.cli_overview import print_command_overview, show_subgroup_help
+from entrix.cli_release import cmd_release_trigger
 from entrix.engine import collect_changed_files, run_fitness_report
-from entrix.file_budgets import evaluate_paths, is_tracked_source_file, load_config
 from entrix.governance import GovernancePolicy, StreamOutputMode, enforce
 from entrix.harness.conditions import WhenContext
 
@@ -45,11 +45,6 @@ from entrix.model import (
     Tier,
 )
 from entrix.presets import get_project_preset
-from entrix.release_trigger import (
-    evaluate_release_triggers,
-    load_release_manifest,
-    load_release_triggers,
-)
 from entrix.reporters.terminal import TerminalReporter
 from entrix.reporters.visual import AsciiReporter, RichLiveProgressReporter, RichReporter
 from entrix.reporting import report_to_dict, write_report_output
@@ -464,7 +459,9 @@ def cmd_harness_run(args: argparse.Namespace) -> int:
         # 仲裁门禁
         print("正在仲裁门禁...", file=sys.stderr)
         gate_engine = GateEngine(config.gate_policies)
-        verdict = gate_engine.arbitrate(bundle, context.when_context)
+        verdict = gate_engine.arbitrate(
+            bundle, context.when_context, failure_mode=config.failure_mode
+        )
 
         # 输出结果
         if args.json:
@@ -726,15 +723,6 @@ def _load_project_harness(
     return load_harness_config(selected_path)
 
 
-def _find_release_trigger_config(project_root: Path) -> Path:
-    """定位默认的 release-trigger config。"""
-    config_path = get_project_preset().release_trigger_config(project_root)
-    if not config_path.is_file():
-        print(f"错误: 在 {config_path} 未找到 release-trigger 配置")
-        sys.exit(1)
-    return config_path
-
-
 def _print_json(data: dict) -> None:
     print(json.dumps(data, indent=2, ensure_ascii=False))
 
@@ -829,132 +817,6 @@ def _print_graph_review_context(result: dict) -> None:
         for snippet in snippets[:10]:
             suffix = " (truncated)" if snippet.get("truncated") else ""
             print(f"  - {snippet['file_path']}{suffix}")
-
-
-def _format_line_span(item: dict) -> str:
-    return f"L{item['startLine']}-{item['endLine']}, {item['lineCount']}"
-
-
-def _format_compact_items(items: list[dict]) -> str:
-    return ", ".join(f"{item['name']} ({_format_line_span(item)})" for item in items)
-
-
-def _sort_structure_items(items: list[dict]) -> list[dict]:
-    return sorted(items, key=lambda item: (-item["lineCount"], item["startLine"], item["name"]))
-
-
-def _print_hook_long_file_summary(
-    result: dict,
-    *,
-    max_classes: int = 3,
-    max_methods_per_class: int = 4,
-    max_functions: int = 5,
-) -> None:
-    files = result.get("files", [])
-    if not files:
-        print("Structure summary unavailable: no supported files for structural analysis.")
-        return
-
-    print("Structure summary (tree-sitter symbols):")
-    for item in files:
-        file_path = item.get("filePath", "<unknown>")
-        if item.get("status") not in {None, "ok"}:
-            print(f"- {file_path}: {item.get('summary', 'analysis failed')}")
-            continue
-
-        print(f"- {file_path}")
-        classes = _sort_structure_items(item.get("classes", []))
-        functions = _sort_structure_items(item.get("functions", []))
-
-        if not classes and not functions:
-            print("  no class/function symbols found")
-            continue
-
-        for cls in classes[:max_classes]:
-            print(
-                f"  class {cls['name']} "
-                f"({_format_line_span(cls)}, methods={cls.get('methodCount', 0)})"
-            )
-            methods = _sort_structure_items(cls.get("methods", []))
-            for method in methods[:max_methods_per_class]:
-                print(f"    method {method['name']} ({_format_line_span(method)})")
-            remaining_methods = len(methods) - max_methods_per_class
-            if remaining_methods > 0:
-                print(f"    ... {remaining_methods} more method(s)")
-
-        remaining_classes = len(classes) - max_classes
-        if remaining_classes > 0:
-            print(f"  ... {remaining_classes} more class(es)")
-
-        if functions:
-            print(f"  functions: {_format_compact_items(functions[:max_functions])}")
-            remaining_functions = len(functions) - max_functions
-            if remaining_functions > 0:
-                print(f"  ... {remaining_functions} more function(s)")
-
-        warnings = item.get("warnings", [])
-        if warnings:
-            print(f"  review-warnings: {len(warnings)}")
-
-
-def _print_long_file_analysis(result: dict, *, min_lines: int = 60) -> None:
-    files = result.get("files", [])
-    if not files:
-        print("No oversized files detected.")
-        return
-    for item in files:
-        if item.get("status") not in {None, "ok"}:
-            print(f"{item['filePath']}: {item.get('summary', 'analysis failed')}")
-            continue
-        status_line = (
-            f"{item['filePath']} exceeds budget {item['budgetLimit']} with {item['lineCount']} lines"
-            if item.get("overBudget")
-            else f"{item['filePath']} has {item['lineCount']} lines (budget {item['budgetLimit']})"
-        )
-        print(status_line)
-        print(f"History: commits={item.get('commitCount', 0)}")
-        warnings = item.get("warnings", [])
-        if warnings:
-            print(f"Warnings: {len(warnings)}")
-            for warning in warnings:
-                print(
-                    "- review comments in "
-                    f"{warning['symbolKind']} {warning['name']} "
-                    f"({_format_line_span(warning)}) commits={warning['commitCount']} "
-                    f"comments={warning['commentCount']}"
-                )
-
-        classes = sorted(
-            item.get("classes", []),
-            key=lambda cls: (cls["startLine"], cls["name"]),
-        )
-        functions = sorted(
-            item.get("functions", []),
-            key=lambda fn: (fn["startLine"], fn["name"]),
-        )
-        print(f"Classes: {len(classes)}")
-        if classes:
-            for cls in classes:
-                print(f"- {cls['name']} ({_format_line_span(cls)})")
-        else:
-            print("- none")
-
-        print("")
-        print(f"Functions: {len(functions)}")
-        if not functions:
-            print("- none")
-            continue
-
-        large = [fn for fn in functions if fn["lineCount"] >= min_lines]
-        small = [fn for fn in functions if fn["lineCount"] <= 10]
-        medium = [fn for fn in functions if 10 < fn["lineCount"] < min_lines]
-
-        if small:
-            print(f"- Small helpers: {_format_compact_items(small)}")
-        if medium:
-            print(f"- Medium: {_format_compact_items(medium)}")
-        if large:
-            print(f"- Large: {_format_compact_items(large)}")
 
 
 def _print_review_trigger_report(report: dict) -> None:
@@ -1266,68 +1128,6 @@ def cmd_review_trigger(args: argparse.Namespace) -> int:
     return 0
 
 
-def _print_release_trigger_report(report: dict) -> None:
-    print("Release trigger report")
-    print(f"- blocked: {'yes' if report.get('blocked') else 'no'}")
-    print(
-        "- human review required: "
-        f"{'yes' if report.get('human_review_required') else 'no'}"
-    )
-    print(f"- manifest: {report.get('manifest_path')}")
-    if report.get("baseline_manifest_path"):
-        print(f"- baseline manifest: {report['baseline_manifest_path']}")
-    print(f"- artifacts: {len(report.get('artifacts', []))}")
-    print(f"- changed files: {len(report.get('changed_files', []))}")
-    triggers = report.get("triggers", [])
-    if not triggers:
-        print("- triggers: none")
-        return
-    print("- triggers:")
-    for trigger in triggers:
-        print(
-            f"  - {trigger['name']} [{trigger['severity']}] "
-            f"-> {trigger['action']}"
-        )
-        for reason in trigger.get("reasons", []):
-            print(f"    - {reason}")
-
-
-def cmd_release_trigger(args: argparse.Namespace) -> int:
-    """针对 release manifest 评估 release-trigger 规则。"""
-    project_root = _find_project_root()
-    config_path = Path(args.config).resolve() if args.config else _find_release_trigger_config(project_root)
-
-    rules = load_release_triggers(config_path)
-    manifest_path = Path(args.manifest).resolve()
-    manifest_label, artifacts = load_release_manifest(manifest_path)
-    baseline_artifacts = ()
-    baseline_manifest_label: str | None = None
-    if args.baseline_manifest:
-        baseline_manifest_path = Path(args.baseline_manifest).resolve()
-        baseline_manifest_label, baseline_artifacts = load_release_manifest(baseline_manifest_path)
-    changed_files = args.files or collect_review_changed_files(project_root, args.base)
-    report = evaluate_release_triggers(
-        rules,
-        artifacts,
-        manifest_path=manifest_label,
-        changed_files=changed_files,
-        baseline_artifacts=baseline_artifacts,
-        baseline_manifest_path=baseline_manifest_label,
-    )
-
-    if args.json:
-        _print_json(report.to_dict())
-    else:
-        _print_release_trigger_report(report.to_dict())
-
-    if args.fail_on_trigger:
-        if report.blocked:
-            return 4
-        if report.human_review_required:
-            return 3
-    return 0
-
-
 def cmd_graph_build(args: argparse.Namespace) -> int:
     """构建或更新底层 code graph。"""
     runner = GraphRunner(_find_project_root())
@@ -1475,84 +1275,6 @@ def cmd_graph_review_context(args: argparse.Namespace) -> int:
             return 1
         _print_graph_review_context(result)
     return 0 if result.get("status") != "unavailable" else 1
-
-
-def cmd_hook_file_length(args: argparse.Namespace) -> int:
-    """运行一个可复用的 file-length guard，适用于 pre-commit hooks。"""
-    project_root = _find_project_root()
-    config_path = Path(args.config).resolve()
-    config = load_config(config_path)
-    relative_paths = args.files or []
-    if not relative_paths:
-        file_budget_args = argparse.Namespace(
-            changed_only=False,
-            staged_only=args.staged_only,
-            base=args.base,
-            overrides_only=False,
-            paths=[],
-        )
-        from entrix.file_budgets import _resolve_paths
-
-        relative_paths = _resolve_paths(file_budget_args, project_root, config)
-
-    violations = evaluate_paths(
-        project_root,
-        relative_paths,
-        config,
-        use_head_ratchet=not args.strict_limit,
-    )
-
-    checked_count = sum(
-        1 for path in set(relative_paths) if is_tracked_source_file(path, config)
-    )
-    print(f"file_budget_checked: {checked_count}")
-    print(f"file_budget_violations: {len(violations)}")
-    for violation in violations:
-        reason = f" | {violation.reason}" if violation.reason else ""
-        print(
-            f"current file length {violation.line_count} exceeds limit "
-            f"{violation.max_lines}: {violation.path}{reason}"
-        )
-    if violations:
-        print("Refactor the oversized file before commit.")
-        structure_result = analyze_long_files(
-            project_root,
-            files=list(dict.fromkeys(violation.path for violation in violations)),
-            config_path=config_path,
-            base=args.base,
-            use_head_ratchet=not args.strict_limit,
-        )
-        if structure_result.get("status") == "unavailable":
-            print(
-                "Structure summary unavailable: "
-                f"{structure_result.get('summary', 'long-file analysis unavailable')}"
-            )
-        else:
-            _print_hook_long_file_summary(structure_result)
-        return 1
-    return 0
-
-
-def cmd_analyze_long_file(args: argparse.Namespace) -> int:
-    """将超大或显式文件分析为 ClassMap/FunctionMap payload。"""
-    project_root = _find_project_root()
-    explicit_files = list(dict.fromkeys((args.files or []) + (args.paths or [])))
-    result = analyze_long_files(
-        project_root,
-        files=explicit_files or None,
-        config_path=Path(args.config).resolve() if args.config else None,
-        base=args.base,
-        use_head_ratchet=not args.strict_limit,
-        comment_review_commit_threshold=args.comment_review_commit_threshold,
-    )
-    if result.get("status") == "unavailable":
-        print(result.get("summary", "Long-file analysis unavailable"))
-        return 1
-    if args.json:
-        _print_json(result)
-    else:
-        _print_long_file_analysis(result, min_lines=args.min_lines)
-    return 0
 
 
 def _set_command_group_help(

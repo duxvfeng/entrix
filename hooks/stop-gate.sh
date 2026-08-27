@@ -11,11 +11,16 @@
 
 set -uo pipefail
 
-# 安全阀：显式禁用时直接放行
-if [ -n "${ENTRIX_STOP_GATE_DISABLED:-}" ]; then
-  echo "ENTRIX_STOP_GATE_DISABLED is set; Harness Stop Gate is bypassed." >&2
-  exit 0
-fi
+# 安全阀：仅显式 true 值可禁用
+_disabled_value="${ENTRIX_STOP_GATE_DISABLED:-}"
+_disabled_value="${_disabled_value#"${_disabled_value%%[![:space:]]*}"}"
+_disabled_value="${_disabled_value%"${_disabled_value##*[![:space:]]}"}"
+case "$_disabled_value" in
+  1|[Tt][Rr][Uu][Ee]|[Yy][Ee][Ss]|[Oo][Nn])
+    echo "ENTRIX_STOP_GATE_DISABLED is set; Harness Stop Gate is bypassed." >&2
+    exit 0
+    ;;
+esac
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-}"
 block_unavailable() {

@@ -185,7 +185,7 @@ gate_policies:
   - name: Frontend only
     severity: hard
     when: {changed_any: ["frontend/**"]}
-    rule: {evidence_id: missing, condition: 'status == "pass"'}
+    rule: {evidence_id: tests, condition: 'status == "pass"'}
   - name: Tests pass
     severity: hard
     rule: {evidence_id: tests, condition: 'status == "pass"'}

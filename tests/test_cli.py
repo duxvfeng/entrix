@@ -591,8 +591,8 @@ def test_cmd_analyze_long_file_merges_positional_and_flagged_files(monkeypatch):
         captured["files"] = kwargs["files"]
         return {"status": "ok", "base": "HEAD", "files": []}
 
-    monkeypatch.setattr("entrix.cli.analyze_long_files", fake_analyze_long_files)
-    monkeypatch.setattr("entrix.cli._print_long_file_analysis", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("entrix.cli_analysis.analyze_long_files", fake_analyze_long_files)
+    monkeypatch.setattr("entrix.cli_analysis._print_long_file_analysis", lambda *_args, **_kwargs: None)
 
     args = argparse.Namespace(
         files=["src/b.py", "src/a.ts"],
@@ -621,14 +621,14 @@ def test_cmd_hook_file_length_prints_structure_summary(monkeypatch, capsys, tmp_
     )
 
     monkeypatch.setattr("entrix.cli._find_project_root", lambda: tmp_path)
-    monkeypatch.setattr("entrix.cli.load_config", lambda _path: config)
-    monkeypatch.setattr("entrix.cli.evaluate_paths", lambda *_args, **_kwargs: [violation])
+    monkeypatch.setattr("entrix.cli_analysis.load_config", lambda _path: config)
+    monkeypatch.setattr("entrix.cli_analysis.evaluate_paths", lambda *_args, **_kwargs: [violation])
     monkeypatch.setattr(
-        "entrix.cli.is_tracked_source_file",
+        "entrix.cli_analysis.is_tracked_source_file",
         lambda path, loaded_config: loaded_config is config and path == "src/app.ts",
     )
     monkeypatch.setattr(
-        "entrix.cli.analyze_long_files",
+        "entrix.cli_analysis.analyze_long_files",
         lambda *_args, **_kwargs: {
             "status": "ok",
             "files": [
@@ -708,14 +708,14 @@ def test_cmd_hook_file_length_handles_unavailable_structure_summary(
     )
 
     monkeypatch.setattr("entrix.cli._find_project_root", lambda: tmp_path)
-    monkeypatch.setattr("entrix.cli.load_config", lambda _path: config)
-    monkeypatch.setattr("entrix.cli.evaluate_paths", lambda *_args, **_kwargs: [violation])
+    monkeypatch.setattr("entrix.cli_analysis.load_config", lambda _path: config)
+    monkeypatch.setattr("entrix.cli_analysis.evaluate_paths", lambda *_args, **_kwargs: [violation])
     monkeypatch.setattr(
-        "entrix.cli.is_tracked_source_file",
+        "entrix.cli_analysis.is_tracked_source_file",
         lambda path, loaded_config: loaded_config is config and path == "src/app.ts",
     )
     monkeypatch.setattr(
-        "entrix.cli.analyze_long_files",
+        "entrix.cli_analysis.analyze_long_files",
         lambda *_args, **_kwargs: {
             "status": "unavailable",
             "summary": "long-file analysis requires tree-sitter-language-pack",

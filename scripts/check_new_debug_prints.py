@@ -11,7 +11,13 @@ from pathlib import Path, PurePosixPath
 
 DEBUG_CALL = re.compile(r"\b(?:pprint|print)\s*\(")
 SOURCE_SUFFIXES = frozenset({".js", ".jsx", ".py", ".pyi", ".ts", ".tsx"})
-EXPECTED_OUTPUT_MODULES = frozenset({"entrix/cli_overview.py"})
+EXPECTED_OUTPUT_MODULES = frozenset(
+    {
+        "entrix/cli_analysis.py",
+        "entrix/cli_overview.py",
+        "entrix/cli_release.py",
+    }
+)
 
 
 @dataclass(frozen=True)

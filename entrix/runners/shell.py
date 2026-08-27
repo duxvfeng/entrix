@@ -14,30 +14,14 @@ from threading import Thread
 from typing import Callable
 
 from entrix.model import Gate, Metric, MetricResult, ResultState
-from entrix.runners.process import process_group_kwargs, terminate_process_tree
-
-_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[mGKHF]")
-
-# 保留前 4KB 和后 4KB，这样启动上下文和最终的
-# 摘要（通过/失败行）在截断后仍然可见。
-_OUTPUT_HEAD = 4000
-_OUTPUT_TAIL = 4000
-_OUTPUT_MAX = _OUTPUT_HEAD + _OUTPUT_TAIL + 200  # a bit of slack
-
-
-def _terminate_process_tree(process: subprocess.Popen) -> None:
-    """Compatibility wrapper for the process-tree terminator."""
-    terminate_process_tree(process)
-
-
-def _smart_truncate(text: str) -> str:
-    """保留输出的头部和尾部，使上下文和判定结果都可见。"""
-    if len(text) <= _OUTPUT_MAX:
-        return text
-    head = text[:_OUTPUT_HEAD]
-    tail = text[-_OUTPUT_TAIL:]
-    omitted = len(text) - _OUTPUT_HEAD - _OUTPUT_TAIL
-    return f"{head}\n\n... [{omitted} characters omitted] ...\n\n{tail}"
+from entrix.runners.process import (
+    process_group_kwargs,
+    run_shell_command,
+    shell_command_parts,
+    smart_truncate,
+    strip_ansi,
+    terminate_process_tree,
+)
 
 ProgressCallback = Callable[[str, Metric, MetricResult | None], None]
 OutputCallback = Callable[[Metric, str, str], None]
@@ -105,7 +89,7 @@ class ShellRunner:
             else:
                 output, returncode = self._run_captured(metric, timeout=timeout)
 
-            clean_output = _ANSI_ESCAPE.sub("", output)
+            clean_output = strip_ansi(output)
 
             if metric.pattern:
                 pattern_matched = bool(re.search(metric.pattern, clean_output, re.IGNORECASE))
@@ -132,7 +116,7 @@ class ShellRunner:
             return MetricResult(
                 metric_name=metric.name,
                 passed=passed,
-                output=_smart_truncate(clean_output),
+                output=smart_truncate(clean_output),
                 tier=metric.tier,
                 hard_gate=metric.gate == Gate.HARD,
                 duration_ms=elapsed,
@@ -163,33 +147,18 @@ class ShellRunner:
             )
 
     def _run_captured(self, metric: Metric, *, timeout: int) -> tuple[str, int]:
-        command, use_shell = self._shell_command(metric.command)
-        process = subprocess.Popen(
-            command,
-            shell=use_shell,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+        outcome = run_shell_command(
+            metric.command,
             cwd=self.project_root,
-            env={**environ, **self.env_overrides},
-            **process_group_kwargs(),
+            env_overrides=self.env_overrides,
+            timeout_seconds=timeout,
         )
-        try:
-            stdout, stderr = process.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            _terminate_process_tree(process)
-            try:
-                process.communicate(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.communicate()
-            raise
-        return stdout + stderr, process.returncode
+        if outcome.timed_out:
+            raise subprocess.TimeoutExpired(metric.command, timeout)
+        return outcome.stdout + outcome.stderr, outcome.returncode
 
     def _run_streaming(self, metric: Metric, *, timeout: int) -> tuple[str, int]:
-        command, use_shell = self._shell_command(metric.command)
+        command, use_shell = shell_command_parts(metric.command)
         process = subprocess.Popen(
             command,
             shell=use_shell,
@@ -233,7 +202,7 @@ class ShellRunner:
         while closed_streams < len(threads):
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                _terminate_process_tree(process)
+                terminate_process_tree(process)
                 try:
                     process.wait(timeout=1)
                 except subprocess.TimeoutExpired:
@@ -256,7 +225,7 @@ class ShellRunner:
         try:
             returncode = process.wait(timeout=max(0.1, deadline - time.monotonic()))
         except subprocess.TimeoutExpired:
-            _terminate_process_tree(process)
+            terminate_process_tree(process)
             try:
                 process.wait(timeout=1)
             except subprocess.TimeoutExpired:
@@ -265,12 +234,6 @@ class ShellRunner:
         for thread in threads:
             thread.join(timeout=0.1)
         return "".join(chunks), returncode
-
-    @staticmethod
-    def _shell_command(command: str) -> tuple[str | list[str], bool]:
-        if os.name == "nt":
-            return command, True
-        return ["/bin/bash", "-lc", command], False
 
     def _emit_output(self, metric: Metric, source: str, line: str) -> None:
         if self.output_callback is not None:

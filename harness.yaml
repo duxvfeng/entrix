@@ -30,7 +30,7 @@ fitness:
       threshold: {pass: 100, warn: 90}
       metrics:
         - name: pytest_pass
-          command: pytest 2>&1
+          command: python -m pytest tests 2>&1
           hard_gate: true
           tier: normal
           description: The repository test suite must pass.

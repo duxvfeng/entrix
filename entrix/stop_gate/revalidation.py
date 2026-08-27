@@ -6,8 +6,12 @@ import hashlib
 import json
 import os
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
+
+RETENTION_DAYS = 30
+MAX_SESSIONS_PER_WORKSPACE = 50
 
 
 @dataclass(frozen=True)
@@ -63,10 +67,30 @@ class StopGateStateStore:
         }
         temporary.write_text(json.dumps(payload, ensure_ascii=False) + "\n", encoding="utf-8")
         temporary.replace(target)
+        try:
+            self._prune_sessions(target.parent)
+        except OSError:
+            # 剪枝失败不影响本次保存已成功的事实
+            pass
 
     def delete(self, workspace: Path, session_id: str) -> None:
         """Delete cached authorization state for one workspace session."""
         self._path(workspace, session_id).unlink(missing_ok=True)
+
+    def _prune_sessions(self, sessions_dir: Path) -> None:
+        """删除过期或超出数量上限的 session verdict 文件。"""
+        sessions = sorted(
+            (path for path in sessions_dir.glob("*.json") if path.is_file()),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        cutoff = time.time() - RETENTION_DAYS * 86400
+        for index, path in enumerate(sessions):
+            try:
+                if path.stat().st_mtime < cutoff or index >= MAX_SESSIONS_PER_WORKSPACE:
+                    path.unlink(missing_ok=True)
+            except OSError:
+                continue
 
     def evidence_root(self, workspace: Path) -> Path:
         """Return the external EvidenceStore root for a workspace."""

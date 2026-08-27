@@ -85,7 +85,7 @@ cache_dir = ".pytest-runs/cache"
 # 裸 pytest 下 cwd 不在 sys.path，`scripts.*` 会误从主仓库的 editable 安装解析；
 # 显式把 rootdir 加入 sys.path，保证测试始终导入当前 checkout 的模块
 pythonpath = ["."]
-norecursedirs = ["tests/fixtures", ".pytest_*", ".pytest-*", ".tmp-check-*", ".worktrees"]
+norecursedirs = ["tests/fixtures", ".pytest_*", ".pytest-*", ".tmp-check-*", ".worktrees", ".claude/worktrees"]
 markers = [
     "integration: marks tests as integration tests (slow, may require external tools)",
 ]
@@ -99,6 +99,10 @@ files = [
     "entrix/reporting.py",
     "entrix/reporters",
     "entrix/cli_hints.py",
+    "entrix/cli_analysis.py",
+    "entrix/cli_release.py",
+    "entrix/file_budgets.py",
+    "entrix/scoring.py",
     "entrix/harness/config.py",
     "entrix/harness/engine.py",
     "entrix/harness/gate",
@@ -108,6 +112,7 @@ files = [
     "entrix/runners/graph.py",
     "entrix/runners/shell.py",
     "entrix/structure/language.py",
+    "scripts",
 ]
 exclude = ["docs/multi_agent_system"]
 check_untyped_defs = true

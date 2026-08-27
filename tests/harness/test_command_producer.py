@@ -117,22 +117,13 @@ def test_command_producer_timeout_terminates_process_tree(tmp_path, monkeypatch)
         timeout_seconds=1,
         parser={"type": "exit_code"},
     )
-    process = type("Process", (), {"pid": 12345, "returncode": None})()
-
-    def communicate(timeout=None):
-        if timeout is not None:
-            raise subprocess.TimeoutExpired("slow-command", timeout)
-        return "", ""
-
-    process.communicate = communicate
-    process.kill = lambda: None
     terminated = []
-    monkeypatch.setattr(command_module.subprocess, "Popen", lambda *args, **kwargs: process)
-    monkeypatch.setattr(
-        command_module,
-        "terminate_process_tree",
-        lambda candidate: terminated.append(candidate),
-    )
+
+    def fake_run_shell_command(command, **kwargs):
+        terminated.append(command)
+        raise subprocess.TimeoutExpired(command, 1)
+
+    monkeypatch.setattr(command_module, "run_shell_command", fake_run_shell_command)
     context = ProducerContext(
         task_id="task-1",
         repo_root=tmp_path,
@@ -142,7 +133,55 @@ def test_command_producer_timeout_terminates_process_tree(tmp_path, monkeypatch)
     evidence = CommandProducer(config).run(context)
 
     assert evidence.status == "timeout"
-    assert terminated == [process]
+    assert terminated == ["slow-command"]
+
+
+def test_command_producer_passes_stdout_and_stderr_separately(tmp_path, monkeypatch):
+    from entrix.harness.parsers.base import ParserResult
+    from entrix.runners.process import ShellCommandOutcome
+
+    captured: dict[str, object] = {}
+
+    def fake_run_shell_command(command, **kwargs):
+        captured.update(kwargs)
+        return ShellCommandOutcome(
+            stdout="out-marker\n",
+            stderr="err-marker\n",
+            returncode=0,
+            duration_ms=12.0,
+            timed_out=False,
+        )
+
+    monkeypatch.setattr(command_module, "run_shell_command", fake_run_shell_command)
+    parsed_with: dict[str, object] = {}
+
+    class Parser:
+        def parse(self, parser_context):
+            parsed_with["stdout"] = parser_context.completed_process.stdout
+            parsed_with["stderr"] = parser_context.completed_process.stderr
+            return ParserResult(status="pass", summary={}, raw={})
+
+    monkeypatch.setattr(command_module, "get_parser", lambda _type: Parser())
+    context = ProducerContext(
+        task_id="task-1",
+        repo_root=tmp_path,
+        when_context=WhenContext(repo_root=tmp_path),
+    )
+    evidence = CommandProducer(
+        EvidenceProducerConfig(
+            id="io-test",
+            type="test",
+            name="IO",
+            command="echo out && echo err >&2",
+            producer="test",
+            parser={"type": "exit_code"},
+        )
+    ).run(context)
+
+    assert evidence.status == "pass"
+    assert parsed_with["stdout"] == "out-marker\n"
+    assert parsed_with["stderr"] == "err-marker\n"
+    assert evidence.duration_ms == 12
 
 
 def test_command_producer_regex_parse_error():

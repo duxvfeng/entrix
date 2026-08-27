@@ -155,3 +155,29 @@ def test_release_workflow_rejects_tag_and_manifest_version_mismatch() -> None:
     assert "release_tag != f\"v{version}\"" in workflow
     assert ".claude-plugin/plugin.json" in workflow
     assert ".claude-plugin/marketplace.json" in workflow
+
+
+def test_publish_workflow_uses_trusted_publishing() -> None:
+    """PyPI 发布走 OIDC Trusted Publishing，且不再向 GitHub Release 重复附加 dist。"""
+    workflow = (ROOT / ".github" / "workflows" / "publish.yml").read_text(encoding="utf-8")
+    payload = yaml.safe_load(workflow)
+
+    assert payload["permissions"] == {"contents": "read", "id-token": "write"}
+    assert "PYPI_API_TOKEN" not in workflow
+    assert "action-gh-release" not in workflow
+
+
+def test_ci_has_read_only_top_level_permissions() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    payload = yaml.safe_load(workflow)
+
+    assert payload["permissions"] == {"contents": "read"}
+
+
+def test_mypy_coverage_includes_scripts_and_new_cli_modules() -> None:
+    package = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    files = package["tool"]["mypy"]["files"]
+
+    assert "scripts" in files
+    assert "entrix/cli_analysis.py" in files
+    assert "entrix/cli_release.py" in files

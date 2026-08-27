@@ -8,11 +8,20 @@ from pathlib import Path
 # 保证脚本使用所在 checkout 的 entrix，而不是全局安装的旧版本
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 # Windows 控制台默认 GBK，无法编码 emoji 输出
-if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+def _reconfigure_utf8(stream: object) -> None:
+    """把支持 reconfigure 的文本流切到 UTF-8 容错模式。"""
+    encoding = getattr(stream, "encoding", None)
+    if not encoding or encoding.lower() in ("utf-8", "utf8"):
+        return
+    reconfigure = getattr(stream, "reconfigure", None)
+    if reconfigure is not None:
+        reconfigure(encoding="utf-8", errors="replace")
 
-from entrix.stop_gate.revalidation import StopGateStateStore
+
+_reconfigure_utf8(sys.stdout)
+_reconfigure_utf8(sys.stderr)
+
+from entrix.stop_gate.revalidation import StopGateStateStore  # noqa: E402
 
 
 def cmd_clear_state(args: argparse.Namespace) -> int:

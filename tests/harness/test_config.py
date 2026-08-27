@@ -588,3 +588,139 @@ gate_policies: []
 
     with pytest.raises(ValueError, match="tier"):
         load_harness_config(config_path)
+
+
+def _minimal_valid_config() -> str:
+    return '''version: "harness/v1"
+fitness:
+  dimensions:
+    - dimension: quality
+      weight: 100
+      threshold: {pass: 100, warn: 90}
+      metrics:
+        - name: lint
+          command: "echo ok"
+evidence_producers:
+  - {id: tests, type: test, name: Tests, command: "echo ok"}
+gate_policies:
+  - name: Tests pass
+    severity: hard
+    rule: {evidence_id: tests, condition: 'status == "pass"'}
+'''
+
+
+def test_rejects_unknown_gate_evidence_id(tmp_path):
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        '''version: "harness/v1"
+evidence_producers:
+  - {id: tests, type: test, name: Tests, command: pytest}
+gate_policies:
+  - name: Ghost gate
+    severity: hard
+    rule: {evidence_id: ghost, condition: 'status == "pass"'}
+''',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="ghost"):
+        load_harness_config(config_path)
+
+
+def test_rejects_threshold_pass_below_warn(tmp_path):
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        '''version: "harness/v1"
+fitness:
+  dimensions:
+    - dimension: quality
+      weight: 100
+      threshold: {pass: 80, warn: 90}
+      metrics:
+        - name: lint
+          command: "echo ok"
+evidence_producers:
+  - {id: tests, type: test, name: Tests, command: "echo ok"}
+gate_policies:
+  - name: Tests pass
+    severity: hard
+    rule: {evidence_id: tests, condition: 'status == "pass"'}
+''',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="threshold"):
+        load_harness_config(config_path)
+
+
+def test_rejects_review_trigger_invalid_severity(tmp_path):
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        '''version: "harness/v1"
+evidence_producers:
+  - {id: tests, type: test, name: Tests, command: "echo ok"}
+gate_policies:
+  - name: Tests pass
+    severity: hard
+    rule: {evidence_id: tests, condition: 'status == "pass"'}
+review_triggers:
+  rules:
+    - {name: risky, type: changed_paths, paths: ["src/**"], severity: urgent}
+''',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="severity"):
+        load_harness_config(config_path)
+
+
+def test_rejects_review_trigger_invalid_type(tmp_path):
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        '''version: "harness/v1"
+evidence_producers:
+  - {id: tests, type: test, name: Tests, command: "echo ok"}
+gate_policies:
+  - name: Tests pass
+    severity: hard
+    rule: {evidence_id: tests, condition: 'status == "pass"'}
+review_triggers:
+  rules:
+    - {name: weird, type: unknown_kind}
+''',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="type"):
+        load_harness_config(config_path)
+
+
+def test_rejects_review_trigger_negative_max_values(tmp_path):
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(
+        '''version: "harness/v1"
+evidence_producers:
+  - {id: tests, type: test, name: Tests, command: "echo ok"}
+gate_policies:
+  - name: Tests pass
+    severity: hard
+    rule: {evidence_id: tests, condition: 'status == "pass"'}
+review_triggers:
+  rules:
+    - {name: sized, type: diff_size, max_files: -1}
+''',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="max_files"):
+        load_harness_config(config_path)
+
+
+def test_allows_weighted_fitness_dimensions_totaling_100(tmp_path):
+    """有 fitness 维度时权重总和必须为 100（正向验证）。"""
+    config_path = tmp_path / "harness.yaml"
+    config_path.write_text(_minimal_valid_config(), encoding="utf-8")
+
+    config = load_harness_config(config_path)
+
+    assert config.fitness_dimensions[0].weight == 100

@@ -12,7 +12,7 @@
 
 安全阀：
 
-- 环境变量 ``ENTRIX_STOP_GATE_DISABLED`` 非空时直接放行。
+- 环境变量 ``ENTRIX_STOP_GATE_DISABLED`` 解析为显式 true 值时直接放行。
 - 工作区没有 ``harness.yaml`` 的仓库不激活门禁，直接放行，
   这样插件可以全局安装而不影响未配置的仓库。
 """
@@ -20,11 +20,12 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import json
 import os
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from time import monotonic
 from typing import IO, Any
 
@@ -56,6 +57,12 @@ _FINGERPRINT_IGNORED_DIRECTORIES = frozenset(
 )
 
 
+def _stop_gate_disabled() -> bool:
+    """Return whether the explicit Stop Gate bypass switch is enabled."""
+    value = os.environ.get("ENTRIX_STOP_GATE_DISABLED", "")
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def find_harness_config(workspace: Path) -> Path | None:
     """Return the preferred Harness configuration file, if the workspace has one."""
     for config_path in (workspace / "harness.yaml", workspace / ".harness" / "harness.yaml"):
@@ -64,21 +71,21 @@ def find_harness_config(workspace: Path) -> Path | None:
     return None
 
 
-def read_hook_payload(stream: IO[str] | None = None) -> dict:
-    """读取并解析 stdin 的 hook 载荷，损坏或缺失时返回空 dict。"""
+def read_hook_payload(stream: IO[str] | None = None) -> dict[str, Any] | None:
+    """读取并解析 stdin 的 hook 载荷，无效或缺失时返回 ``None``。"""
     if stream is None:
         stream = sys.stdin
     try:
         data = stream.read()
     except OSError:
-        return {}
+        return None
     if not data.strip():
-        return {}
+        return None
     try:
         payload = json.loads(data)
     except json.JSONDecodeError:
-        return {}
-    return payload if isinstance(payload, dict) else {}
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def derive_changed_files(workspace: Path) -> list[str] | None:
@@ -130,64 +137,53 @@ def derive_changed_files(workspace: Path) -> list[str] | None:
     return changed
 
 
+_SOURCE_DIRS = frozenset(
+    {"src", "lib", "app", "entrix", "packages", "tests", "test", "__tests__", ".github"}
+)
+_SOURCE_EXTS = (
+    ".py", ".js", ".ts", ".tsx", ".jsx",
+    ".java", ".go", ".rs", ".cpp", ".c", ".h",
+    ".sh", ".mjs", ".ps1", ".bat", ".yml", ".yaml",
+    ".json",
+)
+_CONFIG_BASENAMES = frozenset(
+    {
+        "pyproject.toml", "package.json", "cargo.toml",
+        "go.mod", "pom.xml", "build.gradle", "build.gradle.kts",
+        "harness.yaml", "makefile", "dockerfile", ".dockerignore",
+    }
+)
+
+
 def has_code_change(changed_files: list[str]) -> bool:
     """判断是否有代码变更（需要质量检查）。
 
-    规则：
-    1. 修改了源代码文件（src/, lib/, *.py, *.js 等）-> 需要检查
-    2. 修改了配置文件（pyproject.toml, package.json 等）-> 需要检查
-    3. 修改了测试文件 -> 需要检查
-    4. 只修改文档（docs/, README, CHANGELOG 等）-> 不检查
+    规则（按 git status 的 POSIX 风格路径做结构化匹配，
+    避免旧 substring 匹配对 ``myproject.toml.bak`` 之类路径的误报）：
 
-    Args:
-        changed_files: 本次会话变更的文件列表
+    1. basename 精确命中配置文件（pyproject.toml、package.json 等）
+    2. 路径首段为 .github 目录
+    3. 文件名以源码后缀结尾（*.py、*.json 等）
+    4. 路径首段位于源码或测试目录（src/、tests/ 等）
+    5. 文件名 stem 的点分段包含 "test"（如 test_x.py 以外的 foo.test.ts）
 
-    Returns:
-        True 如果有代码变更需要检查，False 如果只是文档变更
+    只修改文档（docs/、README、CHANGELOG 等）不触发检查。
     """
-    if not changed_files:
-        return False
+    for raw_path in changed_files:
+        if not raw_path:
+            continue
+        path = PurePosixPath(raw_path.strip().strip('"'))
+        name = path.name.lower()
+        first_part = path.parts[0].lower() if path.parts else ""
 
-    # 源代码目录/后缀
-    SOURCE_PATTERNS = {
-        "src/", "lib/", "app/", "entrix/", "packages/",
-        ".py", ".js", ".ts", ".tsx", ".jsx",
-        ".java", ".go", ".rs", ".cpp", ".c", ".h",
-        ".sh", ".mjs", ".ps1", ".bat", ".yml", ".yaml",
-        ".json",
-    }
-
-    # 配置文件
-    CONFIG_FILES = {
-        "pyproject.toml", "package.json", "cargo.toml",
-        "go.mod", "pom.xml", "build.gradle", "build.gradle.kts",
-        "harness.yaml", ".github", "makefile",
-        "dockerfile", ".dockerignore"
-    }
-
-    # 测试目录
-    TEST_PATTERNS = {
-        "tests/", "test/", "__tests__", ".test."
-    }
-
-    for file_path in changed_files:
-        # 转小写便于匹配
-        path_lower = file_path.lower()
-
-        # 检查是否是配置文件
-        if any(config in path_lower for config in CONFIG_FILES):
+        if name in _CONFIG_BASENAMES or first_part == ".github":
             return True
-
-        # 检查是否是测试文件
-        if any(test in path_lower for test in TEST_PATTERNS):
+        if name.endswith(_SOURCE_EXTS):
             return True
-
-        # 检查是否是源代码
-        if (any(src in path_lower for src in SOURCE_PATTERNS) or
-            any(file_path.endswith(ext) for ext in SOURCE_PATTERNS)):
+        if first_part in _SOURCE_DIRS:
             return True
-
-    # 没有代码变更
+        if "test" in path.stem.lower().split("."):
+            return True
     return False
 
 
@@ -351,7 +347,25 @@ def _when_environment_fingerprint(config_path: Path) -> str:
             names.update(name for name in required_variables if isinstance(name, str))
 
     payload = "\0".join(f"{name}={os.environ.get(name)!r}" for name in sorted(names))
+    # 命令执行环境可能依赖未显式声明的运行时维度（解释器版本、工具链 PATH、
+    # entrix 版本）。纳入 fingerprint 避免环境变化后复用旧的 FAIL/BLOCKED 缓存。
+    runtime_parts = (
+        os.name,
+        sys.platform,
+        f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        _entrix_package_version(),
+        os.environ.get("PATH", ""),
+    )
+    payload = "\0".join((payload, *runtime_parts))
     return hashlib.sha256(payload.encode("utf-8", errors="surrogateescape")).hexdigest()
+
+
+def _entrix_package_version() -> str:
+    """Return the installed entrix version, or ``unknown`` when unavailable."""
+    try:
+        return importlib.metadata.version("entrix")
+    except importlib.metadata.PackageNotFoundError:
+        return "unknown"
 
 
 def derive_current_branch(workspace: Path) -> str:
@@ -390,7 +404,7 @@ def run_stop_gate_hook(
     stop_deadline = monotonic() + max(0.1, float(timeout_seconds))
 
     # 安全阀：显式禁用时放行
-    if os.environ.get("ENTRIX_STOP_GATE_DISABLED"):
+    if _stop_gate_disabled():
         print(
             "ENTRIX_STOP_GATE_DISABLED is set; Harness Stop Gate is bypassed.",
             file=sys.stderr,
@@ -398,12 +412,34 @@ def run_stop_gate_hook(
         return 0
 
     payload = read_hook_payload(input_stream)
+    if payload is None:
+        _write_block_decision(
+            output_stream,
+            "Stop hook 载荷无效或缺失，无法确认工作区；已按 fail-closed 阻断。",
+        )
+        return 0
     # Claude sets this flag when it is already continuing because a Stop hook
     # blocked the previous turn. Blocking again would create an infinite loop.
     if payload.get("stop_hook_active") is True:
         return 0
 
-    workspace = Path(payload.get("cwd") or os.getcwd()).resolve()
+    cwd = payload.get("cwd")
+    if not isinstance(cwd, str) or not cwd.strip():
+        _write_block_decision(
+            output_stream,
+            "Stop hook 载荷缺少有效 cwd，无法确认工作区；已按 fail-closed 阻断。",
+        )
+        return 0
+    try:
+        workspace = Path(cwd).resolve()
+        if not workspace.is_dir():
+            raise ValueError("cwd is not an existing directory")
+    except (OSError, RuntimeError, ValueError) as error:
+        _write_block_decision(
+            output_stream,
+            f"Stop hook 载荷包含无效 cwd（{error}），已按 fail-closed 阻断。",
+        )
+        return 0
     harness_config = find_harness_config(workspace)
     if harness_config is None:
         return 0
