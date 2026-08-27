@@ -83,7 +83,9 @@ def test_parser_exposes_version(capsys):
         build_parser().parse_args(["--version"])
 
     assert error.value.code == 0
-    assert "entrix 0.1.24" in capsys.readouterr().out
+    from entrix import __version__ as package_version
+
+    assert f"entrix {package_version}" in capsys.readouterr().out
 
 
 def test_init_creates_mcp_config_and_harness_template(tmp_path, capsys):

@@ -639,7 +639,7 @@ def test_plugin_versions_match_package_version() -> None:
     marketplace = json.loads(
         (ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8")
     )
-    assert package_version == "0.1.24"
+    assert package_version == "0.1.25"
     assert plugin["version"] == package_version
     assert marketplace["plugins"][0]["version"] == package_version
     assert plugin["mcpServers"]["entrix"]["env"]["ENTRIX_BINARY_VERSION"] == package_version
@@ -665,3 +665,25 @@ def test_docs_describe_python_free_installation() -> None:
     )
     for phrase in ("SHA-256", "ENTRIX_BINARY_PATH", "pip install entrix[mcp]"):
         assert phrase in docs
+
+
+def test_commands_declare_bootstrap_calls() -> None:
+    """斜杠命令必须存在、frontmatter 齐全，且统一经由插件启动器调用。"""
+    expected_commands = {
+        "init": "init",
+        "run": "run --tier fast",
+        "validate": "harness validate",
+        "phase": "phase",
+        "trust": "trust",
+        "review-trigger": "review-trigger",
+    }
+    for name, subcommand in expected_commands.items():
+        path = ROOT / "commands" / f"{name}.md"
+        content = path.read_text(encoding="utf-8")
+
+        frontmatter = content.split("---", 2)[1]
+        assert "description:" in frontmatter, name
+        assert "argument-hint:" in frontmatter, name
+        assert "allowed-tools: Bash(node:*)" in frontmatter, name
+        assert "${CLAUDE_PLUGIN_ROOT}/bin/entrix-bootstrap.mjs" in content, name
+        assert subcommand in content, name
