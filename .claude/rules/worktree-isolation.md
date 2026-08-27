@@ -2,7 +2,9 @@
 
 ## 核心原则
 
-**所有写操作必须在隔离的 worktree 中进行，严禁直接在主分支上修改文件。**
+**所有写操作必须在隔离的 worktree 中进行，严禁直接在受保护分支（`main`、`master`、`develop`）上修改文件。**
+
+**隔离区只能创建在项目根目录 `.claude/worktrees/<分支或任务名>/` 下。禁止在项目外部目录创建 worktree，也禁止使用临时目录、用户目录或其他仓库目录作为隔离区。**
 
 ---
 
@@ -34,11 +36,11 @@
 # 检查当前状态
 git status
 
-# 如果在主分支且有未提交的更改，询问用户
+# 如果在受保护分支且有未提交的更改，询问用户
 ```
 
 **Claude 应执行**：
-1. 检测是否在 `main` 或 `master` 分支
+1. 检测是否在 `main`、`master` 或 `develop` 分支
 2. 检测是否有未跟踪的新文件或未提交的更改
 3. **询问用户**：`是否创建 worktree 隔离环境？(推荐)`
 
@@ -54,9 +56,17 @@ EnterWorktree("name", "add-user-api")     # 添加用户API
 EnterWorktree("name", "fix-auth-bug")     # 修复认证问题
 ```
 
+若原生 `EnterWorktree` 工具不可用，回退命令也只能使用项目内路径：
+
+```bash
+git worktree add .claude/worktrees/<name> -b <branch>
+```
+
+创建前必须确认 `.claude/worktrees/` 已被 Git 忽略；未忽略时先补充忽略规则并提交，禁止改用项目外目录绕过。
+
 ### 3. 在 Worktree 中工作
 
-worktree 会自动创建在 `.claude/worktrees/<name>/`，包含：
+worktree 必须创建在 `.claude/worktrees/<name>/`，包含：
 - 独立的 Git 工作副本
 - 独立的分支（基于 origin/main 或当前 HEAD）
 - 隔离的文件系统修改
@@ -101,7 +111,7 @@ function shouldUseWorktree() {
   const branch = getCurrentGitBranch();
   const hasWriteOperation = true;
   
-  if (branch === 'main' || branch === 'master') {
+  if (branch === 'main' || branch === 'master' || branch === 'develop') {
     if (hasWriteOperation) {
       return 'MUST_CREATE_WORKTREE';
     }
@@ -119,12 +129,12 @@ function shouldUseWorktree() {
 
 ❌ **错误**：
 ```
-直接在 main 分支生成 CLAUDE.md
+直接在受保护分支生成 CLAUDE.md
 ```
 
 ✅ **正确**：
 ```
-1. 检测到在 main 分支
+1. 检测到在 `main`、`master` 或 `develop` 分支
 2. 询问：是否创建 worktree？
 3. EnterWorktree("name", "init-docs")
 4. 生成文档
@@ -135,7 +145,7 @@ function shouldUseWorktree() {
 
 ❌ **错误**：
 ```
-直接在 main 分支修改代码文件
+直接在受保护分支修改代码文件
 ```
 
 ✅ **正确**：
@@ -151,7 +161,7 @@ function shouldUseWorktree() {
 
 ❌ **错误**：
 ```
-在 main 分支创建多个新文件
+在受保护分支创建多个新文件
 ```
 
 ✅ **正确**：
@@ -181,7 +191,7 @@ function shouldUseWorktree() {
 ```
 ⚠️ 检测到写操作
 
-当前分支：main
+当前分支：`main`、`master` 或 `develop`
 操作类型：[具体操作，如"生成文档"]
 
 💡 推荐做法：创建 worktree 隔离环境
@@ -199,9 +209,9 @@ function shouldUseWorktree() {
 ## 记忆点
 
 - ✅ **写操作 = worktree**
-- ✅ **main 分支 = 只读**
+- ✅ **受保护分支（main/master/develop）= 只读**
 - ✅ **完成后 = 询问 keep/remove**
-- ❌ **永远不要直接污染 main 分支**
+- ❌ **永远不要直接污染 main/master/develop 分支**
 
 ---
 
