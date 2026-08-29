@@ -5,8 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from entrix.errors import ConfigError
 
-class ProfileDetectionError(ValueError):
+
+class ProfileDetectionError(ConfigError):
     """Raised when automatic detection finds more than one project profile."""
 
 
@@ -64,7 +66,7 @@ def resolve_profile(profile: str, repo_root: Path) -> str:
     """Resolve an explicit or automatic profile name."""
     if profile not in PROFILE_NAMES:
         supported = ", ".join(PROFILE_NAMES)
-        raise ValueError(f"未知 profile：{profile}。支持的 profile：{supported}")
+        raise ProfileDetectionError(f"未知 profile：{profile}。支持的 profile：{supported}")
     if profile == "auto":
         return detect_profile(repo_root)
     return profile

@@ -1,6 +1,7 @@
 """Controlled evidence parser registry."""
 from __future__ import annotations
 
+from entrix.errors import ConfigError
 from entrix.harness.parsers.base import EvidenceParser
 from entrix.harness.parsers.evidence_json import EvidenceJsonParser
 from entrix.harness.parsers.json_report import JsonReportParser
@@ -23,7 +24,7 @@ def get_parser(parser_type: str) -> EvidenceParser:
     try:
         return _PARSERS[parser_type]
     except KeyError as error:
-        raise ValueError(f"不支持的 parser type：{parser_type}") from error
+        raise ConfigError(f"不支持的 parser type：{parser_type}") from error
 
 
 __all__ = ["get_parser"]

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 
+from entrix.errors import ConfigError
 from entrix.harness.evidence import Artifact
 from entrix.harness.parsers.base import ParserContext, ParserResult, resolve_workspace_file
 
@@ -14,11 +15,11 @@ class JUnitParser:
         try:
             report_path = resolve_workspace_file(context.repo_root, context.config.get("path"))
             if not report_path.is_file():
-                raise ValueError(f"JUnit 报告不存在：{context.config.get('path')}")
+                raise ConfigError(f"JUnit 报告不存在：{context.config.get('path')}")
             root = ET.parse(report_path).getroot()
             suites = _leaf_suites(root)
             if not suites:
-                raise ValueError("JUnit 报告不包含 testsuite")
+                raise ConfigError("JUnit 报告不包含 testsuite")
             total = sum(_integer(suite, "tests") for suite in suites)
             failed = sum(_integer(suite, "failures") for suite in suites)
             errors = sum(_integer(suite, "errors") for suite in suites)
@@ -59,12 +60,12 @@ def _tag(element: ET.Element) -> str:
 def _integer(element: ET.Element, attribute: str) -> int:
     value = int(element.attrib.get(attribute, "0"))
     if value < 0:
-        raise ValueError(f"JUnit {attribute} 不能为负数")
+        raise ConfigError(f"JUnit {attribute} 不能为负数")
     return value
 
 
 def _decimal(element: ET.Element, attribute: str) -> float:
     value = float(element.attrib.get(attribute, "0"))
     if value < 0:
-        raise ValueError(f"JUnit {attribute} 不能为负数")
+        raise ConfigError(f"JUnit {attribute} 不能为负数")
     return value

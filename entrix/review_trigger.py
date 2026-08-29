@@ -8,6 +8,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from time import monotonic
 
+from entrix.errors import ConfigError
+
 
 @dataclass(frozen=True)
 class DiffStats:
@@ -75,24 +77,24 @@ class ReviewTriggerReport:
 def parse_review_trigger_rules(raw_rules: object) -> list[ReviewTriggerRule]:
     """Parse inline review-trigger mappings into domain rules."""
     if not isinstance(raw_rules, list):
-        raise ValueError("review_triggers.rules 必须是列表")
+        raise ConfigError("review_triggers.rules 必须是列表")
     rules: list[ReviewTriggerRule] = []
     names: set[str] = set()
     for index, entry in enumerate(raw_rules):
         if not isinstance(entry, dict):
-            raise ValueError(f"review_triggers.rules[{index}] 必须是对象")
+            raise ConfigError(f"review_triggers.rules[{index}] 必须是对象")
         name = entry.get("name")
         rule_type = entry.get("type")
         if not isinstance(name, str) or not name.strip():
-            raise ValueError(f"review_triggers.rules[{index}].name 必须是非空字符串")
+            raise ConfigError(f"review_triggers.rules[{index}].name 必须是非空字符串")
         if not isinstance(rule_type, str) or not rule_type.strip():
-            raise ValueError(f"review_triggers.rules[{index}].type 必须是非空字符串")
+            raise ConfigError(f"review_triggers.rules[{index}].type 必须是非空字符串")
         if name in names:
-            raise ValueError(f"review_triggers.rules 存在重复 name：{name}")
+            raise ConfigError(f"review_triggers.rules 存在重复 name：{name}")
         names.add(name)
         raw_boundaries = entry.get("boundaries", {}) or {}
         if not isinstance(raw_boundaries, dict):
-            raise ValueError(f"review_triggers.rules[{index}].boundaries 必须是对象")
+            raise ConfigError(f"review_triggers.rules[{index}].boundaries 必须是对象")
         boundaries: tuple[tuple[str, tuple[str, ...]], ...] = tuple(
             (name, tuple(patterns or ()))
             for name, patterns in raw_boundaries.items()

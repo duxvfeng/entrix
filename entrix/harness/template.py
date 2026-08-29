@@ -8,6 +8,7 @@ from typing import Any
 
 import yaml
 
+from entrix.errors import ConfigError
 from entrix.harness.lint_config import (
     generate_metrics_from_lint_config,
     get_dimension_weights,
@@ -414,11 +415,11 @@ def profile_harness_config(profile: str, repo_root: Path | None = None) -> dict[
     if profile == "generic":
         return default_harness_config()
     if profile == "auto":
-        raise ValueError("profile_harness_config() 需要已解析的 profile，不支持 auto")
+        raise ConfigError("profile_harness_config() 需要已解析的 profile，不支持 auto")
 
     marker = marker_for_profile(profile, repo_root)
     if marker is None:
-        raise ValueError(f"未知 profile：{profile}")
+        raise ConfigError(f"未知 profile：{profile}")
 
     config = deepcopy(default_harness_config())
     config["fitness"]["dimensions"] = _language_dimensions(profile, repo_root)

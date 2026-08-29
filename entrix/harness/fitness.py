@@ -7,6 +7,7 @@ from datetime import date
 from enum import Enum
 from typing import Any, TypeVar
 
+from entrix.errors import ConfigError
 from entrix.model import (
     AnalysisMode,
     Confidence,
@@ -26,13 +27,13 @@ _EnumT = TypeVar("_EnumT", bound=Enum)
 
 def _mapping(value: object, field_name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
-        raise ValueError(f"{field_name} 必须是对象")
+        raise ConfigError(f"{field_name} 必须是对象")
     return value
 
 
 def _text(value: object, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{field_name} 必须是非空字符串")
+        raise ConfigError(f"{field_name} 必须是非空字符串")
     return value.strip()
 
 
@@ -40,7 +41,7 @@ def _string_list(value: object, field_name: str) -> list[str]:
     if value is None:
         return []
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        raise ValueError(f"{field_name} 必须是字符串列表")
+        raise ConfigError(f"{field_name} 必须是字符串列表")
     return value
 
 
@@ -52,11 +53,11 @@ def _enum(
 ) -> _EnumT:
     value = raw.get(field_name, default.value)
     if not isinstance(value, str):
-        raise ValueError(f"{field_name} 不支持值：{value}")
+        raise ConfigError(f"{field_name} 不支持值：{value}")
     try:
         return enum_type(value)
     except ValueError as error:
-        raise ValueError(f"{field_name} 不支持值：{value}") from error
+        raise ConfigError(f"{field_name} 不支持值：{value}") from error
 
 
 def _waiver(value: object) -> Waiver | None:
@@ -70,14 +71,14 @@ def _waiver(value: object) -> Waiver | None:
         try:
             parsed_expiry = date.fromisoformat(expires_at)
         except ValueError as error:
-            raise ValueError("fitness metric.waiver.expires_at 必须是 ISO 日期") from error
+            raise ConfigError("fitness metric.waiver.expires_at 必须是 ISO 日期") from error
     elif expires_at is None:
         parsed_expiry = None
     else:
-        raise ValueError("fitness metric.waiver.expires_at 必须是 ISO 日期")
+        raise ConfigError("fitness metric.waiver.expires_at 必须是 ISO 日期")
     tracking_issue = raw.get("tracking_issue")
     if tracking_issue is not None and not isinstance(tracking_issue, int):
-        raise ValueError("fitness metric.waiver.tracking_issue 必须是整数")
+        raise ConfigError("fitness metric.waiver.tracking_issue 必须是整数")
     return Waiver(
         reason=_text(raw.get("reason"), "fitness metric.waiver.reason"),
         owner=str(raw.get("owner", "")),
@@ -90,12 +91,12 @@ def _metric(raw_value: object, index: int, dimension_name: str) -> Metric:
     raw = _mapping(raw_value, f"fitness.dimensions[{dimension_name}].metrics[{index}]")
     hard_gate = raw.get("hard_gate", False)
     if not isinstance(hard_gate, bool):
-        raise ValueError("fitness metric.hard_gate 必须是布尔值")
+        raise ConfigError("fitness metric.hard_gate 必须是布尔值")
     timeout_seconds = raw.get("timeout_seconds")
     if timeout_seconds is not None and (
         not isinstance(timeout_seconds, int) or timeout_seconds <= 0
     ):
-        raise ValueError("fitness metric.timeout_seconds 必须是正整数")
+        raise ConfigError("fitness metric.timeout_seconds 必须是正整数")
     return Metric(
         name=_text(raw.get("name"), "fitness metric.name"),
         command=_text(raw.get("command"), "fitness metric.command"),
@@ -125,7 +126,7 @@ def parse_dimensions(raw_value: object) -> list[Dimension]:
     if raw_value is None:
         return []
     if not isinstance(raw_value, list):
-        raise ValueError("fitness.dimensions 必须是列表")
+        raise ConfigError("fitness.dimensions 必须是列表")
 
     dimensions: list[Dimension] = []
     names: set[str] = set()
@@ -133,23 +134,23 @@ def parse_dimensions(raw_value: object) -> list[Dimension]:
         raw = _mapping(raw_dimension, f"fitness.dimensions[{index}]")
         name = _text(raw.get("dimension"), f"fitness.dimensions[{index}].dimension")
         if name in names:
-            raise ValueError(f"fitness.dimensions 存在重复 dimension：{name}")
+            raise ConfigError(f"fitness.dimensions 存在重复 dimension：{name}")
         names.add(name)
         weight = raw.get("weight")
         if not isinstance(weight, int) or weight < 0:
-            raise ValueError(f"fitness.dimensions[{index}].weight 必须是非负整数")
+            raise ConfigError(f"fitness.dimensions[{index}].weight 必须是非负整数")
         threshold = _mapping(raw.get("threshold", {}), f"fitness.dimensions[{index}].threshold")
         threshold_pass = threshold.get("pass", 90)
         threshold_warn = threshold.get("warn", 80)
         if not isinstance(threshold_pass, int) or not isinstance(threshold_warn, int):
-            raise ValueError(f"fitness.dimensions[{index}].threshold 必须是整数")
+            raise ConfigError(f"fitness.dimensions[{index}].threshold 必须是整数")
         metrics_value = raw.get("metrics")
         if not isinstance(metrics_value, list):
-            raise ValueError(f"fitness.dimensions[{index}].metrics 必须是列表")
+            raise ConfigError(f"fitness.dimensions[{index}].metrics 必须是列表")
         metrics = [_metric(metric, metric_index, name) for metric_index, metric in enumerate(metrics_value)]
         metric_names = [metric.name for metric in metrics]
         if len(metric_names) != len(set(metric_names)):
-            raise ValueError(f"fitness.dimensions[{index}] 存在重复 metric name")
+            raise ConfigError(f"fitness.dimensions[{index}] 存在重复 metric name")
         dimensions.append(
             Dimension(
                 name=name,

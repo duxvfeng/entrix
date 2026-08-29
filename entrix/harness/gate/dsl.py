@@ -1,6 +1,7 @@
 """Expression DSL for gate conditions."""
 import re
 
+from entrix.errors import ConfigError
 from entrix.harness.evidence import Evidence
 
 # Simple expression parser for MVP
@@ -144,7 +145,7 @@ class ExpressionEvaluator:
             try:
                 return int(value)
             except (TypeError, ValueError) as error:
-                raise ValueError("int() requires an integer-compatible value") from error
+                raise ConfigError("int() requires an integer-compatible value") from error
 
         # Parse string literals
         string_match = re.match(r'"([^"]*)"', self.expression[self.pos:])

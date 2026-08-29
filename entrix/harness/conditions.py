@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from entrix.errors import ConfigError
+
 _PREDICATES = frozenset({"files_exist", "changed_any", "branch", "env"})
 
 
@@ -28,15 +30,15 @@ class WhenContext:
 
 def _validated_pattern(pattern: object, context: WhenContext) -> str:
     if not isinstance(pattern, str) or not pattern:
-        raise ValueError("when 路径模式必须是非空字符串")
+        raise ConfigError("when 路径模式必须是非空字符串")
     relative_path = Path(pattern)
     root = context.repo_root.resolve()
     # Windows drive paths must remain invalid on POSIX runners too.
     if relative_path.is_absolute() or ntpath.isabs(pattern):
-        raise ValueError(f"when 路径必须位于工作区内：{pattern}")
+        raise ConfigError(f"when 路径必须位于工作区内：{pattern}")
     candidate = (root / relative_path).resolve()
     if not candidate.is_relative_to(root):
-        raise ValueError(f"when 路径必须位于工作区内：{pattern}")
+        raise ConfigError(f"when 路径必须位于工作区内：{pattern}")
     return pattern
 
 
@@ -98,32 +100,32 @@ def validate_when_config(when: object, field_name: str) -> dict[str, Any] | None
     if when is None:
         return None
     if not isinstance(when, dict):
-        raise ValueError(f"{field_name} 必须是对象")
+        raise ConfigError(f"{field_name} 必须是对象")
     for predicate, value in when.items():
         if predicate not in _PREDICATES:
-            raise ValueError(f"未知 when 谓词：{predicate}")
+            raise ConfigError(f"未知 when 谓词：{predicate}")
         if predicate in {"files_exist", "changed_any"}:
             if not isinstance(value, list) or not value or not all(
                 isinstance(item, str) and item for item in value
             ):
-                raise ValueError(f"{field_name}.{predicate} 必须是非空字符串列表")
+                raise ConfigError(f"{field_name}.{predicate} 必须是非空字符串列表")
         elif predicate == "branch":
             if not isinstance(value, dict):
-                raise ValueError(f"{field_name}.branch 必须是对象")
+                raise ConfigError(f"{field_name}.branch 必须是对象")
             unknown = set(value) - {"include", "exclude"}
             if unknown:
-                raise ValueError(f"未知 branch 条件：{sorted(unknown)[0]}")
+                raise ConfigError(f"未知 branch 条件：{sorted(unknown)[0]}")
             for key, patterns in value.items():
                 if not isinstance(patterns, list) or not all(
                     isinstance(item, str) and item for item in patterns
                 ):
-                    raise ValueError(f"{field_name}.branch.{key} 必须是字符串列表")
+                    raise ConfigError(f"{field_name}.branch.{key} 必须是字符串列表")
         elif predicate == "env":
             if not isinstance(value, dict) or not all(
                 isinstance(key, str) and isinstance(expected, str)
                 for key, expected in value.items()
             ):
-                raise ValueError(f"{field_name}.env 必须是字符串映射")
+                raise ConfigError(f"{field_name}.env 必须是字符串映射")
     return dict(when)
 
 
@@ -155,6 +157,6 @@ def evaluate_when(when: dict[str, Any] | None, context: WhenContext) -> bool:
             if not _env(predicate_value, context):
                 return False
         else:
-            raise ValueError(f"未知 when 谓词：{predicate_name}")
+            raise ConfigError(f"未知 when 谓词：{predicate_name}")
 
     return True

@@ -7,6 +7,7 @@ from typing import Any
 
 import yaml
 
+from entrix.errors import ConfigError
 from entrix.harness.conditions import validate_when_config
 from entrix.harness.evidence import EVIDENCE_STATUSES
 from entrix.harness.fitness import parse_dimensions, validate_weights
@@ -82,19 +83,19 @@ class HarnessConfig:
 
 def _require_mapping(value: Any, field_name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
-        raise ValueError(f"{field_name} 必须是对象")
+        raise ConfigError(f"{field_name} 必须是对象")
     return value
 
 
 def _require_text(value: Any, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{field_name} 必须是非空字符串")
+        raise ConfigError(f"{field_name} 必须是非空字符串")
     return value.strip()
 
 
 def _load_producer_configs(producers_data: Any) -> list[EvidenceProducerConfig]:
     if not isinstance(producers_data, list):
-        raise ValueError("evidence_producers 必须是列表")
+        raise ConfigError("evidence_producers 必须是列表")
 
     producers: list[EvidenceProducerConfig] = []
     producer_ids: set[str] = set()
@@ -102,7 +103,7 @@ def _load_producer_configs(producers_data: Any) -> list[EvidenceProducerConfig]:
         producer_data = _require_mapping(raw_producer, f"evidence_producers[{index}]")
         producer_id = _require_text(producer_data.get("id"), f"evidence_producers[{index}].id")
         if producer_id in producer_ids:
-            raise ValueError(f"evidence_producers 中存在重复 id：{producer_id}")
+            raise ConfigError(f"evidence_producers 中存在重复 id：{producer_id}")
         producer_ids.add(producer_id)
 
         builtin = producer_data.get("builtin")
@@ -110,9 +111,9 @@ def _load_producer_configs(producers_data: Any) -> list[EvidenceProducerConfig]:
         if builtin is not None:
             builtin = _require_text(builtin, f"evidence_producers[{index}].builtin")
             if builtin not in BUILTIN_PRODUCERS:
-                raise ValueError(f"未知 builtin producer：{builtin}")
+                raise ConfigError(f"未知 builtin producer：{builtin}")
             if command is not None:
-                raise ValueError("builtin producer 不能同时配置 command")
+                raise ConfigError("builtin producer 不能同时配置 command")
         else:
             command = _require_text(command, f"evidence_producers[{index}].command")
 
@@ -120,11 +121,11 @@ def _load_producer_configs(producers_data: Any) -> list[EvidenceProducerConfig]:
         parser_data = _require_mapping(parser_data, f"evidence_producers[{index}].parser")
         parser_type = _require_text(parser_data.get("type", "exit_code"), "parser.type")
         if parser_type not in PARSER_TYPES:
-            raise ValueError(f"不支持的 parser type：{parser_type}")
+            raise ConfigError(f"不支持的 parser type：{parser_type}")
         parser_data = {**parser_data, "type": parser_type}
         pattern = parser_data.get("pattern")
         if parser_type == "regex" and (not isinstance(pattern, str) or not pattern):
-            raise ValueError("regex parser 必须配置非空 pattern")
+            raise ConfigError("regex parser 必须配置非空 pattern")
         if parser_type in {"junit", "json", "evidence_json", "sarif"}:
             parser_data["path"] = _require_text(
                 parser_data.get("path"), f"{parser_type} parser.path"
@@ -139,7 +140,7 @@ def _load_producer_configs(producers_data: Any) -> list[EvidenceProducerConfig]:
             for source_status, evidence_status in status_map.items():
                 _require_text(source_status, "json parser.status_map key")
                 if evidence_status not in EVIDENCE_STATUSES:
-                    raise ValueError(
+                    raise ConfigError(
                         "json parser.status_map values must be valid Evidence statuses"
                     )
             summary = _require_mapping(parser_data.get("summary", {}), "json parser.summary")
@@ -149,16 +150,16 @@ def _load_producer_configs(producers_data: Any) -> list[EvidenceProducerConfig]:
         if parser_type == "sarif":
             blocking_levels = parser_data.get("blocking_levels", ["error"])
             if not isinstance(blocking_levels, list):
-                raise ValueError("sarif parser.blocking_levels 必须是列表")
+                raise ConfigError("sarif parser.blocking_levels 必须是列表")
             if any(level not in SARIF_LEVELS for level in blocking_levels):
-                raise ValueError(
+                raise ConfigError(
                     "sarif parser.blocking_levels 只支持 error/warning/note/none"
                 )
             parser_data["blocking_levels"] = list(blocking_levels)
 
         timeout_seconds = producer_data.get("timeout_seconds", 60)
         if not isinstance(timeout_seconds, int) or timeout_seconds <= 0:
-            raise ValueError("timeout_seconds 必须是正整数")
+            raise ConfigError("timeout_seconds 必须是正整数")
 
         producers.append(
             EvidenceProducerConfig(
@@ -181,7 +182,7 @@ def _load_producer_configs(producers_data: Any) -> list[EvidenceProducerConfig]:
 
 def _load_gate_policies(gates_data: Any) -> list[GatePolicy]:
     if not isinstance(gates_data, list):
-        raise ValueError("gate_policies 必须是列表")
+        raise ConfigError("gate_policies 必须是列表")
 
     policies: list[GatePolicy] = []
     for index, raw_gate in enumerate(gates_data):
@@ -191,21 +192,21 @@ def _load_gate_policies(gates_data: Any) -> list[GatePolicy]:
                 _require_text(gate_data.get("severity"), f"gate_policies[{index}].severity")
             )
         except ValueError as error:
-            raise ValueError(f"不支持的 severity：{gate_data.get('severity')}") from error
+            raise ConfigError(f"不支持的 severity：{gate_data.get('severity')}") from error
 
         rule_data = _require_mapping(gate_data.get("rule"), f"gate_policies[{index}].rule")
         evidence_id = rule_data.get("evidence_id")
         evidence_type = rule_data.get("evidence_type")
         if bool(evidence_id) == bool(evidence_type):
             if evidence_id:
-                raise ValueError("gate rule 只能指定一个 evidence_id 或 evidence_type")
-            raise ValueError("gate rule 必须指定 evidence_id 或 evidence_type")
+                raise ConfigError("gate rule 只能指定一个 evidence_id 或 evidence_type")
+            raise ConfigError("gate rule 必须指定 evidence_id 或 evidence_type")
 
         condition = _require_text(rule_data.get("condition"), "rule.condition")
         try:
             validate_condition_syntax(condition)
         except (SyntaxError, ValueError) as error:
-            raise ValueError(f"无效的 gate condition：{condition}") from error
+            raise ConfigError(f"无效的 gate condition：{condition}") from error
 
         policies.append(
             GatePolicy(
@@ -231,17 +232,17 @@ def _validate_semantics(config: HarnessConfig) -> None:
     if config.fitness_dimensions:
         valid, total = validate_weights(config.fitness_dimensions)
         if not valid:
-            raise ValueError(f"fitness 维度权重总和必须为 100，当前为 {total}")
+            raise ConfigError(f"fitness 维度权重总和必须为 100，当前为 {total}")
 
     for index, dimension in enumerate(config.fitness_dimensions):
         for field_name in ("threshold_pass", "threshold_warn"):
             value = getattr(dimension, field_name)
             if not 0 <= value <= 100:
-                raise ValueError(
+                raise ConfigError(
                     f"fitness.dimensions[{index}].{field_name} 必须在 0-100：{value}"
                 )
         if dimension.threshold_pass < dimension.threshold_warn:
-            raise ValueError(
+            raise ConfigError(
                 f"fitness.dimensions[{index}] 的 threshold.pass 必须 >= threshold.warn："
                 f"{dimension.name}"
             )
@@ -250,7 +251,7 @@ def _validate_semantics(config: HarnessConfig) -> None:
     for index, policy in enumerate(config.gate_policies):
         rule = policy.rule
         if rule.evidence_id and rule.evidence_id not in producer_ids:
-            raise ValueError(
+            raise ConfigError(
                 f"gate_policies[{index}] 引用了不存在的 evidence_id：{rule.evidence_id}"
             )
 
@@ -262,28 +263,28 @@ def _validate_review_rule(rule: ReviewTriggerRule, index: int) -> None:
     """校验单条 review-trigger 规则的枚举与数值字段。"""
     prefix = f"review_triggers.rules[{index}]"
     if rule.type not in REVIEW_RULE_TYPES:
-        raise ValueError(
+        raise ConfigError(
             f"{prefix}.type 不受支持：{rule.type}。必须是以下之一：{sorted(REVIEW_RULE_TYPES)}"
         )
     if rule.severity not in REVIEW_SEVERITIES:
-        raise ValueError(
+        raise ConfigError(
             f"{prefix}.severity 不受支持：{rule.severity}。"
             f"必须是以下之一：{sorted(REVIEW_SEVERITIES)}"
         )
     if rule.action not in REVIEW_ACTIONS:
-        raise ValueError(
+        raise ConfigError(
             f"{prefix}.action 不受支持：{rule.action}。必须是以下之一：{sorted(REVIEW_ACTIONS)}"
         )
     for field_name in ("paths", "directories", "evidence_paths"):
         values = getattr(rule, field_name)
         if any(not isinstance(value, str) or not value.strip() for value in values):
-            raise ValueError(f"{prefix}.{field_name} 必须是非空字符串列表")
+            raise ConfigError(f"{prefix}.{field_name} 必须是非空字符串列表")
     for field_name in ("max_files", "max_added_lines", "max_deleted_lines"):
         value = getattr(rule, field_name)
         if value is not None and (not isinstance(value, int) or isinstance(value, bool) or value <= 0):
-            raise ValueError(f"{prefix}.{field_name} 必须是正整数：{value}")
+            raise ConfigError(f"{prefix}.{field_name} 必须是正整数：{value}")
     if rule.min_boundaries < 1:
-        raise ValueError(f"{prefix}.min_boundaries 必须 >= 1")
+        raise ConfigError(f"{prefix}.min_boundaries 必须 >= 1")
 
 
 def load_harness_config(config_path: Path) -> HarnessConfig:
@@ -295,21 +296,21 @@ def load_harness_config(config_path: Path) -> HarnessConfig:
     data = _require_mapping(data, "harness 配置")
     version = data.get("version", "")
     if version not in SUPPORTED_VERSIONS:
-        raise ValueError(
+        raise ConfigError(
             f"不支持的 harness 版本：{version}。必须是以下之一：{list(SUPPORTED_VERSIONS)}"
         )
 
     settings = _require_mapping(data.get("settings", {}), "settings")
     failure_mode = settings.get("failure_mode", "closed")
     if failure_mode != "closed":
-        raise ValueError("settings.failure_mode 仅支持 closed")
+        raise ConfigError("settings.failure_mode 仅支持 closed")
     max_parallel_producers = settings.get("max_parallel_producers", 1)
     if (
         isinstance(max_parallel_producers, bool)
         or not isinstance(max_parallel_producers, int)
         or max_parallel_producers <= 0
     ):
-        raise ValueError("settings.max_parallel_producers 必须是正整数")
+        raise ConfigError("settings.max_parallel_producers 必须是正整数")
 
     producers = _load_producer_configs(data.get("evidence_producers", []))
     policies = _load_gate_policies(data.get("gate_policies", []))
@@ -320,9 +321,9 @@ def load_harness_config(config_path: Path) -> HarnessConfig:
         _require_mapping(data.get("review_triggers", {}), "review_triggers").get("rules", [])
     )
     if not producers:
-        raise ValueError("evidence_producers 至少需要一个 producer")
+        raise ConfigError("evidence_producers 至少需要一个 producer")
     if not policies:
-        raise ValueError("gate_policies 至少需要一个 gate")
+        raise ConfigError("gate_policies 至少需要一个 gate")
 
     config = HarnessConfig(
         version=version,
