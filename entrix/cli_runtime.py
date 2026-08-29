@@ -8,6 +8,7 @@ import tempfile
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from entrix.model import FitnessReport
 
@@ -93,7 +94,7 @@ def build_runtime_fitness_snapshot(
     for dimension_score in report.dimensions:
         metrics = []
         for result in dimension_score.results:
-            metric_summary = {
+            metric_summary: dict[str, Any] = {
                 "name": result.metric_name,
                 "passed": result.passed,
                 "state": result.state.value if result.state is not None else "unknown",

@@ -71,7 +71,7 @@ class ShellRunner:
             )
 
         start = time.monotonic()
-        timeout = metric.timeout_seconds or self.timeout
+        timeout: float = metric.timeout_seconds or self.timeout
         if self.deadline is not None:
             timeout = min(float(timeout), self.deadline - time.monotonic())
             if timeout <= 0:
@@ -146,7 +146,7 @@ class ShellRunner:
                 state=ResultState.UNKNOWN,
             )
 
-    def _run_captured(self, metric: Metric, *, timeout: int) -> tuple[str, int]:
+    def _run_captured(self, metric: Metric, *, timeout: float) -> tuple[str, int]:
         outcome = run_shell_command(
             metric.command,
             cwd=self.project_root,
@@ -157,7 +157,7 @@ class ShellRunner:
             raise subprocess.TimeoutExpired(metric.command, timeout)
         return outcome.stdout + outcome.stderr, outcome.returncode
 
-    def _run_streaming(self, metric: Metric, *, timeout: int) -> tuple[str, int]:
+    def _run_streaming(self, metric: Metric, *, timeout: float) -> tuple[str, int]:
         command, use_shell = shell_command_parts(metric.command)
         process = subprocess.Popen(
             command,

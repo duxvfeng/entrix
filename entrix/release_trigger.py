@@ -229,16 +229,16 @@ def evaluate_release_triggers(
                     )
                 )
         elif rule.type == "artifact_size_delta":
-            reasons: list[str] = []
+            size_reasons: list[str] = []
             for artifact in artifacts:
                 if not _artifact_matches_rule(artifact, rule):
                     continue
                 if rule.max_size_bytes is not None and artifact.size_bytes > rule.max_size_bytes:
-                    reasons.append(
+                    size_reasons.append(
                         f"artifact {artifact.kind} ({artifact.path}) size {artifact.size_bytes} exceeds limit {rule.max_size_bytes}"
                     )
                 if rule.max_file_count is not None and artifact.file_count > rule.max_file_count:
-                    reasons.append(
+                    size_reasons.append(
                         f"artifact {artifact.kind} ({artifact.path}) file count {artifact.file_count} exceeds limit {rule.max_file_count}"
                     )
                 baseline_artifact = _find_baseline_artifact(artifact, baseline_artifacts, rule)
@@ -255,33 +255,33 @@ def evaluate_release_triggers(
                     rule.min_growth_bytes is None or growth_bytes >= rule.min_growth_bytes
                 )
                 if percent_exceeded and bytes_exceeded:
-                    reasons.append(
+                    size_reasons.append(
                         "artifact "
                         f"{artifact.kind} ({artifact.path}) grew by {growth_bytes} bytes "
                         f"({growth_percent:.1f}%) versus baseline {baseline_artifact.path}"
                     )
-            if reasons:
+            if size_reasons:
                 triggers.append(
                     TriggerMatch(
                         name=rule.name,
                         severity=rule.severity,
                         action=rule.action,
-                        reasons=tuple(reasons),
+                        reasons=tuple(size_reasons),
                     )
                 )
         elif rule.type in {"release_boundary_change", "capability_change"}:
-            reasons = tuple(
+            path_reasons = tuple(
                 f"changed release-sensitive path: {file_path}"
                 for file_path in changed_files
                 if any(fnmatch.fnmatch(file_path, pattern) for pattern in rule.paths)
             )
-            if reasons:
+            if path_reasons:
                 triggers.append(
                     TriggerMatch(
                         name=rule.name,
                         severity=rule.severity,
                         action=rule.action,
-                        reasons=reasons,
+                        reasons=path_reasons,
                     )
                 )
 

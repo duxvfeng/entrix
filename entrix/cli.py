@@ -13,6 +13,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
+from typing import Any
 
 from entrix import __version__ as PACKAGE_VERSION
 from entrix import cli_runtime as _cli_runtime
@@ -152,30 +153,6 @@ def _positive_int(value: str) -> int:
 def _runtime_root(project_root: Path) -> Path:
     """Compatibility seam for callers that isolate CLI runtime files in tests."""
     return _cli_runtime.runtime_root(project_root)
-
-
-def _runtime_mode(tier: str | None) -> str:
-    return _cli_runtime.runtime_mode(tier)
-
-
-def _build_runtime_fitness_snapshot(project_root: Path, **kwargs: object) -> dict:
-    return _cli_runtime.build_runtime_fitness_snapshot(project_root, **kwargs)
-
-
-def _write_runtime_fitness_artifacts(project_root: Path, **kwargs: object) -> str:
-    return _cli_runtime.write_runtime_fitness_artifacts(
-        project_root,
-        runtime_root_resolver=_runtime_root,
-        **kwargs,
-    )
-
-
-def _emit_runtime_fitness_event(project_root: Path, **kwargs: object) -> None:
-    _cli_runtime.emit_runtime_fitness_event(
-        project_root,
-        runtime_root_resolver=_runtime_root,
-        **kwargs,
-    )
 
 
 def _default_mcp_config() -> dict:
@@ -519,7 +496,7 @@ def _harness_status(project_root: Path, state_store: StopGateStateStore) -> dict
     }
 
 
-def _status_payload(project_root: Path, session_id: str) -> dict[str, object]:
+def _status_payload(project_root: Path, session_id: str) -> dict[str, Any]:
     state_store = StopGateStateStore()
     harness = _harness_status(project_root, state_store)
     session_phase = read_phase(project_root, session_id=session_id)
@@ -888,7 +865,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                     "dimensions": [],
                 },
             )
-            _emit_runtime_fitness_event(
+            _cli_runtime.emit_runtime_fitness_event(
                 project_root,
                 status="skipped",
                 tier=args.tier,
@@ -896,6 +873,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 metric_count=0,
                 duration_ms=0.0,
                 artifact_path=None,
+                runtime_root_resolver=_runtime_root,
             )
             return 0
 
@@ -940,7 +918,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 "dimensions": [],
             },
         )
-        _emit_runtime_fitness_event(
+        _cli_runtime.emit_runtime_fitness_event(
             project_root,
             status="skipped",
             tier=args.tier,
@@ -948,6 +926,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             metric_count=0,
             duration_ms=0.0,
             artifact_path=None,
+            runtime_root_resolver=_runtime_root,
         )
         return 0
 
@@ -957,7 +936,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             print(f"   Source: {dim.source_file}")
 
             for result in ds.results:
-                state_labels = {
+                state_labels: dict[ResultState | None, str] = {
                     ResultState.PASS: "\u2705 PASS",
                     ResultState.FAIL: "\u274c FAIL",
                     ResultState.UNKNOWN: "\u2753 UNKNOWN",
@@ -995,7 +974,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             project_root, tier=args.tier, observed_at_ms=observed_at_ms
         )
     )
-    snapshot = _build_runtime_fitness_snapshot(
+    snapshot = _cli_runtime.build_runtime_fitness_snapshot(
         project_root,
         tier=args.tier,
         report=report,
@@ -1006,13 +985,14 @@ def cmd_run(args: argparse.Namespace) -> int:
         base_ref=(args.base if changed_files else None),
         changed_files=changed_files,
     )
-    artifact_path = _write_runtime_fitness_artifacts(
+    artifact_path = _cli_runtime.write_runtime_fitness_artifacts(
         project_root,
         tier=args.tier,
         snapshot=snapshot,
         observed_at_ms=observed_at_ms,
+        runtime_root_resolver=_runtime_root,
     )
-    _emit_runtime_fitness_event(
+    _cli_runtime.emit_runtime_fitness_event(
         project_root,
         status="passed" if exit_code == 0 else "failed",
         tier=args.tier,
@@ -1020,6 +1000,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         metric_count=sum(len(ds.results) for ds in report.dimensions),
         duration_ms=duration_ms,
         artifact_path=artifact_path,
+        runtime_root_resolver=_runtime_root,
     )
     return exit_code
 
@@ -1781,7 +1762,7 @@ def run_cli(argv: list[str] | None = None) -> int:
 
     if not getattr(args, "func", None):
         # 检查是否是子命令组，如果是则显示该组的子命令帮助
-        if len(argv) == 1 and argv[0] in ["harness", "graph", "hook", "analyze"]:
+        if argv and len(argv) == 1 and argv[0] in ["harness", "graph", "hook", "analyze"]:
             show_subgroup_help(argv[0])
         else:
             print_command_overview()

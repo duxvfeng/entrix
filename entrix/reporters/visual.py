@@ -99,7 +99,7 @@ class RichLiveProgressReporter:
 
         status = "passed"
         if result is not None:
-            status_map = {
+            status_map: dict[ResultState | None, str] = {
                 ResultState.PASS: "passed",
                 ResultState.FAIL: "failed",
                 ResultState.UNKNOWN: "unknown",

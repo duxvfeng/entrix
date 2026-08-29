@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from entrix.structure.builtin import BuiltinGraphAdapter
 
@@ -24,7 +25,7 @@ class CodeReviewGraphAdapter:
 
     def __init__(self, repo_root: Path):
         self.repo_root = repo_root
-        self._tools = None
+        self._tools: Any = None
 
     def _ensure_loaded(self) -> None:
         """根据 ROUTA_CODE_REVIEW_GRAPH_SOURCE 懒加载 code_review_graph。"""

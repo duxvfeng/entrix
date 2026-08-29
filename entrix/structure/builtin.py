@@ -35,7 +35,7 @@ from entrix.structure.language import (
 try:
     from tree_sitter_language_pack import get_parser
 except ImportError:  # pragma: no cover - exercised via adapter selection
-    get_parser = None
+    get_parser = None  # type: ignore[assignment,misc]
 
 
 _CACHE_VERSION = 4
@@ -314,7 +314,11 @@ class BuiltinGraphAdapter:
     def _read_json(self, path: Path) -> dict[str, Any] | None:
         if not path.exists():
             return None
-        return json.loads(path.read_text(encoding="utf-8"))
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            # 缓存损坏时视为无缓存，触发全量重建而不是让整个分析失败
+            return None
 
     def _ensure_index(self) -> dict[str, Any]:
         return self._load_index()
@@ -347,7 +351,7 @@ class BuiltinGraphAdapter:
 
     def _parse_file(self, rel_path: str, source: bytes) -> dict[str, Any]:
         language = _LANGUAGE_BY_SUFFIX.get(Path(rel_path).suffix.lower(), "unknown")
-        parser = get_parser(language)
+        parser = get_parser(language)  # type: ignore[arg-type]
         tree = parser.parse(source)
         is_test_file = classify_test_file(rel_path)
         imports: set[str] = set()

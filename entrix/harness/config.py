@@ -239,8 +239,8 @@ def _validate_semantics(config: HarnessConfig) -> None:
                 f"gate_policies[{index}] 引用了不存在的 evidence_id：{rule.evidence_id}"
             )
 
-    for index, rule in enumerate(config.review_trigger_rules):
-        _validate_review_rule(rule, index)
+    for index, review_rule in enumerate(config.review_trigger_rules):
+        _validate_review_rule(review_rule, index)
 
 
 def _validate_review_rule(rule: ReviewTriggerRule, index: int) -> None:

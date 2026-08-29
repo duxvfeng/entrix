@@ -217,10 +217,10 @@ def test_dependabot_tracks_pip_and_github_actions() -> None:
     assert ecosystems == {"pip", "github-actions"}
 
 
-def test_mypy_coverage_includes_scripts_and_new_cli_modules() -> None:
+def test_mypy_covers_the_whole_package_and_scripts() -> None:
     package = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    files = package["tool"]["mypy"]["files"]
+    config = package["tool"]["mypy"]
 
-    assert "scripts" in files
-    assert "entrix/cli_analysis.py" in files
-    assert "entrix/cli_release.py" in files
+    assert "entrix" in config["files"]
+    assert "scripts" in config["files"]
+    assert config.get("follow_imports") != "skip"

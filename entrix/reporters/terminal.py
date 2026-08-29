@@ -39,7 +39,7 @@ class TerminalReporter:
             print(f"[RUNNING] {metric_name}{hard}{tier_label}")
             return
 
-        status_labels = {
+        status_labels: dict[ResultState | None, str] = {
             ResultState.PASS: "PASS",
             ResultState.FAIL: "FAIL",
             ResultState.UNKNOWN: "UNKNOWN",
@@ -64,7 +64,7 @@ class TerminalReporter:
             print(f"   Score: {ds.score:.0f}%")
 
     def _print_result(self, result: MetricResult, *, show_tier: bool = False) -> None:
-        status_labels = {
+        status_labels: dict[ResultState | None, str] = {
             ResultState.PASS: "\u2705 PASS",
             ResultState.FAIL: "\u274c FAIL",
             ResultState.UNKNOWN: "\u2753 UNKNOWN",

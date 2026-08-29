@@ -13,6 +13,7 @@ from pathlib import Path
 
 from entrix.presets import get_project_preset
 from entrix.release_trigger import (
+    ReleaseArtifact,
     evaluate_release_triggers,
     load_release_manifest,
     load_release_triggers,
@@ -87,7 +88,7 @@ def cmd_release_trigger(args: argparse.Namespace) -> int:
     rules = load_release_triggers(config_path)
     manifest_path = Path(args.manifest).resolve()
     manifest_label, artifacts = load_release_manifest(manifest_path)
-    baseline_artifacts = ()
+    baseline_artifacts: tuple[ReleaseArtifact, ...] = ()
     baseline_manifest_label: str | None = None
     if args.baseline_manifest:
         baseline_manifest_path = Path(args.baseline_manifest).resolve()

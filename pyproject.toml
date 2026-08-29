@@ -93,30 +93,11 @@ markers = [
 [tool.mypy]
 python_version = "3.11"
 files = [
-    "entrix/server.py",
-    "entrix/cli_runtime.py",
-    "entrix/cli_overview.py",
-    "entrix/reporting.py",
-    "entrix/reporters",
-    "entrix/cli_hints.py",
-    "entrix/cli_analysis.py",
-    "entrix/cli_release.py",
-    "entrix/file_budgets.py",
-    "entrix/scoring.py",
-    "entrix/harness/config.py",
-    "entrix/harness/engine.py",
-    "entrix/harness/gate",
-    "entrix/harness/producers",
-    "entrix/stop_gate/hook.py",
-    "entrix/stop_gate/runner.py",
-    "entrix/runners/graph.py",
-    "entrix/runners/shell.py",
-    "entrix/structure/language.py",
+    "entrix",
     "scripts",
 ]
 exclude = ["docs/multi_agent_system"]
 check_untyped_defs = true
-follow_imports = "skip"
 ignore_missing_imports = true
 
 [tool.coverage.run]

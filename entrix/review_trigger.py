@@ -214,33 +214,33 @@ def evaluate_review_triggers(
     triggers: list[TriggerMatch] = []
     for rule in rules:
         if rule.type == "changed_paths":
-            reasons = tuple(
+            path_reasons = tuple(
                 f"changed path: {file_path}"
                 for file_path in changed_files
                 if any(fnmatch.fnmatch(file_path, pattern) for pattern in rule.paths)
             )
-            if reasons:
+            if path_reasons:
                 triggers.append(
                     TriggerMatch(
                         name=rule.name,
                         severity=rule.severity,
                         action=rule.action,
-                        reasons=reasons,
+                        reasons=path_reasons,
                     )
                 )
         elif rule.type == "sensitive_file_change":
-            reasons = tuple(
+            sensitive_reasons = tuple(
                 f"sensitive file changed: {file_path}"
                 for file_path in changed_files
                 if any(fnmatch.fnmatch(file_path, pattern) for pattern in rule.paths)
             )
-            if reasons:
+            if sensitive_reasons:
                 triggers.append(
                     TriggerMatch(
                         name=rule.name,
                         severity=rule.severity,
                         action=rule.action,
-                        reasons=reasons,
+                        reasons=sensitive_reasons,
                     )
                 )
         elif rule.type == "diff_size":
@@ -276,7 +276,7 @@ def evaluate_review_triggers(
         elif rule.type == "directory_file_count":
             if repo_root is None or rule.max_files is None:
                 continue
-            reasons: list[str] = []
+            dir_reasons: list[str] = []
             for directory in rule.directories:
                 touched_files = _changed_files_in_directory(changed_files, directory)
                 if not touched_files:
@@ -286,17 +286,17 @@ def evaluate_review_triggers(
                     changed_sample = ", ".join(touched_files[:3])
                     if len(touched_files) > 3:
                         changed_sample += ", ..."
-                    reasons.append(
+                    dir_reasons.append(
                         f"directory '{directory}' has {file_count} direct files "
                         f"(threshold: {rule.max_files}); changed files: {changed_sample}"
                     )
-            if reasons:
+            if dir_reasons:
                 triggers.append(
                     TriggerMatch(
                         name=rule.name,
                         severity=rule.severity,
                         action=rule.action,
-                        reasons=tuple(reasons),
+                        reasons=tuple(dir_reasons),
                     )
                 )
         elif rule.type == "evidence_gap":
@@ -313,7 +313,7 @@ def evaluate_review_triggers(
                 for pattern in rule.evidence_paths
             )
             if not evidence_touched:
-                reasons = tuple(
+                gap_reasons = tuple(
                     [f"changed code path without evidence update: {path}" for path in monitored_changes]
                     + [f"expected evidence path patterns: {', '.join(rule.evidence_paths)}"]
                 )
@@ -322,7 +322,7 @@ def evaluate_review_triggers(
                         name=rule.name,
                         severity=rule.severity,
                         action=rule.action,
-                        reasons=reasons,
+                        reasons=gap_reasons,
                     )
                 )
         elif rule.type == "cross_boundary_change":
@@ -336,7 +336,7 @@ def evaluate_review_triggers(
                 if matches:
                     boundary_hits[boundary_name] = matches
             if len(boundary_hits) >= rule.min_boundaries:
-                reasons = tuple(
+                boundary_reasons = tuple(
                     f"changed boundary '{boundary_name}': {', '.join(paths)}"
                     for boundary_name, paths in boundary_hits.items()
                 )
@@ -345,7 +345,7 @@ def evaluate_review_triggers(
                         name=rule.name,
                         severity=rule.severity,
                         action=rule.action,
-                        reasons=reasons,
+                        reasons=boundary_reasons,
                     )
                 )
 

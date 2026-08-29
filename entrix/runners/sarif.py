@@ -52,7 +52,7 @@ class SarifRunner:
             )
 
         start = time.monotonic()
-        timeout = metric.timeout_seconds or self.timeout
+        timeout: float = metric.timeout_seconds or self.timeout
         if self.deadline is not None:
             timeout = min(float(timeout), self.deadline - time.monotonic())
             if timeout <= 0:

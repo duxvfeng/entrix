@@ -108,7 +108,8 @@ def run_shell_command(
 def process_group_kwargs() -> dict[str, Any]:
     """Start a subprocess in a group that can be terminated with its children."""
     if os.name == "nt":
-        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+        # CREATE_NEW_PROCESS_GROUP 仅存在于 Windows 版 subprocess;运行时按平台取值
+        return {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
     return {"start_new_session": True}
 
 
