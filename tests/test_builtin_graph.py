@@ -1,10 +1,12 @@
 """Tests for the built-in structural analyzer."""
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
 
+from entrix.structure import builtin as builtin_module
 from entrix.structure.builtin import BuiltinGraphAdapter
 
 pytestmark = pytest.mark.skipif(
@@ -317,3 +319,189 @@ def test_builtin_graph_queries_from_persisted_index_without_file_cache(tmp_path:
     assert stats["files"] == 3
     assert sorted(impact["impacted_files"]) == ["src/consumer.py", "src/test_service.py"]
     assert [item["qualified_name"] for item in tests["results"]] == ["src/test_service.py:test_run"]
+
+
+def test_builtin_graph_parses_go_functions_and_methods(tmp_path: Path):
+    _write(
+        tmp_path / "pkg" / "runner.go",
+        "package pkg\n\ntype Runner struct{}\n\nfunc (r Runner) Start() {\n\thelper()\n}\n\nfunc helper() {}\n",
+    )
+
+    adapter = BuiltinGraphAdapter(tmp_path)
+    build = adapter.build_or_update(full=True)
+    children = adapter.query("children_of", "pkg/runner.go")
+    callees = adapter.query("callees_of", "pkg/runner.go:Runner.Start")
+
+    assert build["status"] == "ok"
+    assert "go" in build["languages"]
+    assert {"pkg/runner.go:Runner", "pkg/runner.go:Runner.Start", "pkg/runner.go:helper"} <= {
+        item["qualified_name"] for item in children["results"]
+    }
+    assert [item["qualified_name"] for item in callees["results"]] == ["pkg/runner.go:helper"]
+
+
+def test_builtin_graph_parses_plain_javascript(tmp_path: Path):
+    _write(
+        tmp_path / "src" / "app.js",
+        "function run() { return helper(); }\n\nfunction helper() { return 1; }\n",
+    )
+
+    adapter = BuiltinGraphAdapter(tmp_path)
+    build = adapter.build_or_update(full=True)
+    children = adapter.query("children_of", "src/app.js")
+    callees = adapter.query("callees_of", "src/app.js:run")
+
+    assert build["status"] == "ok"
+    assert "javascript" in build["languages"]
+    assert {"src/app.js:run", "src/app.js:helper"} <= {
+        item["qualified_name"] for item in children["results"]
+    }
+    assert [item["qualified_name"] for item in callees["results"]] == ["src/app.js:helper"]
+
+
+def test_builtin_graph_rejects_unknown_query_type(tmp_path: Path):
+    adapter = BuiltinGraphAdapter(tmp_path)
+
+    result = adapter.query("bogus_query", "src/app.py")
+
+    assert result["status"] == "error"
+    assert "bogus_query" in result["summary"]
+
+
+def test_builtin_graph_returns_not_found_for_missing_target(tmp_path: Path):
+    _write(tmp_path / "src" / "app.py", "def run():\n    return 1\n")
+    adapter = BuiltinGraphAdapter(tmp_path)
+    adapter.build_or_update(full=True)
+
+    missing_node = adapter.query("callees_of", "src/ghost.py:nope")
+    missing_file = adapter.query("file_summary", "docs/nope.py")
+
+    assert missing_node["status"] == "not_found"
+    assert missing_file["status"] == "not_found"
+
+
+def test_builtin_graph_summarizes_single_file(tmp_path: Path):
+    _write(
+        tmp_path / "src" / "service.py",
+        "class Service:\n    def run(self):\n        return 1\n",
+    )
+
+    adapter = BuiltinGraphAdapter(tmp_path)
+    adapter.build_or_update(full=True)
+    summary = adapter.query("file_summary", "src/service.py")
+
+    assert summary["status"] == "ok"
+    qualified = {item["qualified_name"] for item in summary["results"]}
+    assert "src/service.py" in qualified
+    assert "src/service.py:Service.run" in qualified
+
+
+def test_builtin_graph_impact_radius_ignores_unknown_files(tmp_path: Path):
+    _write(tmp_path / "src" / "app.py", "def run():\n    return 1\n")
+    adapter = BuiltinGraphAdapter(tmp_path)
+    adapter.build_or_update(full=True)
+
+    impact = adapter.impact_radius(["docs/not-in-index.py"], depth=1)
+
+    assert impact["status"] == "ok"
+    assert impact["impacted_files"] == []
+    assert impact["changed_nodes"] == []
+
+
+def test_builtin_graph_incremental_build_reparses_only_changed_files(tmp_path: Path, monkeypatch):
+    _write(tmp_path / "src" / "a.py", "def one():\n    return 1\n")
+    _write(tmp_path / "src" / "b.py", "def two():\n    return 2\n")
+    adapter = BuiltinGraphAdapter(tmp_path)
+    adapter.build_or_update(full=True)
+
+    _write(tmp_path / "src" / "a.py", "def one():\n    return 11\n\n\ndef one_more():\n    return 1\n")
+    monkeypatch.setattr(
+        builtin_module, "git_changed_files", lambda repo_root, base="HEAD~1": ["src/a.py"]
+    )
+    build = adapter.build_or_update()
+    summary = adapter.query("file_summary", "src/a.py")
+
+    assert build["status"] == "ok"
+    assert build["build_type"] == "incremental"
+    assert build["files_updated"] == 1
+    assert "src/a.py:one_more" in {item["qualified_name"] for item in summary["results"]}
+
+
+def test_builtin_graph_drops_stale_files_from_index(tmp_path: Path, monkeypatch):
+    _write(tmp_path / "src" / "a.py", "def one():\n    return 1\n")
+    _write(tmp_path / "src" / "b.py", "def two():\n    return 2\n")
+    adapter = BuiltinGraphAdapter(tmp_path)
+    adapter.build_or_update(full=True)
+
+    (tmp_path / "src" / "b.py").unlink()
+    monkeypatch.setattr(builtin_module, "git_changed_files", lambda repo_root, base="HEAD~1": [])
+    build = adapter.build_or_update()
+    stats = adapter.stats()
+
+    assert build["status"] == "ok"
+    assert build["stale_files"] == ["src/b.py"]
+    assert stats["files"] == 1
+
+
+def test_builtin_graph_rebuilds_after_corrupted_cache(tmp_path: Path):
+    _write(tmp_path / "src" / "app.py", "def run():\n    return 1\n")
+    adapter = BuiltinGraphAdapter(tmp_path)
+    adapter.build_or_update(full=True)
+
+    adapter.files_cache_path.write_text("{not valid json", encoding="utf-8")
+    rebuilt = BuiltinGraphAdapter(tmp_path)
+    build = rebuilt.build_or_update(full=True)
+    stats = rebuilt.stats()
+
+    assert build["status"] == "ok"
+    assert build["files_updated"] == 1
+    assert stats["files"] == 1
+    assert json.loads(rebuilt.files_cache_path.read_text(encoding="utf-8"))["version"] == 4
+
+
+def test_builtin_graph_falls_back_to_legacy_cache(tmp_path: Path):
+    _write(tmp_path / "src" / "app.py", "def run():\n    return 1\n")
+    adapter = BuiltinGraphAdapter(tmp_path)
+    adapter.build_or_update(full=True)
+    files_payload = json.loads(adapter.files_cache_path.read_text(encoding="utf-8"))
+    adapter.files_cache_path.unlink()
+    adapter.index_cache_path.unlink()
+    adapter.legacy_cache_path.write_text(json.dumps(files_payload), encoding="utf-8")
+
+    migrated = BuiltinGraphAdapter(tmp_path)
+    stats = migrated.stats()
+
+    assert stats["status"] == "ok"
+    assert stats["files"] == 1
+
+
+def test_builtin_graph_analyze_file_reports_language_and_symbols(tmp_path: Path):
+    _write(tmp_path / "src" / "app.py", "def run():\n    return 1\n")
+    _write(tmp_path / "README.md", "# demo\n")
+    adapter = BuiltinGraphAdapter(tmp_path)
+
+    parsed = adapter.analyze_file("src/app.py")
+    unsupported = adapter.analyze_file("README.md")
+    missing = adapter.analyze_file("src/ghost.py")
+
+    assert parsed["status"] == "ok"
+    assert parsed["language"] == "python"
+    assert [item["qualified_name"] for item in parsed["symbols"]] == ["src/app.py:run"]
+    assert unsupported["status"] == "unsupported"
+    assert missing["status"] == "not_found"
+
+
+def test_builtin_graph_honors_ignore_patterns_and_binary_files(tmp_path: Path):
+    _write(tmp_path / "src" / "ok.py", "def ok():\n    return 1\n")
+    _write(tmp_path / "vendor" / "lib.py", "def vendored():\n    return 2\n")
+    _write(tmp_path / "node_modules" / "dep.py", "function dep() {}\n")
+    (tmp_path / "src" / "blob.py").write_bytes(b"def broken(): ...\n\x00\x00\x00")
+    (tmp_path / ".code-review-graphignore").write_text("vendor/**\n", encoding="utf-8")
+
+    adapter = BuiltinGraphAdapter(tmp_path)
+    build = adapter.build_or_update(full=True)
+    stats = adapter.stats()
+
+    assert build["status"] == "ok"
+    assert stats["files"] == 1
+    assert build["languages"] == ["python"]
