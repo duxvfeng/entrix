@@ -22,12 +22,14 @@ from entrix.engine import matches_changed_files
 from entrix.file_budgets import FileBudgetViolation
 from entrix.harness.config import HarnessConfig, load_harness_config
 from entrix.harness.evidence import EvidenceBundle
+from entrix.harness.gate.arbiter import Verdict, VerdictStatus
 from entrix.model import ExecutionScope, FitnessReport, Metric, MetricResult, ResultState, Tier
 from entrix.presets import get_project_preset
 from entrix.reporters.terminal import TerminalReporter
 from entrix.reporting import report_to_dict
 from entrix.stop_gate.phase import read_phase
 from entrix.stop_gate.revalidation import CachedVerdict
+from entrix.stop_gate.runner import RunResult
 
 
 def test_default_mcp_config_uses_binary_command() -> None:
@@ -236,31 +238,54 @@ def test_init_preserves_existing_harness_unless_forced(tmp_path, capsys):
 
 
 def test_harness_run_defaults_to_serial_collection(monkeypatch, tmp_path):
-    captured = []
-    config = HarnessConfig(version="harness/v1", max_parallel_producers=2)
+    captured = {}
 
-    def collect(_self, context):
-        captured.append(context)
-        return EvidenceBundle(task_id=context.task_id, active=False)
+    class StubRunner:
+        def __init__(
+            self,
+            config_path,
+            *,
+            evidence_root=None,
+            parallel_producers=False,
+            max_parallel_producers=None,
+            timeout_seconds=None,
+        ):
+            captured["config_path"] = config_path
+            captured["parallel_producers"] = parallel_producers
+            captured["max_parallel_producers"] = max_parallel_producers
 
-    monkeypatch.setattr(cli_module, "load_harness_config", lambda _path: config)
-    monkeypatch.setattr(cli_module.EvidenceEngine, "collect", collect)
+        def run(self, context):
+            captured["context"] = context
+            return RunResult(verdict=Verdict(status=VerdictStatus.PASS, summary="ok"))
+
+    monkeypatch.setattr(cli_module, "HarnessRunner", StubRunner)
 
     assert cli_module.run_cli(["harness", "run", "--config", str(tmp_path / "harness.yaml")]) == 0
-    assert captured[0].parallel_producers is False
-    assert captured[0].max_parallel_producers is None
+    assert captured["parallel_producers"] is False
+    assert captured["max_parallel_producers"] is None
 
 
 def test_harness_run_passes_explicit_parallel_worker_request(monkeypatch, tmp_path):
-    captured = []
-    config = HarnessConfig(version="harness/v1", max_parallel_producers=2)
+    captured = {}
 
-    def collect(_self, context):
-        captured.append(context)
-        return EvidenceBundle(task_id=context.task_id, active=False)
+    class StubRunner:
+        def __init__(
+            self,
+            config_path,
+            *,
+            evidence_root=None,
+            parallel_producers=False,
+            max_parallel_producers=None,
+            timeout_seconds=None,
+        ):
+            captured["parallel_producers"] = parallel_producers
+            captured["max_parallel_producers"] = max_parallel_producers
 
-    monkeypatch.setattr(cli_module, "load_harness_config", lambda _path: config)
-    monkeypatch.setattr(cli_module.EvidenceEngine, "collect", collect)
+        def run(self, context):
+            captured["context"] = context
+            return RunResult(verdict=Verdict(status=VerdictStatus.PASS, summary="ok"))
+
+    monkeypatch.setattr(cli_module, "HarnessRunner", StubRunner)
 
     assert (
         cli_module.run_cli(
@@ -276,8 +301,8 @@ def test_harness_run_passes_explicit_parallel_worker_request(monkeypatch, tmp_pa
         )
         == 0
     )
-    assert captured[0].parallel_producers is True
-    assert captured[0].max_parallel_producers == 4
+    assert captured["parallel_producers"] is True
+    assert captured["max_parallel_producers"] == 4
 
 
 def test_harness_run_rejects_non_positive_worker_count(capsys):

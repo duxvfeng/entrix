@@ -37,15 +37,11 @@ from entrix.cli_overview import print_command_overview, show_subgroup_help
 from entrix.cli_release import cmd_release_trigger
 from entrix.engine import collect_changed_files, run_fitness_report
 from entrix.governance import GovernancePolicy, StreamOutputMode, enforce
-from entrix.harness.conditions import WhenContext
 
 # Harness system imports
 from entrix.harness.config import HarnessConfig, load_harness_config
-from entrix.harness.engine import EvidenceEngine, HarnessRunContext
 from entrix.harness.fitness import validate_weights
-from entrix.harness.gate.arbiter import GateEngine
 from entrix.harness.profiles import PROFILE_NAMES, ProfileDetectionError, resolve_profile
-from entrix.harness.store import EvidenceStore
 from entrix.harness.template import render_default_harness
 from entrix.model import (
     ExecutionScope,
@@ -68,6 +64,7 @@ from entrix.review_trigger import (
 )
 from entrix.stop_gate.phase import clear_phase, read_phase, write_phase
 from entrix.stop_gate.revalidation import StopGateStateStore
+from entrix.stop_gate.runner import HarnessRunner
 
 
 class _ShellOutputController:
@@ -368,78 +365,73 @@ def cmd_harness_validate(args: argparse.Namespace) -> int:
 
 
 def cmd_harness_run(args: argparse.Namespace) -> int:
-    """执行harness收集和门禁仲裁。"""
-    config_path = Path(args.config).resolve() if args.config else Path.cwd() / "harness.yaml"
+    """执行harness收集和门禁裁决。"""
+    repo_root = Path.cwd()
+    config_path: Path | None
+    if args.config:
+        config_path = Path(args.config).resolve()
+    else:
+        config_path = _find_harness_config(repo_root)
+        if config_path is None:
+            print("未找到 harness.yaml 或 .harness/harness.yaml", file=sys.stderr)
+            return 1
 
     try:
-        config = load_harness_config(config_path)
-        repo_root = Path.cwd()
-
-        # 创建上下文
-        context = HarnessRunContext(
-            task_id="manual-run",
-            repo_root=repo_root,
-            when_context=WhenContext(repo_root=repo_root, changed_files=[], current_branch="manual"),
-            store=EvidenceStore(repo_root),
+        runner = HarnessRunner(
+            config_path,
+            evidence_root=repo_root,
             parallel_producers=args.parallel,
             max_parallel_producers=args.max_workers if args.parallel else None,
         )
-
-        # 收集证据
-        print("正在收集证据...", file=sys.stderr)
-        engine = EvidenceEngine(config)
-        bundle = engine.collect(context)
-
-        print(f"已收集 {len(bundle.evidence)} 条证据", file=sys.stderr)
-
-        # 仲裁门禁
-        print("正在仲裁门禁...", file=sys.stderr)
-        gate_engine = GateEngine(config.gate_policies)
-        verdict = gate_engine.arbitrate(
-            bundle, context.when_context, failure_mode=config.failure_mode
+        result = runner.run(
+            {
+                "workspace": repo_root,
+                "task_id": "manual-run",
+                "changed_files": [],
+                "branch": "manual",
+                "base_ref": "HEAD",
+            }
         )
+        verdict = result.verdict
+        bundle = result.bundle
 
         # 输出结果
         if args.json:
-            result = {
-                "status": verdict.status.value if hasattr(verdict.status, 'value') else verdict.status,
+            output = {
+                "status": verdict.status.value,
                 "summary": verdict.summary,
-                "evidence_count": len(bundle.evidence),
+                "evidence_count": len(bundle.evidence) if bundle else 0,
                 "gate_results": [
                     {
-                        "policy": r.policy_name,
-                        "severity": r.severity.value if hasattr(r.severity, 'value') else r.severity,
-                        "passed": r.passed,
-                        "active": r.active,
-                        "message": r.message,
+                        "policy": gate_result.policy_name,
+                        "severity": gate_result.severity.value,
+                        "passed": gate_result.passed,
+                        "active": gate_result.active,
+                        "message": gate_result.message,
                     }
-                    for r in verdict.gate_results
+                    for gate_result in verdict.gate_results
                 ],
             }
-            print(json.dumps(result, indent=2, ensure_ascii=False))
+            print(json.dumps(output, indent=2, ensure_ascii=False))
         else:
-            status_value = verdict.status.value if hasattr(verdict.status, 'value') else verdict.status
             print(f"\n{'=' * 50}")
-            print(f"Verdict: {str(status_value).upper()}")
+            print(f"Verdict: {verdict.status.value.upper()}")
             print(f"{'=' * 50}")
             print(f"Summary: {verdict.summary}")
+            if bundle is not None:
+                print(f"已收集 {len(bundle.evidence)} 条证据", file=sys.stderr)
 
             if verdict.gate_results:
                 print("\nGate results:")
                 for gate_result in verdict.gate_results:
                     status_icon = "✓" if gate_result.passed else "✗"
-                    severity_value = (
-                        gate_result.severity.value
-                        if hasattr(gate_result.severity, "value")
-                        else gate_result.severity
-                    )
                     print(
                         f"  {status_icon} {gate_result.policy_name} "
-                        f"({severity_value}): {gate_result.message}"
+                        f"({gate_result.severity.value}): {gate_result.message}"
                     )
 
         # 返回适当的退出码
-        return 0 if (verdict.status.value if hasattr(verdict.status, 'value') else verdict.status) == "pass" else 1
+        return 0 if verdict.status.value == "pass" else 1
 
     except Exception as e:
         print(f"错误: {e}", file=sys.stderr)

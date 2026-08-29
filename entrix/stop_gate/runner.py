@@ -31,11 +31,13 @@ class HarnessRunner:
         *,
         evidence_root: Path | None = None,
         parallel_producers: bool = False,
+        max_parallel_producers: int | None = None,
         timeout_seconds: int | float | None = None,
     ) -> None:
         self.config_path = config_path
         self.evidence_root = evidence_root
         self.parallel_producers = parallel_producers
+        self.max_parallel_producers = max_parallel_producers
         self.timeout_seconds = timeout_seconds
 
     def run(self, context: dict[str, Any]) -> RunResult:
@@ -60,6 +62,7 @@ class HarnessRunner:
             store=None,
             base_ref=str(context.get("base_ref") or "HEAD"),
             parallel_producers=self.parallel_producers,
+            max_parallel_producers=self.max_parallel_producers,
             deadline=deadline,
         )
         evidence_engine = EvidenceEngine(config)
