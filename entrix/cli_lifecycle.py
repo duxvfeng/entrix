@@ -395,3 +395,11 @@ def cmd_stop_gate_retry(args: argparse.Namespace) -> int:
     else:
         print(f"已清理 session {session_id} 的 Stop Gate 缓存（原状态: {cached.status}）。")
     return 0
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    """运行 Entrix MCP server。"""
+    from entrix.server import create_server
+
+    create_server().run(transport="stdio")
+    return 0

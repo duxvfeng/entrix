@@ -27,8 +27,8 @@ from entrix.model import ExecutionScope, FitnessReport, Metric, MetricResult, Re
 from entrix.presets import get_project_preset
 from entrix.reporters.terminal import TerminalReporter
 from entrix.reporting import report_to_dict
-from entrix.stop_gate.phase import read_phase
-from entrix.stop_gate.revalidation import CachedVerdict
+from entrix.stop_gate.phase import read_phase, write_phase
+from entrix.stop_gate.revalidation import CachedVerdict, StopGateStateStore
 from entrix.stop_gate.runner import RunResult
 
 
@@ -73,7 +73,7 @@ def test_run_accepts_explicit_repo(monkeypatch, tmp_path: Path):
         captured["root"] = project_root
         raise FileNotFoundError("stop after root detection")
 
-    monkeypatch.setattr(cli_module, "_load_project_harness", fake_load)
+    monkeypatch.setattr("entrix.cli_fitness._load_project_harness", fake_load)
     args = build_parser().parse_args(["run", "--repo", str(tmp_path)])
 
     assert cli_module.cmd_run(args) == 1
@@ -258,7 +258,7 @@ def test_harness_run_defaults_to_serial_collection(monkeypatch, tmp_path):
             captured["context"] = context
             return RunResult(verdict=Verdict(status=VerdictStatus.PASS, summary="ok"))
 
-    monkeypatch.setattr(cli_module, "HarnessRunner", StubRunner)
+    monkeypatch.setattr("entrix.cli_fitness.HarnessRunner", StubRunner)
 
     assert cli_module.run_cli(["harness", "run", "--config", str(tmp_path / "harness.yaml")]) == 0
     assert captured["parallel_producers"] is False
@@ -285,7 +285,7 @@ def test_harness_run_passes_explicit_parallel_worker_request(monkeypatch, tmp_pa
             captured["context"] = context
             return RunResult(verdict=Verdict(status=VerdictStatus.PASS, summary="ok"))
 
-    monkeypatch.setattr(cli_module, "HarnessRunner", StubRunner)
+    monkeypatch.setattr("entrix.cli_fitness.HarnessRunner", StubRunner)
 
     assert (
         cli_module.run_cli(
@@ -412,9 +412,9 @@ def test_cmd_status_reports_phase_and_cached_verdict(tmp_path: Path, monkeypatch
     state_dir = tmp_path / "state"
     monkeypatch.setenv("ENTRIX_STATE_DIR", str(state_dir))
     (tmp_path / "harness.yaml").write_text("version: harness/v1\n", encoding="utf-8")
-    cli_module.StopGateStateStore(state_dir).trust_config(tmp_path, tmp_path / "harness.yaml")
-    cli_module.write_phase(tmp_path, "implementation", session_id="session-a")
-    cli_module.StopGateStateStore(state_dir).save(
+    StopGateStateStore(state_dir).trust_config(tmp_path, tmp_path / "harness.yaml")
+    write_phase(tmp_path, "implementation", session_id="session-a")
+    StopGateStateStore(state_dir).save(
         tmp_path,
         "session-a",
         CachedVerdict(fingerprint="f" * 64, status="fail", summary="fix it"),
@@ -431,7 +431,7 @@ def test_cmd_status_reports_phase_and_cached_verdict(tmp_path: Path, monkeypatch
 def test_cmd_stop_gate_retry_clears_cached_verdict(tmp_path: Path, monkeypatch, capsys):
     state_dir = tmp_path / "state"
     monkeypatch.setenv("ENTRIX_STATE_DIR", str(state_dir))
-    store = cli_module.StopGateStateStore(state_dir)
+    store = StopGateStateStore(state_dir)
     store.save(
         tmp_path,
         "session-a",
@@ -612,7 +612,7 @@ def test_parser_analyze_long_file_supports_positional_and_flagged_files():
 def test_cmd_analyze_long_file_merges_positional_and_flagged_files(monkeypatch):
     captured = {}
 
-    monkeypatch.setattr("entrix.cli._find_project_root", lambda: ".")
+    monkeypatch.setattr("entrix.cli_analysis._find_project_root", lambda: ".")
 
     def fake_analyze_long_files(*_args, **kwargs):
         captured["files"] = kwargs["files"]
@@ -647,7 +647,7 @@ def test_cmd_hook_file_length_prints_structure_summary(monkeypatch, capsys, tmp_
         reason="legacy hotspot",
     )
 
-    monkeypatch.setattr("entrix.cli._find_project_root", lambda: tmp_path)
+    monkeypatch.setattr("entrix.cli_analysis._find_project_root", lambda: tmp_path)
     monkeypatch.setattr("entrix.cli_analysis.load_config", lambda _path: config)
     monkeypatch.setattr("entrix.cli_analysis.evaluate_paths", lambda *_args, **_kwargs: [violation])
     monkeypatch.setattr(
@@ -734,7 +734,7 @@ def test_cmd_hook_file_length_handles_unavailable_structure_summary(
         max_lines=1000,
     )
 
-    monkeypatch.setattr("entrix.cli._find_project_root", lambda: tmp_path)
+    monkeypatch.setattr("entrix.cli_analysis._find_project_root", lambda: tmp_path)
     monkeypatch.setattr("entrix.cli_analysis.load_config", lambda _path: config)
     monkeypatch.setattr("entrix.cli_analysis.evaluate_paths", lambda *_args, **_kwargs: [violation])
     monkeypatch.setattr(
@@ -963,16 +963,16 @@ def test_report_to_dict_includes_result_state():
 def test_cmd_run_defaults_scope_to_local(tmp_path, monkeypatch):
     captured = {}
 
-    monkeypatch.setattr("entrix.cli._find_project_root", lambda: tmp_path)
-    monkeypatch.setattr("entrix.cli._runtime_root", lambda _project_root: tmp_path / "runtime")
+    monkeypatch.setattr("entrix.cli_fitness._find_project_root", lambda: tmp_path)
+    monkeypatch.setattr("entrix.cli_fitness._runtime_root", lambda _project_root: tmp_path / "runtime")
     monkeypatch.setattr(
-        "entrix.cli._load_project_harness",
+        "entrix.cli_fitness._load_project_harness",
         lambda _project_root: HarnessConfig(version="harness/v1"),
     )
-    monkeypatch.setattr("entrix.cli.get_project_preset", lambda: object())
-    monkeypatch.setattr("entrix.cli._collect_run_files", lambda _args, _project_root: [])
+    monkeypatch.setattr("entrix.cli_fitness.get_project_preset", lambda: object())
+    monkeypatch.setattr("entrix.cli_fitness._collect_run_files", lambda _args, _project_root: [])
     monkeypatch.setattr(
-        "entrix.cli.run_fitness_report",
+        "entrix.cli_fitness.run_fitness_report",
         lambda _project_root, policy, _preset, **_kwargs: (
             captured.update(
                 execution_scope=policy.execution_scope,
@@ -981,7 +981,7 @@ def test_cmd_run_defaults_scope_to_local(tmp_path, monkeypatch):
             [],
         ),
     )
-    monkeypatch.setattr("entrix.cli.write_report_output", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("entrix.cli_fitness.write_report_output", lambda *_args, **_kwargs: None)
 
     args = argparse.Namespace(
         tier=None,
@@ -1035,17 +1035,17 @@ def test_cmd_run_emits_runtime_fitness_event(tmp_path, monkeypatch):
         ],
     )
 
-    monkeypatch.setattr("entrix.cli._find_project_root", lambda: tmp_path)
-    monkeypatch.setattr("entrix.cli._runtime_root", lambda _project_root: tmp_path / "runtime")
+    monkeypatch.setattr("entrix.cli_fitness._find_project_root", lambda: tmp_path)
+    monkeypatch.setattr("entrix.cli_fitness._runtime_root", lambda _project_root: tmp_path / "runtime")
     monkeypatch.setattr(
-        "entrix.cli._load_project_harness",
+        "entrix.cli_fitness._load_project_harness",
         lambda _project_root: HarnessConfig(version="harness/v1"),
     )
-    monkeypatch.setattr("entrix.cli.get_project_preset", lambda: object())
-    monkeypatch.setattr("entrix.cli._collect_run_files", lambda _args, _project_root: [])
-    monkeypatch.setattr("entrix.cli.run_fitness_report", lambda *_args, **_kwargs: (report, [dimension]))
-    monkeypatch.setattr("entrix.cli.enforce", lambda _report, _policy: 0)
-    monkeypatch.setattr("entrix.cli.write_report_output", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("entrix.cli_fitness.get_project_preset", lambda: object())
+    monkeypatch.setattr("entrix.cli_fitness._collect_run_files", lambda _args, _project_root: [])
+    monkeypatch.setattr("entrix.cli_fitness.run_fitness_report", lambda *_args, **_kwargs: (report, [dimension]))
+    monkeypatch.setattr("entrix.cli_fitness.enforce", lambda _report, _policy: 0)
+    monkeypatch.setattr("entrix.cli_fitness.write_report_output", lambda *_args, **_kwargs: None)
 
     args = argparse.Namespace(
         tier="fast",
