@@ -1,11 +1,19 @@
 """Shared shell executor tests (entrix.runners.process.run_shell_command)."""
 
+import os
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 import entrix.runners.process as process_module
 from entrix.runners.process import run_shell_command, smart_truncate, strip_ansi
+
+posix_only = pytest.mark.skipif(
+    os.name == "nt",
+    reason="登录 shell 与 PATH 前置是 POSIX 分支的行为",
+)
 
 
 def test_run_shell_command_captures_stdout_and_stderr_separately(tmp_path: Path) -> None:
@@ -80,6 +88,7 @@ def test_strip_ansi_removes_escape_sequences() -> None:
     assert strip_ansi("\x1b[31mred\x1b[0m plain") == "red plain"
 
 
+@posix_only
 def test_shell_command_parts_front_loads_caller_path(monkeypatch) -> None:
     monkeypatch.setenv("PATH", "/caller/bin:/usr/bin:/bin")
     command = "python -m pytest -q 2>&1"
@@ -96,6 +105,7 @@ def test_shell_command_parts_front_loads_caller_path(monkeypatch) -> None:
     assert resolved[2].endswith(command)
 
 
+@posix_only
 def test_shell_command_parts_quotes_path_with_specials(monkeypatch) -> None:
     monkeypatch.setenv("PATH", "/caller a/bin:/caller$HOME")
 
@@ -104,6 +114,7 @@ def test_shell_command_parts_quotes_path_with_specials(monkeypatch) -> None:
     assert resolved[2].startswith("export PATH='/caller a/bin:/caller$HOME':$PATH; ")
 
 
+@posix_only
 def test_run_shell_command_resolves_python_from_caller_path(tmp_path: Path, monkeypatch) -> None:
     """端到端验证：指标命令解析到调用方 PATH 里的解释器，而非系统路径。"""
     import os
