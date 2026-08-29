@@ -8,8 +8,10 @@ build/
 .pytest_*/
 .pytest-*/
 .ruff_cache/
+.mypy_cache/
 .coverage
 .venv/
+.venv312/
 venv/
 .node/
 .npm-cache/

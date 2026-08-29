@@ -149,6 +149,18 @@ def build_runtime_fitness_snapshot(
     }
 
 
+def fitness_artifact_path(
+    project_root: Path,
+    *,
+    tier: str | None,
+    observed_at_ms: int,
+    runtime_root_resolver: Callable[[Path], Path] | None = None,
+) -> Path:
+    mode = runtime_mode(tier)
+    artifact_dir = _runtime_dir(project_root, runtime_root_resolver) / "artifacts" / "fitness"
+    return artifact_dir / f"{observed_at_ms}-{mode}.json"
+
+
 def write_runtime_fitness_artifacts(
     project_root: Path,
     *,
@@ -157,11 +169,14 @@ def write_runtime_fitness_artifacts(
     observed_at_ms: int,
     runtime_root_resolver: Callable[[Path], Path] | None = None,
 ) -> str:
-    mode = runtime_mode(tier)
-    artifact_dir = _runtime_dir(project_root, runtime_root_resolver) / "artifacts" / "fitness"
-    artifact_dir.mkdir(parents=True, exist_ok=True)
-    artifact_path = artifact_dir / f"{observed_at_ms}-{mode}.json"
-    latest_path = artifact_dir / f"latest-{mode}.json"
+    artifact_path = fitness_artifact_path(
+        project_root,
+        tier=tier,
+        observed_at_ms=observed_at_ms,
+        runtime_root_resolver=runtime_root_resolver,
+    )
+    latest_path = artifact_path.parent / f"latest-{runtime_mode(tier)}.json"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
     serialized = json.dumps(snapshot, indent=2, ensure_ascii=False) + "\n"
     artifact_path.write_text(serialized, encoding="utf-8")
     latest_path.write_text(serialized, encoding="utf-8")

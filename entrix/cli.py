@@ -154,28 +154,8 @@ def _runtime_root(project_root: Path) -> Path:
     return _cli_runtime.runtime_root(project_root)
 
 
-def _runtime_event_path(project_root: Path) -> Path:
-    return _runtime_root(project_root) / "events.jsonl"
-
-
-def _runtime_fitness_artifact_dir(project_root: Path) -> Path:
-    return _runtime_root(project_root) / "artifacts" / "fitness"
-
-
-def _runtime_fitness_mailbox_dir(project_root: Path) -> Path:
-    return _runtime_root(project_root) / "mailbox" / "fitness" / "new"
-
-
 def _runtime_mode(tier: str | None) -> str:
     return _cli_runtime.runtime_mode(tier)
-
-
-def _load_runtime_coverage_summary(project_root: Path) -> dict:
-    return _cli_runtime.load_runtime_coverage_summary(project_root)
-
-
-def _summarize_metric_output(output: str) -> str | None:
-    return _cli_runtime.summarize_metric_output(output)
 
 
 def _build_runtime_fitness_snapshot(project_root: Path, **kwargs: object) -> dict:
@@ -187,14 +167,6 @@ def _write_runtime_fitness_artifacts(project_root: Path, **kwargs: object) -> st
         project_root,
         runtime_root_resolver=_runtime_root,
         **kwargs,
-    )
-
-
-def _write_runtime_fitness_mailbox_message(project_root: Path, *, payload: dict) -> None:
-    _cli_runtime.write_runtime_fitness_mailbox_message(
-        project_root,
-        payload=payload,
-        runtime_root_resolver=_runtime_root,
     )
 
 
@@ -1018,29 +990,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     exit_code = enforce(report, policy)
     duration_ms = (time.perf_counter() - run_started_at) * 1000.0
     observed_at_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
-    artifact_path = _write_runtime_fitness_artifacts(
-        project_root,
-        tier=args.tier,
-        snapshot={
-            "mode": _runtime_mode(args.tier),
-            "final_score": report.final_score,
-            "hard_gate_blocked": report.hard_gate_blocked,
-            "score_blocked": report.score_blocked,
-            "duration_ms": duration_ms,
-            "metric_count": sum(len(ds.results) for ds in report.dimensions),
-            "coverage_metric_available": False,
-            "coverage_summary": {"generated_at_ms": None, "typescript": {}, "rust": {}},
-            "dimensions": [],
-            "slowest_metrics": [],
-            "artifact_path": None,
-            "producer": "entrix",
-            "generated_at_ms": observed_at_ms,
-            "base_ref": args.base if changed_files else None,
-            "changed_file_count": len(changed_files),
-            "changed_files_preview": changed_files[:8],
-            "failing_metrics": [],
-        },
-        observed_at_ms=observed_at_ms,
+    artifact_path = str(
+        _cli_runtime.fitness_artifact_path(
+            project_root, tier=args.tier, observed_at_ms=observed_at_ms
+        )
     )
     snapshot = _build_runtime_fitness_snapshot(
         project_root,
