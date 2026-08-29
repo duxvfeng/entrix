@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -16,7 +17,7 @@ def test_stop_gate_with_invalid_config() -> None:
     invalid_config.write_text("invalid: yaml: content: [", encoding="utf-8")
 
     result = subprocess.run(
-        ["python", "-m", "entrix.cli", "stop-gate"],
+        [sys.executable, "-m", "entrix.cli", "stop-gate"],
         cwd=temp_dir,
         capture_output=True,
         text=True,
@@ -33,7 +34,7 @@ def test_stop_gate_no_config() -> None:
     temp_dir = Path(tempfile.mkdtemp())
 
     result = subprocess.run(
-        ["python", "-m", "entrix.cli", "stop-gate"],
+        [sys.executable, "-m", "entrix.cli", "stop-gate"],
         cwd=temp_dir,
         capture_output=True,
         text=True,
@@ -58,7 +59,7 @@ def test_clear_cache_script(tmp_path: Path) -> None:
 
     result = subprocess.run(
         [
-            "python",
+            sys.executable,
             "scripts/clear_stop_gate_cache.py",
             "--repo",
             str(workspace),
