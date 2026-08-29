@@ -78,3 +78,46 @@ def test_smart_truncate_keeps_head_and_tail() -> None:
 
 def test_strip_ansi_removes_escape_sequences() -> None:
     assert strip_ansi("\x1b[31mred\x1b[0m plain") == "red plain"
+
+
+def test_shell_command_parts_front_loads_caller_path(monkeypatch) -> None:
+    monkeypatch.setenv("PATH", "/caller/bin:/usr/bin:/bin")
+    command = "python -m pytest -q 2>&1"
+
+    resolved, use_shell = process_module.shell_command_parts(command)
+
+    assert use_shell is False
+    assert resolved[0] == "/bin/bash"
+    assert resolved[1] == "-lc"
+    # 调用方 PATH 被前置到登录 shell 的 PATH 之前（macOS path_helper
+    # 会把 /etc/paths.d 的系统解释器提到最前，抢占 python 解析），
+    # 原命令保持完整地排在语句末尾。
+    assert resolved[2].startswith("export PATH=/caller/bin:/usr/bin:/bin:$PATH; ")
+    assert resolved[2].endswith(command)
+
+
+def test_shell_command_parts_quotes_path_with_specials(monkeypatch) -> None:
+    monkeypatch.setenv("PATH", "/caller a/bin:/caller$HOME")
+
+    resolved, _ = process_module.shell_command_parts("true")
+
+    assert resolved[2].startswith("export PATH='/caller a/bin:/caller$HOME':$PATH; ")
+
+
+def test_run_shell_command_resolves_python_from_caller_path(tmp_path: Path, monkeypatch) -> None:
+    """端到端验证：指标命令解析到调用方 PATH 里的解释器，而非系统路径。"""
+    import os
+
+    caller_bin = tmp_path / "caller-bin"
+    caller_bin.mkdir()
+    shim = caller_bin / "python"
+    shim.write_text("#!/bin/sh\necho caller-python\n", encoding="utf-8")
+    shim.chmod(0o755)
+
+    env_path = os.environ.get("PATH", "")
+    monkeypatch.setenv("PATH", f"{caller_bin}{os.pathsep}{env_path}")
+
+    outcome = run_shell_command("python", cwd=tmp_path)
+
+    assert outcome.returncode == 0
+    assert outcome.stdout == "caller-python\n"

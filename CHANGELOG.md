@@ -4,6 +4,12 @@
 
 ## [未发布]
 
+### 修复
+
+- 指标命令经登录 shell 执行时调用方 PATH 保持优先：macOS 的 path_helper
+  会把 /etc/paths.d 注册的系统解释器提到最前，导致用户已激活 venv 的
+  `python` 被框架 Python 抢占、指标解析到错误解释器
+
 ### 清理与工程化
 
 - 版本库清理:移除误提交的 Stop Gate 运行时状态文件,删除无引用的死代码(JSON reporter、structure queries、stop_gate model、CLI 运行时 shim);`entrix run` 不再以 stub 快照重复写 fitness artifact(`#2b09c60`)

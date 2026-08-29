@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import signal
 import subprocess
 from dataclasses import dataclass
@@ -51,7 +52,14 @@ def shell_command_parts(command: str) -> tuple[str | list[str], bool]:
     """Pick the platform-appropriate shell invocation for a command string."""
     if os.name == "nt":
         return command, True
-    return ["/bin/bash", "-lc", command], False
+    # 登录 shell 会执行 /etc/profile：macOS 的 path_helper 会重建 PATH，
+    # 把 /etc/paths.d 注册的系统解释器提到调用方 PATH 之前（典型后果：
+    # 用户已激活 venv，指标里的 `python` 却解析到框架 Python）。这里把
+    # 调用方 PATH 重新前置——调用 entrix 的环境优先解析指标命令，profile
+    # 追加的 toolchain 路径仍保留在后面。
+    caller_path = environ.get("PATH", "")
+    prefix = f"export PATH={shlex.quote(caller_path)}:$PATH; " if caller_path else ""
+    return ["/bin/bash", "-lc", prefix + command], False
 
 
 def run_shell_command(
