@@ -1,5 +1,8 @@
 # 项目质量检查 - Lint 配置说明
 
+> 本文记录 **Entrix 仓库自身** `harness.yaml` 的 lint 配置现状（dogfooding）。
+> 如果你要在自己的项目中自定义 lint 检查，请阅读《[可配置的 Lint 系统使用指南](lint-config-guide.md)》。
+
 ## ✅ 已配置的 Lint 检查
 
 项目在 `harness.yaml` 中已配置 **Ruff Lint 检查**：
