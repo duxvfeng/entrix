@@ -174,6 +174,49 @@ def test_ci_has_read_only_top_level_permissions() -> None:
     assert payload["permissions"] == {"contents": "read"}
 
 
+def test_ci_matrix_covers_macos() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    payload = yaml.safe_load(workflow)
+    matrix = payload["jobs"]["test"]["strategy"]["matrix"]["include"]
+
+    assert {"os": "macos-latest", "python-version": "3.12"} in matrix
+
+
+def test_pr_workflows_cancel_superseded_runs() -> None:
+    for workflow_name in ("ci.yml", "defense.yml", "skill-regression.yml"):
+        payload = yaml.safe_load(
+            (ROOT / ".github" / "workflows" / workflow_name).read_text(encoding="utf-8")
+        )
+        concurrency = payload["concurrency"]
+
+        assert concurrency["group"] == "${{ github.workflow }}-${{ github.ref }}"
+        assert concurrency["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"
+
+
+def test_release_workflows_serialize_runs_without_cancelling() -> None:
+    for workflow_name in ("build.yml", "publish.yml"):
+        payload = yaml.safe_load(
+            (ROOT / ".github" / "workflows" / workflow_name).read_text(encoding="utf-8")
+        )
+
+        assert payload["concurrency"] == {"group": "${{ github.workflow }}-${{ github.ref }}"}
+
+
+def test_skill_regression_runs_with_read_only_permissions() -> None:
+    payload = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "skill-regression.yml").read_text(encoding="utf-8")
+    )
+
+    assert payload["permissions"] == {"contents": "read"}
+
+
+def test_dependabot_tracks_pip_and_github_actions() -> None:
+    payload = yaml.safe_load((ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8"))
+    ecosystems = {entry["package-ecosystem"] for entry in payload["updates"]}
+
+    assert ecosystems == {"pip", "github-actions"}
+
+
 def test_mypy_coverage_includes_scripts_and_new_cli_modules() -> None:
     package = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     files = package["tool"]["mypy"]["files"]
