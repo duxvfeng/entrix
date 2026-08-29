@@ -34,6 +34,21 @@ REVIEW_RULE_TYPES = frozenset(
 REVIEW_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
 REVIEW_ACTIONS = frozenset({"require_human_review"})
 
+# 仓库 harness 配置的约定查找路径（相对仓库根，按优先级排序）
+HARNESS_CONFIG_CANDIDATES: tuple[Path, ...] = (
+    Path("harness.yaml"),
+    Path(".harness") / "harness.yaml",
+)
+
+
+def find_harness_config(workspace: Path) -> Path | None:
+    """按约定顺序查找仓库的 harness 配置文件，未配置时返回 ``None``。"""
+    for candidate in HARNESS_CONFIG_CANDIDATES:
+        resolved = workspace / candidate
+        if resolved.is_file():
+            return resolved
+    return None
+
 
 @dataclass
 class EvidenceProducerConfig:

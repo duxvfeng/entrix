@@ -1067,9 +1067,9 @@ def test_cmd_run_emits_runtime_fitness_event(tmp_path, monkeypatch):
 
 
 def test_cmd_graph_test_mapping_returns_non_zero_when_missing(monkeypatch):
-    monkeypatch.setattr("entrix.cli._find_project_root", lambda: Path("/tmp/project"))
+    monkeypatch.setattr("entrix.cli_graph.find_project_root", lambda: Path("/tmp/project"))
     monkeypatch.setattr(
-        "entrix.cli.analyze_test_mappings",
+        "entrix.cli_graph.analyze_test_mappings",
         lambda *_args, **_kwargs: {
             "status": "ok",
             "status_counts": {"missing": 1},
@@ -1092,9 +1092,9 @@ def test_cmd_graph_test_mapping_returns_non_zero_when_missing(monkeypatch):
 
 
 def test_cmd_graph_test_mapping_allows_missing_when_flag_disabled(monkeypatch):
-    monkeypatch.setattr("entrix.cli._find_project_root", lambda: Path("/tmp/project"))
+    monkeypatch.setattr("entrix.cli_graph.find_project_root", lambda: Path("/tmp/project"))
     monkeypatch.setattr(
-        "entrix.cli.analyze_test_mappings",
+        "entrix.cli_graph.analyze_test_mappings",
         lambda *_args, **_kwargs: {
             "status": "ok",
             "status_counts": {"missing": 2},

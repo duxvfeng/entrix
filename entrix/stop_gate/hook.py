@@ -31,6 +31,7 @@ from typing import IO, Any
 
 import yaml
 
+from entrix.harness.config import HARNESS_CONFIG_CANDIDATES
 from entrix.stop_gate.feedback import format_block_feedback
 from entrix.stop_gate.phase import consume_phase, read_phase
 from entrix.stop_gate.revalidation import CachedVerdict, StopGateStateStore
@@ -65,10 +66,9 @@ def _stop_gate_disabled() -> bool:
 
 def find_harness_config(workspace: Path) -> Path | None:
     """Return the preferred Harness configuration file, if the workspace has one."""
-    for config_path in (workspace / "harness.yaml", workspace / ".harness" / "harness.yaml"):
-        if config_path.is_file():
-            return config_path
-    return None
+    from entrix.harness.config import find_harness_config as _find_config
+
+    return _find_config(workspace)
 
 
 def read_hook_payload(stream: IO[str] | None = None) -> dict[str, Any] | None:
@@ -263,7 +263,7 @@ def workspace_fingerprint(workspace: Path) -> str | None:
             digest.update(b"<missing>")
         except OSError:
             return None
-    for config_path in (workspace / "harness.yaml", workspace / ".harness" / "harness.yaml"):
+    for config_path in (workspace / candidate for candidate in HARNESS_CONFIG_CANDIDATES):
         digest.update(str(config_path.relative_to(workspace)).encode("utf-8"))
         try:
             with config_path.open("rb") as file:
@@ -293,7 +293,7 @@ def _filesystem_fingerprint(workspace: Path) -> str | None:
                 digest.update(str(relative_path).encode("utf-8", errors="surrogateescape"))
                 digest.update(str(stat.st_size).encode("ascii"))
                 digest.update(str(stat.st_mtime_ns).encode("ascii"))
-        for config_path in (workspace / "harness.yaml", workspace / ".harness" / "harness.yaml"):
+        for config_path in (workspace / candidate for candidate in HARNESS_CONFIG_CANDIDATES):
             try:
                 stat = config_path.stat()
             except FileNotFoundError:
@@ -368,21 +368,11 @@ def _entrix_package_version() -> str:
         return "unknown"
 
 
-def derive_current_branch(workspace: Path) -> str:
+def derive_current_branch(workspace: Path, *, timeout: float = 10.0) -> str:
     """Return the checked-out branch name, or ``unknown`` outside a repository."""
-    try:
-        result = subprocess.run(
-            ["git", "branch", "--show-current"],
-            cwd=workspace,
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return "unknown"
-    branch = result.stdout.strip()
-    return branch if result.returncode == 0 and branch else "unknown"
+    from entrix.gitinfo import current_branch
+
+    return current_branch(workspace, timeout=timeout)
 
 
 def run_stop_gate_hook(

@@ -74,6 +74,11 @@ def summarize_metric_output(output: str) -> str | None:
     return excerpt
 
 
+def print_json(data: dict) -> None:
+    """以统一的缩进与中文安全转义打印 JSON。"""
+    print(json.dumps(data, indent=2, ensure_ascii=False))
+
+
 def build_runtime_fitness_snapshot(
     project_root: Path,
     *,

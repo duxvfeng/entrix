@@ -24,6 +24,7 @@ def print_command_overview() -> None:
     print("  entrix init                 初始化 .mcp.json 与 harness.yaml")
     print("  entrix phase planning      标记当前回合为规划阶段")
     print("  entrix status              查看当前配置、阶段和门禁缓存")
+    print("  entrix trust               查看/管理 harness.yaml 信任状态")
     print("  entrix doctor              检查插件运行环境和信任状态")
     print("  entrix harness validate     检查 Harness 配置")
     print("  entrix run                  执行 Fitness 指标")
