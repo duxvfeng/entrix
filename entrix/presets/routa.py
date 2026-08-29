@@ -1,4 +1,4 @@
-"""用于路径根与 domain 推断的 Routa 专用 preset。"""
+"""基于路径根与 domain 启发式推断的默认 preset。"""
 
 from __future__ import annotations
 
@@ -7,8 +7,12 @@ from pathlib import Path
 from entrix.model import Metric
 
 
-class RoutaPreset:
-    """针对 Routa monorepo 的 repository 专用行为。"""
+class DefaultPreset:
+    """基于常见 monorepo 布局启发式推断 domain 的默认 preset。
+
+    历史上仅服务于 Routa monorepo；路径规则对一般仓库同样成立，
+    未识别的文件不产生 domain，由增量过滤层以 fail-open 兜底。
+    """
 
     def release_trigger_config(self, project_root: Path) -> Path:
         return project_root / "docs" / "release-triggers.yaml"
@@ -86,3 +90,7 @@ class RoutaPreset:
         if not domains:
             domains.add("global")
         return domains
+
+
+RoutaPreset = DefaultPreset
+"""历史名称别名；新代码请使用 :class:`DefaultPreset`。"""

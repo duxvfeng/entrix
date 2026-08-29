@@ -403,3 +403,48 @@ def test_run_fitness_report_disables_parallelism_with_deadline(monkeypatch, tmp_
     )
 
     assert captured["parallel"] is False
+
+
+def _incremental_dimension(name: str, command: str) -> Dimension:
+    return Dimension(
+        name=name,
+        weight=50,
+        threshold_pass=100,
+        threshold_warn=90,
+        metrics=[Metric(name=f"{name}_metric", command=command)],
+    )
+
+
+def test_filter_dimensions_fail_open_for_unknown_domains():
+    dimensions = [
+        _incremental_dimension("code_quality", "npm run lint"),
+        _incremental_dimension("testability", "go test ./..."),
+    ]
+
+    filtered = engine_module.filter_dimensions_for_incremental(
+        dimensions,
+        ["cmd/server/main.go", "internal/store/store.go"],
+        set(),
+        get_project_preset(),
+    )
+
+    assert [dimension.name for dimension in filtered] == [
+        "code_quality",
+        "testability",
+    ]
+
+
+def test_filter_dimensions_still_narrows_for_known_domains():
+    dimensions = [
+        _incremental_dimension("code_quality", "npm run lint"),
+        _incremental_dimension("testability", "python -m pytest"),
+    ]
+
+    # 已知 domain 触发窄化：web 变更只留下 web 相关指标所在的维度
+    narrowed = engine_module.filter_dimensions_for_incremental(
+        dimensions,
+        ["src/app/page.tsx"],
+        {"web"},
+        get_project_preset(),
+    )
+    assert [dimension.name for dimension in narrowed] == ["code_quality"]

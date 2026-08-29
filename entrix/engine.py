@@ -98,6 +98,10 @@ def filter_dimensions_for_incremental(
         return []
     if "config" in domains:
         return dimensions
+    if not domains:
+        # 变更文件映射不出任何已知 domain（如未收录的语言/布局）时，
+        # 保守地运行全量指标，而不是静默跳过所有检查后直接绿灯。
+        return dimensions
 
     filtered_dimensions: list[Dimension] = []
     for dimension in dimensions:
