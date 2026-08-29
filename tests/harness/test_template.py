@@ -31,12 +31,28 @@ def test_default_harness_template_uses_portable_check_commands():
         for metric in dimension["metrics"]
     ]
 
-    assert any("check_new_debug_prints.py" in command for command in commands)
-    assert any(command.startswith("python -m pytest") for command in commands)
-    assert any(command.startswith("python -m entrix") for command in commands)
-    assert any(command.startswith("python -m build") for command in commands)
+    # generic 模板是语言中立仓库的脚手架：指标全部是可替换的 printf 探针，
+    # 不依赖 entrix 仓库自身的脚本或包入口。graph: 前缀是内置图探针，同样中立。
+    assert all(
+        command.startswith("printf '") or command.startswith("graph:") for command in commands
+    )
     assert all("python3" not in command for command in commands)
     assert all("grep" not in command and "awk" not in command for command in commands)
+    assert all("check_new_debug_prints.py" not in command for command in commands)
+    assert all("python -m entrix" not in command for command in commands)
+
+
+def test_default_harness_template_is_repository_neutral():
+    import yaml as yaml_module
+
+    serialized = yaml_module.safe_dump(default_harness_config(), sort_keys=False)
+
+    # 模板会写入用户仓库，不得引用 entrix 仓库自身的源码路径。
+    assert "entrix/cli.py" not in serialized
+    assert "entrix/engine.py" not in serialized
+    assert "entrix/" not in serialized
+    assert "src/instrumentation.ts" not in serialized
+    assert "scripts/obs/" not in serialized
 
 
 def test_render_default_harness_is_valid_yaml_with_one_trailing_newline():
