@@ -145,7 +145,11 @@ def run_fitness_report(
             changed_domains,
             preset,
         )
+        # 双前缀同时下发：ENTRIX_* 为规范名，ROUTA_* 保持对既有指标脚本的兼容
         runner_env = {
+            "ENTRIX_FITNESS_CHANGED_ONLY": "1",
+            "ENTRIX_FITNESS_CHANGED_BASE": base,
+            "ENTRIX_FITNESS_CHANGED_FILES": "\n".join(effective_changed_files),
             "ROUTA_FITNESS_CHANGED_ONLY": "1",
             "ROUTA_FITNESS_CHANGED_BASE": base,
             "ROUTA_FITNESS_CHANGED_FILES": "\n".join(effective_changed_files),

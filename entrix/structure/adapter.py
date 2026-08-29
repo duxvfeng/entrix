@@ -6,17 +6,17 @@
 
 外部 adapter 处理：
 - Lazy import（仅在真正使用时）
-- ROUTA_CODE_REVIEW_GRAPH_SOURCE 环境变量用于本地开发
+- ENTRIX_CODE_REVIEW_GRAPH_SOURCE 环境变量用于本地开发（兼容 ROUTA_ 前缀）
 - 未安装时优雅地报错
 """
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 from typing import Any
 
+from entrix.env_settings import env_setting
 from entrix.structure.builtin import BuiltinGraphAdapter
 
 
@@ -28,11 +28,11 @@ class CodeReviewGraphAdapter:
         self._tools: Any = None
 
     def _ensure_loaded(self) -> None:
-        """根据 ROUTA_CODE_REVIEW_GRAPH_SOURCE 懒加载 code_review_graph。"""
+        """根据 ENTRIX_CODE_REVIEW_GRAPH_SOURCE（兼容 ROUTA_ 前缀）懒加载 code_review_graph。"""
         if self._tools is not None:
             return
 
-        source = os.environ.get("ROUTA_CODE_REVIEW_GRAPH_SOURCE")
+        source = env_setting("CODE_REVIEW_GRAPH_SOURCE")
         if source:
             sys.path.insert(0, source)
 
@@ -77,12 +77,12 @@ class CodeReviewGraphAdapter:
 def try_create_adapter(repo_root: Path):
     """创建当前可用的最佳 structural analyzer backend。
 
-    Backend 选择可通过 `ROUTA_FITNESS_GRAPH_BACKEND` 强制指定：
+    Backend 选择可通过 `ENTRIX_FITNESS_GRAPH_BACKEND`（兼容 `ROUTA_FITNESS_GRAPH_BACKEND`）强制指定：
     - `external`：要求使用 code-review-graph
     - `builtin`：始终使用本地 Tree-sitter 分析器
     - `auto`（默认）：优先使用 builtin，然后回退到 external
     """
-    backend = os.environ.get("ROUTA_FITNESS_GRAPH_BACKEND", "auto").strip().lower() or "auto"
+    backend = (env_setting("FITNESS_GRAPH_BACKEND") or "auto").strip().lower() or "auto"
 
     if backend in {"auto", "builtin"}:
         try:
